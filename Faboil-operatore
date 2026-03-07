@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#f8f9fb">
+<title>Faboil Operatore</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f0f3f7;--surface:#fff;--surface2:#f5f7fa;--surface3:#edf0f5;
+  --border:#e2e6ef;--border2:#c9d0de;--text:#111827;--muted:#64748b;--muted2:#94a3b8;
+  --accent:#e07b00;--accent-bg:rgba(224,123,0,.09);--blue:#2563eb;--blue-bg:rgba(37,99,235,.09);
+  --red:#dc2626;--red-bg:rgba(220,38,38,.08);--green:#15803d;--green-bg:rgba(21,128,61,.08);
+  --mono:'IBM Plex Mono',monospace;--sans:'Syne',sans-serif;--radius:10px;
+  --shadow:0 1px 4px rgba(0,0,0,.07),0 4px 16px rgba(0,0,0,.04);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{font-size:16px;-webkit-text-size-adjust:100%}
+body{height:100dvh;background:var(--bg);color:var(--text);font-family:var(--sans);overflow:hidden;-webkit-font-smoothing:antialiased}
+.app{display:flex;flex-direction:column;height:100dvh}
+.topbar{display:flex;align-items:center;padding:.75rem 1.25rem;background:var(--surface);border-bottom:1.5px solid var(--border);flex-shrink:0;gap:.75rem}
+.logo{font-size:1.1rem;font-weight:800;letter-spacing:-.02em;color:var(--accent)}
+.logo em{color:var(--muted);font-style:normal;font-weight:600;font-size:.72rem;margin-left:.35rem}
+#sync-badge{font-size:.6rem;font-family:var(--mono);padding:.1rem .45rem;border-radius:8px;background:rgba(0,0,0,.08);color:var(--muted);font-weight:500;margin-left:.3rem}
+.content{flex:1;overflow-y:auto;overflow-x:hidden}
+.page{display:none;padding:1.2rem 1rem;max-width:680px;margin:0 auto}
+.page.on{display:block;animation:fadeUp .18s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.bnav{background:var(--surface);border-top:1.5px solid var(--border);flex-shrink:0}
+.bnav-inner{display:flex}
+.bn{flex:1;background:none;border:none;font-family:var(--sans);font-size:.68rem;font-weight:700;padding:.6rem .3rem .55rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:.15rem;color:var(--muted);transition:color .12s}
+.bn .ic{font-size:1.4rem;line-height:1.1}
+.bn.on{color:var(--accent)}
+/* LOGIN */
+.login-wrap{display:flex;align-items:center;justify-content:center;height:100%;padding:1.5rem}
+.login-box{background:var(--surface);border:1.5px solid var(--border);border-radius:14px;padding:2rem 1.5rem;width:100%;max-width:340px;box-shadow:var(--shadow);text-align:center}
+.login-logo{font-size:2.5rem;margin-bottom:.5rem}
+.login-box h2{font-size:1.2rem;font-weight:800;margin-bottom:.3rem}
+.login-box p{font-size:.8rem;color:var(--muted);margin-bottom:1.4rem}
+.pin-dots{display:flex;justify-content:center;gap:.6rem;margin-bottom:1.2rem}
+.pin-dot{width:14px;height:14px;border-radius:50%;background:var(--border2);transition:background .15s}
+.pin-dot.filled{background:var(--accent)}
+.keypad{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;max-width:240px;margin:0 auto}
+.kbtn{background:var(--surface2);border:1.5px solid var(--border);border-radius:10px;font-family:var(--sans);font-size:1.3rem;font-weight:700;padding:.75rem;cursor:pointer;transition:all .1s}
+.kbtn:active{transform:scale(.93);background:var(--accent-bg)}
+.kbtn.del{font-size:1rem;color:var(--muted)}
+.kbtn.empty{background:none;border-color:transparent;cursor:default}
+/* CARD / FORM */
+.sh{margin-bottom:1rem}
+.sh h1{font-size:1.35rem;font-weight:800;letter-spacing:-.02em}
+.sh p{font-size:.75rem;color:var(--muted);font-family:var(--mono);margin-top:.2rem}
+.card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:1rem 1.1rem;margin-bottom:.85rem;box-shadow:var(--shadow)}
+.card-title{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.8rem}
+label{font-size:.7rem;font-weight:700;color:var(--muted);display:block;margin-bottom:.28rem;text-transform:uppercase;letter-spacing:.05em}
+input,select{background:var(--surface2);border:1.5px solid var(--border2);border-radius:7px;color:var(--text);font-family:var(--mono);font-size:.95rem;padding:.5rem .7rem;width:100%;outline:none;transition:border-color .12s;-webkit-appearance:none;appearance:none}
+input:focus,select:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px rgba(224,123,0,.12)}
+input[type=number]{text-align:right}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .7rem center;padding-right:1.8rem}
+.frow{display:flex;gap:.55rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:.7rem}
+.fg1{flex:1;min-width:120px}
+.fg2{flex:2;min-width:180px}
+.btn{background:var(--surface2);border:1.5px solid var(--border2);color:var(--text);font-family:var(--sans);font-size:.88rem;font-weight:700;padding:.5rem 1rem;border-radius:7px;cursor:pointer;transition:all .12s;white-space:nowrap;display:inline-flex;align-items:center;gap:.3rem}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-primary:hover{background:#c56d00;border-color:#c56d00}
+.btn-blue{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn-sm{font-size:.78rem;padding:.32rem .65rem}
+.btn-xs{font-size:.7rem;padding:.22rem .5rem}
+.btn-red{background:var(--red);border-color:var(--red);color:#fff}
+.sbar{font-size:.8rem;font-weight:600;padding:.5rem .85rem;border-radius:7px;margin-top:.55rem;display:flex;align-items:center;gap:.4rem}
+.sbar.ok{background:var(--green-bg);color:var(--green);border:1px solid rgba(21,128,61,.2)}
+.sbar.err{background:var(--red-bg);color:var(--red);border:1px solid rgba(220,38,38,.2)}
+.sbar.info{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(37,99,235,.2)}
+.sbar.warn{background:var(--accent-bg);color:var(--accent);border:1px solid rgba(224,123,0,.2)}
+.empty{text-align:center;padding:2rem 1rem;color:var(--muted2)}
+.empty-ic{font-size:2.2rem;margin-bottom:.4rem}
+.empty p{font-size:.82rem}
+/* STATS */
+.stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.6rem;margin-bottom:.85rem}
+.stat-box{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:.8rem .9rem;box-shadow:var(--shadow)}
+.stat-label{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:.25rem}
+.stat-val{font-size:1.3rem;font-weight:800;font-family:var(--mono);line-height:1.1}
+.stat-val.acc{color:var(--accent)}
+.stat-val.blue{color:var(--blue)}
+.stat-val.red{color:var(--red)}
+.stat-val.green{color:var(--green)}
+/* TURNI */
+.turno-pill{border-radius:5px;padding:.22rem .45rem;font-size:.75rem;font-weight:700;display:inline-block;line-height:1.3}
+.turno-pill.Mattina{background:#fef9c3;border:1px solid #fbbf24;color:#92400e}
+.turno-pill.Pomeriggio{background:#dbeafe;border:1px solid #60a5fa;color:#1e40af}
+.turno-pill.Notte{background:#ede9fe;border:1px solid #a78bfa;color:#4c1d95}
+.turno-pill.Personalizzato{background:#dcfce7;border:1px solid #4ade80;color:#14532d}
+.turno-pill.Riposo{background:#f1f5f9;border:1px solid #cbd5e1;color:#64748b}
+.turno-row{display:flex;align-items:center;justify-content:space-between;padding:.65rem .9rem;border-bottom:1px solid var(--border);gap:.5rem;flex-wrap:wrap}
+.turno-row:last-child{border-bottom:none}
+.turno-data{font-family:var(--mono);font-size:.78rem;color:var(--muted);min-width:75px}
+.turno-nome{font-weight:700;font-size:.88rem;flex:1}
+.turno-note{font-size:.72rem;color:var(--muted);font-family:var(--mono)}
+/* INSERIMENTO */
+.scan-item{display:flex;justify-content:space-between;align-items:center;padding:.5rem .8rem;background:var(--surface2);border:1px solid var(--border);border-radius:7px;margin-bottom:.3rem;font-size:.83rem}
+.scan-item .name{font-weight:700}
+.scan-item .amt{font-family:var(--mono);font-weight:700;color:var(--accent)}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .55s linear infinite;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+.mono{font-family:var(--mono)}
+.muted{color:var(--muted)}
+/* RIEPILOGO TABLE */
+.tbl{width:100%;border-collapse:collapse;font-size:.83rem}
+.tbl th{text-align:right;padding:.5rem .55rem;background:var(--surface2);border-bottom:2px solid var(--border2);color:var(--muted);font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}
+.tbl th:first-child{text-align:left}
+.tbl td{text-align:right;padding:.55rem .55rem;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:.82rem;vertical-align:middle}
+.tbl td:first-child{text-align:left;font-family:var(--sans);font-size:.83rem}
+.tbl tfoot td{font-weight:700;border-top:2px solid var(--border2);background:var(--surface2)}
+.tbl tfoot td:first-child{font-family:var(--sans);font-weight:800}
+.tbl tr.ammanco td{background:var(--red-bg)}
+.pos{color:var(--green);font-weight:700}
+.neg{color:var(--red);font-weight:700}
+.zero{color:var(--muted)}
+/* CAL WEEK */
+.cal-nav{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.7rem}
+.cal-label{flex:1;text-align:center;font-weight:800;font-size:.95rem;min-width:160px}
+.week-list{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+.week-day{border-bottom:1px solid var(--border)}
+.week-day:last-child{border-bottom:none}
+.week-day-header{display:flex;align-items:center;padding:.55rem .9rem;background:var(--surface2);gap:.6rem}
+.week-day-header.oggi{background:var(--accent-bg)}
+.week-day-nome{font-weight:800;font-size:.85rem;min-width:35px}
+.week-day-data{font-family:var(--mono);font-size:.72rem;color:var(--muted)}
+.week-day-header.oggi .week-day-nome,.week-day-header.oggi .week-day-data{color:var(--accent)}
+.week-turni{padding:.35rem .9rem .45rem}
+.no-turni{font-size:.75rem;color:var(--muted2);font-style:italic;padding:.3rem 0}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo">⛽ Faboil <em>Operatore</em>
+    <span id="sync-badge">💾 locale</span>
+  </div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:.5rem">
+    <span id="user-label" style="font-size:.78rem;font-weight:700;color:var(--muted)"></span>
+    <button id="btn-logout" class="btn btn-sm" style="display:none" onclick="logout()">🚪</button>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div id="login-screen" class="login-wrap">
+  <div class="login-box">
+    <div class="login-logo">⛽</div>
+    <h2>Faboil Operatore</h2>
+    <p>Inserisci il tuo PIN a 4 cifre</p>
+    <div class="pin-dots" id="pin-dots">
+      <div class="pin-dot" id="d0"></div>
+      <div class="pin-dot" id="d1"></div>
+      <div class="pin-dot" id="d2"></div>
+      <div class="pin-dot" id="d3"></div>
+    </div>
+    <div id="login-err" style="font-size:.8rem;color:var(--red);margin-bottom:.7rem;min-height:1.2em"></div>
+    <div class="keypad">
+      <button class="kbtn" onclick="kPress('1')">1</button>
+      <button class="kbtn" onclick="kPress('2')">2</button>
+      <button class="kbtn" onclick="kPress('3')">3</button>
+      <button class="kbtn" onclick="kPress('4')">4</button>
+      <button class="kbtn" onclick="kPress('5')">5</button>
+      <button class="kbtn" onclick="kPress('6')">6</button>
+      <button class="kbtn" onclick="kPress('7')">7</button>
+      <button class="kbtn" onclick="kPress('8')">8</button>
+      <button class="kbtn" onclick="kPress('9')">9</button>
+      <button class="kbtn empty"></button>
+      <button class="kbtn" onclick="kPress('0')">0</button>
+      <button class="kbtn del" onclick="kDel()">⌫</button>
+    </div>
+  </div>
+</div>
+
+<!-- APP PAGES -->
+<div class="content" id="app-content" style="display:none">
+
+  <!-- TURNI -->
+  <div id="p-turni" class="page on">
+    <div class="sh"><h1>🗓 Turni</h1><p id="turni-sub">Settimana corrente</p></div>
+    <div class="cal-nav">
+      <button class="btn btn-sm" onclick="calPrev()">◀</button>
+      <button class="btn btn-primary btn-sm" onclick="calOggi()">Oggi</button>
+      <button class="btn btn-sm" onclick="calNext()">▶</button>
+      <div class="cal-label" id="cal-label"></div>
+    </div>
+    <div class="week-list" id="week-list"></div>
+  </div>
+
+  <!-- INSERIMENTO -->
+  <div id="p-inserimento" class="page">
+    <div class="sh"><h1>📥 Inserimento</h1><p>Drop Mooney e POS</p></div>
+
+    <!-- DROP -->
+    <div class="card">
+      <div class="card-title">🪙 Mooney Drop</div>
+      <div class="frow">
+        <div class="fg2"><label>Operatore</label><select id="drop-badge"></select></div>
+        <div class="fg1"><label>Data</label><input type="date" id="drop-data"></div>
+        <div class="fg1"><label>Importo €</label><input type="number" id="drop-imp" step="0.01" min="0" placeholder="0.00"></div>
+        <div style="align-self:flex-end"><button class="btn btn-primary" onclick="dropManuale()">➕ Aggiungi</button></div>
+      </div>
+      <div id="drop-status"></div>
+    </div>
+
+    <!-- POS -->
+    <div class="card">
+      <div class="card-title">💳 POS</div>
+      <div class="frow">
+        <div class="fg2"><label>Operatore</label><select id="pos-badge"></select></div>
+        <div class="fg1"><label>Data</label><input type="date" id="pos-data"></div>
+        <div class="fg1"><label>Totale POS €</label><input type="number" id="pos-imp" step="0.01" min="0" placeholder="0.00"></div>
+        <div class="fg1"><label>Addebiti €</label><input type="number" id="pos-addeb" step="0.01" placeholder="0.00"></div>
+        <div class="fg1"><label>Monete €</label><input type="number" id="pos-mon" step="0.01" min="0" placeholder="0.00"></div>
+        <div style="align-self:flex-end"><button class="btn btn-primary" onclick="posManuale()">➕ Salva</button></div>
+      </div>
+      <div id="pos-status"></div>
+    </div>
+
+    <!-- STORICO -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:.8rem 1rem;border-bottom:1.5px solid var(--border)">
+        <div class="card-title" style="margin:0">📋 Inserimenti recenti</div>
+      </div>
+      <div id="ins-list"></div>
+    </div>
+  </div>
+
+  <!-- RIEPILOGO -->
+  <div id="p-riepilogo" class="page">
+    <div class="sh"><h1>📊 Riepilogo</h1><p>FABOIL SRL — Lusciano (CE)</p></div>
+    <div class="card">
+      <div class="card-title">Periodo</div>
+      <div class="frow">
+        <div class="fg1"><label>Dal</label><input type="date" id="r-da" onchange="rCalc()"></div>
+        <div class="fg1"><label>Al</label> <input type="date" id="r-a"  onchange="rCalc()"></div>
+        <div style="align-self:flex-end"><button class="btn btn-primary" onclick="rCalc()">Calcola</button></div>
+      </div>
+    </div>
+    <div id="r-empty" class="empty"><div class="empty-ic">📊</div><p>Seleziona un periodo</p></div>
+    <div id="r-stats" style="display:none">
+      <div class="stats-grid" id="r-boxes"></div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="overflow-x:auto">
+          <table class="tbl">
+            <thead><tr><th>Operatore</th><th>Erogato</th><th>Drop</th><th>POS</th><th>Inc.</th><th>Diff.</th></tr></thead>
+            <tbody id="r-tbody"></tbody>
+            <tfoot id="r-tfoot"></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /content -->
+
+<!-- BOTTOM NAV -->
+<div class="bnav" id="app-bnav" style="display:none">
+  <div class="bnav-inner">
+    <button class="bn on" onclick="go('turni',this)"><span class="ic">🗓</span>Turni</button>
+    <button class="bn"    onclick="go('inserimento',this)"><span class="ic">📥</span>Inserimento</button>
+    <button class="bn"    onclick="go('riepilogo',this)"><span class="ic">📊</span>Riepilogo</button>
+  </div>
+</div>
+
+</div><!-- /app -->
+
+<script>
+// ══════════════════════════════════════════════════
+//  ▼▼▼ STESSA CONFIGURAZIONE DI faboil.html ▼▼▼
+// ══════════════════════════════════════════════════
+const JB_KEY      = '$2a$10$wREVQf5to/PQ3A2ACVOpBOf.9pmfxM4DjvuSLXBi0XNKQ5LnGwSua';
+const JB_BIN_FISSO = ''; // ← stesso Bin ID di faboil.html
+// ══════════════════════════════════════════════════
+
+const DEFAULT_BADGES={
+  '4273001':{nome:'IVAN DIOMAJUTO',dist:'1',pin:'0001'},
+  '4273003':{nome:'NICOLA MOTTOLA',dist:'1',pin:'0003'},
+  '4273007':{nome:'DI GENNARO NICOLA',dist:'1',pin:'0007'},
+  '4273008':{nome:'IVAN PIROZZI',dist:'1',pin:'0008'},
+  '4273009':{nome:'RAFFAELLO LAMA',dist:'1',pin:'0009'},
+  '4273012':{nome:'BRUNO CIPULLO',dist:'1',pin:'0012'},
+  '4273013':{nome:'ANTONINO NOTARO',dist:'1',pin:'0013'},
+  '4273014':{nome:'GIUSEPPE CANTILE',dist:'1',pin:'0014'},
+  '4273015':{nome:'CARMINE RICCARDO',dist:'1',pin:'0015'},
+  '4273017':{nome:'NICOLA VITALE',dist:'1',pin:'0017'}
+};
+
+let S={badges:{},erogato:{},drops:{},pos_d:{},turni_sched:[]};
+let JB_BIN=JB_BIN_FISSO||localStorage.getItem('gc5_bin')||'';
+let _jbLastHash='';
+let currentBadge=null;
+
+// ── STORAGE ────────────────────────────────────────
+function applyData(data){
+  if(data.badges)S.badges=data.badges;
+  if(data.erogato)S.erogato=data.erogato;
+  if(data.drops)S.drops=data.drops;
+  if(data.pos_d)S.pos_d=data.pos_d;
+  if(data.turni_sched)S.turni_sched=data.turni_sched;
+  Object.entries(DEFAULT_BADGES).forEach(([n,b])=>{if(!S.badges[n])S.badges[n]=b});
+  if(!S.turni_sched)S.turni_sched=[];
+}
+function ld(){
+  try{const d=localStorage.getItem('gc5');if(d)Object.assign(S,JSON.parse(d))}catch(e){}
+  Object.entries(DEFAULT_BADGES).forEach(([n,b])=>{if(!S.badges[n])S.badges[n]=b});
+  if(!S.turni_sched)S.turni_sched=[];
+  if(JB_BIN)jbPull();
+  setInterval(jbPoll,4000);
+}
+function sv(){
+  try{localStorage.setItem('gc5',JSON.stringify(S))}catch(e){}
+  jbSave();
+}
+
+// ── UTILS ──────────────────────────────────────────
+const fmt=v=>'€'+Number(v||0).toFixed(2);
+const fd=d=>{const[y,m,dd]=String(d).split('-');return`${dd}/${m}/${y}`};
+function bNome(n){return(S.badges[n]&&S.badges[n].nome)||('Badge '+n)}
+function showSt(id,msg,type){const el=document.getElementById(id);if(el)el.innerHTML=`<div class="sbar ${type}">${msg}</div>`}
+const today=()=>new Date().toISOString().slice(0,10);
+function optsHtml(placeholder){
+  return`<option value="">${placeholder}</option>`+Object.entries(S.badges)
+    .sort((a,b)=>a[1].nome.localeCompare(b[1].nome))
+    .map(([n,b])=>`<option value="${n}">${b.nome}</option>`).join('');
+}
+
+// ── LOGIN PIN ──────────────────────────────────────
+let pinBuf='';
+function kPress(c){
+  if(pinBuf.length>=4)return;
+  pinBuf+=c;
+  updDots();
+  if(pinBuf.length===4)setTimeout(checkPin,120);
+}
+function kDel(){pinBuf=pinBuf.slice(0,-1);updDots();document.getElementById('login-err').textContent=''}
+function updDots(){
+  for(let i=0;i<4;i++)document.getElementById('d'+i).classList.toggle('filled',i<pinBuf.length);
+}
+function checkPin(){
+  const match=Object.entries(S.badges).find(([n,b])=>b.pin===pinBuf);
+  if(match){
+    currentBadge=match[0];
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('app-content').style.display='';
+    document.getElementById('app-bnav').style.display='';
+    document.getElementById('user-label').textContent=bNome(currentBadge);
+    document.getElementById('btn-logout').style.display='';
+    initApp();
+  } else {
+    document.getElementById('login-err').textContent='PIN non valido, riprova';
+    pinBuf='';updDots();
+  }
+}
+function logout(){
+  currentBadge=null;pinBuf='';updDots();
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('app-content').style.display='none';
+  document.getElementById('app-bnav').style.display='none';
+  document.getElementById('user-label').textContent='';
+  document.getElementById('btn-logout').style.display='none';
+  document.getElementById('login-err').textContent='';
+}
+
+// ── NAV ────────────────────────────────────────────
+function go(id,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  document.getElementById('p-'+id).classList.add('on');
+  document.querySelectorAll('.bn').forEach(b=>b.classList.remove('on'));
+  if(btn)btn.classList.add('on');
+  if(id==='turni')calRender();
+  if(id==='inserimento'){initInserimento();rInserimenti()}
+  if(id==='riepilogo')rInit();
+}
+
+function initApp(){
+  calOggi();
+  initInserimento();
+  rInit();
+}
+
+// ── CALENDARIO SETTIMANALE ─────────────────────────
+const MESI=['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+const GG=['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'];
+const GG_S=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+let calStart=null;
+function calGetLun(d){const dt=new Date(d);const day=dt.getDay()||7;dt.setDate(dt.getDate()-day+1);dt.setHours(12,0,0,0);return dt}
+function calDs(d){return d.toISOString().slice(0,10)}
+function calOggi(){calStart=calGetLun(new Date());calRender()}
+function calPrev(){calStart.setDate(calStart.getDate()-7);calRender()}
+function calNext(){calStart.setDate(calStart.getDate()+7);calRender()}
+
+function calRender(){
+  const giorni=[...Array(7)].map((_,i)=>{const d=new Date(calStart);d.setDate(calStart.getDate()+i);return calDs(d)});
+  const da=new Date(giorni[0]+'T12:00'),a=new Date(giorni[6]+'T12:00');
+  document.getElementById('cal-label').textContent=`${da.getDate()} ${MESI[da.getMonth()]} — ${a.getDate()} ${MESI[a.getMonth()]} ${a.getFullYear()}`;
+  const tod=today();
+  const turni=(S.turni_sched||[]).filter(t=>t.data>=giorni[0]&&t.data<=giorni[6]);
+  let html='';
+  giorni.forEach(dt=>{
+    const d=new Date(dt+'T12:00'),isOggi=dt===tod;
+    const dayT=turni.filter(t=>t.data===dt).sort((a,b)=>{
+      const ord={Mattina:0,Pomeriggio:1,Notte:2,Personalizzato:3,Riposo:4};
+      return(ord[a.tipo]||0)-(ord[b.tipo]||0);
+    });
+    html+=`<div class="week-day">
+      <div class="week-day-header${isOggi?' oggi':''}">
+        <span class="week-day-nome">${GG_S[d.getDay()]}</span>
+        <span class="week-day-data">${d.getDate()} ${MESI[d.getMonth()]}</span>
+        ${isOggi?'<span style="margin-left:auto;font-size:.65rem;font-weight:700;color:var(--accent);background:var(--accent-bg);padding:.1rem .45rem;border-radius:6px">OGGI</span>':''}
+      </div>
+      <div class="week-turni">`;
+    if(!dayT.length){html+=`<div class="no-turni">Nessun turno</div>`}
+    else dayT.forEach(t=>{
+      const ic=t.tipo==='Mattina'?'☀️':t.tipo==='Pomeriggio'?'🌤':t.tipo==='Notte'?'🌙':t.tipo==='Riposo'?'🛌':'⏱';
+      const orario=t.tipo==='Personalizzato'?` ${t.oraInizio}–${t.oraFine}`:t.tipo!=='Riposo'&&(t.oraInizio)?` ${t.oraInizio}–${t.oraFine}`:'';
+      html+=`<div class="turno-row" style="padding:.5rem 0">
+        <span class="turno-pill ${t.tipo}">${ic} ${t.tipo==='Personalizzato'?'Libero':t.tipo}</span>
+        <span style="font-weight:700;font-size:.85rem;flex:1;margin-left:.5rem">${bNome(t.badge)}</span>
+        <span style="font-family:var(--mono);font-size:.72rem;color:var(--muted)">${orario}</span>
+        ${t.note?`<span class="turno-note" style="width:100%;margin-top:.15rem">📝 ${t.note}</span>`:''}
+      </div>`;
+    });
+    html+='</div></div>';
+  });
+  document.getElementById('week-list').innerHTML=html||'<div class="empty"><div class="empty-ic">🗓</div><p>Nessun turno questa settimana</p></div>';
+}
+
+// ── INSERIMENTO ────────────────────────────────────
+function initInserimento(){
+  const t=today();
+  if(!document.getElementById('drop-data').value)document.getElementById('drop-data').value=t;
+  if(!document.getElementById('pos-data').value)document.getElementById('pos-data').value=t;
+  const opts=optsHtml('— Seleziona —');
+  document.getElementById('drop-badge').innerHTML=opts;
+  document.getElementById('pos-badge').innerHTML=opts;
+  // Pre-seleziona operatore loggato
+  if(currentBadge){
+    document.getElementById('drop-badge').value=currentBadge;
+    document.getElementById('pos-badge').value=currentBadge;
+  }
+}
+function dropManuale(){
+  const bdg=document.getElementById('drop-badge').value,data=document.getElementById('drop-data').value;
+  const imp=parseFloat(document.getElementById('drop-imp').value)||0;
+  if(!bdg||!data||!imp){showSt('drop-status','Compila tutti i campi','err');return}
+  if(!S.drops[bdg])S.drops[bdg]={};
+  S.drops[bdg][data]=Math.round(((S.drops[bdg][data]||0)+imp)*100)/100;
+  sv();showSt('drop-status',`✅ Drop ${fmt(imp)} salvato per ${bNome(bdg)} · ${fd(data)}`,'ok');
+  document.getElementById('drop-imp').value='';rInserimenti();
+}
+function posManuale(){
+  const bdg=document.getElementById('pos-badge').value,data=document.getElementById('pos-data').value;
+  const pos=parseFloat(document.getElementById('pos-imp').value)||0;
+  const addeb=parseFloat(document.getElementById('pos-addeb').value)||0;
+  const mon=parseFloat(document.getElementById('pos-mon').value)||0;
+  if(!bdg||!data){showSt('pos-status','Seleziona operatore e data','err');return}
+  if(!S.pos_d[bdg])S.pos_d[bdg]={};
+  S.pos_d[bdg][data]={pos,addeb,mon};sv();
+  showSt('pos-status',`✅ POS ${fmt(pos)} salvato per ${bNome(bdg)} · ${fd(data)}`,'ok');
+  ['pos-imp','pos-addeb','pos-mon'].forEach(id=>document.getElementById(id).value='');
+  rInserimenti();
+}
+function rInserimenti(){
+  const el=document.getElementById('ins-list');
+  const items=[];
+  Object.entries(S.drops||{}).forEach(([b,dates])=>Object.entries(dates).forEach(([dt,v])=>items.push({tipo:'drop',badge:b,data:dt,label:`🪙 Drop — ${bNome(b)}`,val:v,color:'var(--blue)'})));
+  Object.entries(S.pos_d||{}).forEach(([b,dates])=>Object.entries(dates).forEach(([dt,v])=>items.push({tipo:'pos',badge:b,data:dt,label:`💳 POS — ${bNome(b)}`,val:v.pos,color:'var(--text)',sub:`Add: ${fmt(v.addeb)} · Mon: ${fmt(v.mon)}`})));
+  items.sort((a,b)=>b.data.localeCompare(a.data));
+  if(!items.length){el.innerHTML='<div class="empty"><div class="empty-ic">📋</div><p>Nessun inserimento ancora</p></div>';return}
+  el.innerHTML=items.slice(0,30).map(it=>`
+    <div class="scan-item"><div><div class="name">${it.label}</div>
+      <div style="font-size:.7rem;color:var(--muted);font-family:var(--mono)">${fd(it.data)}${it.sub?' · '+it.sub:''}</div></div>
+      <span class="amt" style="color:${it.color}">${fmt(it.val)}</span>
+    </div>`).join('');
+}
+
+// ── RIEPILOGO ──────────────────────────────────────
+function rInit(){
+  if(!document.getElementById('r-da').value)document.getElementById('r-da').value=today();
+  if(!document.getElementById('r-a').value)document.getElementById('r-a').value=today();
+}
+function sumRange(map,badge,da,a){
+  let tot=0;
+  const src=badge?(map[badge]||{}):Object.values(map).reduce((acc,bd)=>{Object.entries(bd).forEach(([dt,v])=>{acc[dt]=(acc[dt]||0)+v});return acc},{});
+  Object.entries(src).forEach(([dt,v])=>{if(dt>=da&&dt<=a)tot+=v});
+  return Math.round(tot*100)/100;
+}
+function sumPosField(badge,da,a,field){
+  let tot=0;
+  const src=badge?(S.pos_d[badge]||{}):Object.values(S.pos_d).reduce((acc,bd)=>{
+    Object.entries(bd).forEach(([dt,v])=>{if(!acc[dt])acc[dt]={pos:0,addeb:0,mon:0};acc[dt].pos+=(v.pos||0);acc[dt].addeb+=(v.addeb||0);acc[dt].mon+=(v.mon||0)});return acc},{});
+  Object.entries(src).forEach(([dt,v])=>{if(dt>=da&&dt<=a)tot+=(v[field]||0)});
+  return Math.round(tot*100)/100;
+}
+function rCalc(){
+  const da=document.getElementById('r-da').value,a=document.getElementById('r-a').value;
+  if(!da||!a)return;
+  const badges=Object.keys(S.badges).filter(b=>{
+    return Object.keys(S.erogato[b]||{}).some(dt=>dt>=da&&dt<=a)||
+           Object.keys(S.drops[b]||{}).some(dt=>dt>=da&&dt<=a)||
+           Object.keys(S.pos_d[b]||{}).some(dt=>dt>=da&&dt<=a);
+  });
+  if(!badges.length){
+    document.getElementById('r-stats').style.display='none';
+    document.getElementById('r-empty').style.display='';
+    document.getElementById('r-empty').innerHTML='<div class="empty-ic">🔍</div><p>Nessun dato per questo periodo</p>';
+    return;
+  }
+  document.getElementById('r-empty').style.display='none';
+  document.getElementById('r-stats').style.display='';
+  let tEr=0,tDr=0,tPos=0,tAdd=0,tMon=0,rows='';
+  badges.sort((a,b)=>bNome(a).localeCompare(bNome(b))).forEach(b=>{
+    const er=sumRange(S.erogato,b,da,a),dr=sumRange(S.drops,b,da,a);
+    const pos=sumPosField(b,da,a,'pos'),add=sumPosField(b,da,a,'addeb'),mon=sumPosField(b,da,a,'mon');
+    const inc=Math.round((dr+pos+add+mon)*100)/100,diff=Math.round((inc-er)*100)/100;
+    const dc=diff<-.5?'neg':diff>.5?'pos':'zero';
+    const isMe=b===currentBadge;
+    tEr+=er;tDr+=dr;tPos+=pos;tAdd+=add;tMon+=mon;
+    rows+=`<tr class="${diff<-.5?'ammanco':''}" style="${isMe?'background:var(--accent-bg)':''}">
+      <td><strong>${bNome(b)}</strong>${isMe?' <span style="font-size:.65rem;color:var(--accent)">● tu</span>':''}</td>
+      <td style="color:var(--accent)">${fmt(er)}</td><td>${fmt(dr)}</td><td>${fmt(pos)}</td>
+      <td><strong>${fmt(inc)}</strong></td><td class="${dc}">${diff>=0?'+':''}${fmt(diff)}</td></tr>`;
+  });
+  document.getElementById('r-tbody').innerHTML=rows;
+  const tInc=Math.round((tDr+tPos+tAdd+tMon)*100)/100,tDiff=Math.round((tInc-tEr)*100)/100;
+  const tdc=tDiff<-.5?'neg':tDiff>.5?'pos':'zero';
+  document.getElementById('r-tfoot').innerHTML=`<tr><td>TOT.</td><td style="color:var(--accent)">${fmt(tEr)}</td><td>${fmt(tDr)}</td><td>${fmt(tPos)}</td><td>${fmt(tInc)}</td><td class="${tdc}">${tDiff>=0?'+':''}${fmt(tDiff)}</td></tr>`;
+  const dfc=tDiff<-.5?'red':tDiff>.5?'green':'';
+  document.getElementById('r-boxes').innerHTML=`
+    <div class="stat-box"><div class="stat-label">Erogato</div><div class="stat-val acc">${fmt(tEr)}</div></div>
+    <div class="stat-box"><div class="stat-label">Drop</div><div class="stat-val blue">${fmt(tDr)}</div></div>
+    <div class="stat-box"><div class="stat-label">POS</div><div class="stat-val">${fmt(tPos)}</div></div>
+    <div class="stat-box"><div class="stat-label">Differenza</div><div class="stat-val ${dfc}">${tDiff>=0?'+':''}${fmt(tDiff)}</div></div>`;
+}
+
+// ── JSONBIN SYNC ───────────────────────────────────
+function jbEnabled(){return JB_KEY&&JB_KEY.length>10}
+async function jbPull(){
+  if(!jbEnabled()||!JB_BIN)return;
+  try{
+    const r=await fetch(`https://api.jsonbin.io/v3/b/${JB_BIN}/latest`,{headers:{'X-Master-Key':JB_KEY}});
+    const d=await r.json();if(!d.record)return;
+    applyData(d.record);
+    try{localStorage.setItem('gc5',JSON.stringify(S))}catch(e){}
+    _jbLastHash=JSON.stringify(d.record).slice(0,200);
+    jbStatusUpdate('ok');
+    if(currentBadge){const act=document.querySelector('.page.on');if(act){if(act.id==='p-turni')calRender();if(act.id==='p-riepilogo')rCalc();}}
+  }catch(e){console.warn('jbPull:',e)}
+}
+async function jbSave(){
+  if(!jbEnabled()||!JB_BIN)return;
+  try{
+    await fetch(`https://api.jsonbin.io/v3/b/${JB_BIN}`,{method:'PUT',headers:{'Content-Type':'application/json','X-Master-Key':JB_KEY},body:JSON.stringify(S)});
+    jbStatusUpdate('ok');
+  }catch(e){jbStatusUpdate('err');console.warn('jbSave:',e)}
+}
+async function jbPoll(){
+  if(!jbEnabled()||!JB_BIN)return;
+  try{
+    const r=await fetch(`https://api.jsonbin.io/v3/b/${JB_BIN}/latest`,{headers:{'X-Master-Key':JB_KEY}});
+    const d=await r.json();if(!d.record)return;
+    const hash=JSON.stringify(d.record).slice(0,200);
+    if(hash===_jbLastHash)return;
+    _jbLastHash=hash;
+    applyData(d.record);
+    try{localStorage.setItem('gc5',JSON.stringify(S))}catch(e){}
+    if(currentBadge){
+      const act=document.querySelector('.page.on');
+      if(act){
+        if(act.id==='p-turni')calRender();
+        if(act.id==='p-riepilogo')rCalc();
+        if(act.id==='p-inserimento')rInserimenti();
+      }
+    }
+  }catch(e){}
+}
+function jbStatusUpdate(state){
+  const el=document.getElementById('sync-badge');if(!el)return;
+  if(!jbEnabled()||!JB_BIN){el.textContent='💾 locale';return}
+  if(state==='ok'){el.textContent='☁️ sync';el.style.color='#16a34a';el.style.background='rgba(34,197,94,.15)'}
+  else if(state==='err'){el.textContent='⚠️ errore';el.style.color='#dc2626';el.style.background='rgba(239,68,68,.1)'}
+}
+
+// ── BOOT ───────────────────────────────────────────
+ld();
+setTimeout(()=>jbStatusUpdate(),500);
+</script>
+</body>
+</html>
