@@ -1,0 +1,4 @@
+trading/data/
+trading/__pycache__/
+__pycache__/
+*.pyc
