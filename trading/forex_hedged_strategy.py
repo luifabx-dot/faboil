@@ -1,54 +1,75 @@
 """
-Forex trend-following strategy with options hedging.
+Forex cheap-options strategy on price levels (long gamma).
 
-Strategia
+Filosofia
 ---------
-Trend-following giornaliero su coppia FX (default EUR/USD) con copertura
-del rischio di coda tramite opzioni FX vanilla (modello Garman-Kohlhagen).
+Non si usano indicatori tecnici per decidere l'ingresso. Si opera SOLO
+comprando opzioni FX vanilla (call o put) a buon mercato quando il
+prezzo spot raggiunge un livello strutturale individuato sulla sola
+price action.
 
 Regole operative
 ----------------
-1. Indicatori su barre daily:
-   - EMA veloce (20) e EMA lenta (50)
-   - ADX (14) come filtro di forza del trend
-   - ATR (14) per volatilita' e stop dinamici
-2. Segnale di ingresso:
-   - LONG  quando EMA_fast incrocia sopra EMA_slow e ADX > adx_threshold
-   - SHORT quando EMA_fast incrocia sotto EMA_slow e ADX > adx_threshold
-3. Copertura (hedge) all'ingresso:
-   - LONG  -> acquisto di una put OTM ~2% (scadenza ~30 giorni)
-   - SHORT -> acquisto di una call OTM ~2% (scadenza ~30 giorni)
-   - Opzionale "collar": finanziamento parziale vendendo un'opzione
-     piu' OTM (4%) sul lato opposto
-4. Money management:
-   - Rischio per trade = risk_pct del capitale (default 1%)
-   - Size dello spot basata sulla distanza spot-stop + premio netto
-5. Stop / Take profit:
-   - Stop loss   = entry -/+ 2 * ATR(14)
-   - Take profit = entry +/- 4 * ATR(14)
-   - Uscita anche su inversione del trend (cross inverso delle EMA)
+1. Individuazione dei livelli (pura price action):
+   - Swing pivot strutturali in stile fractal: una barra e' un pivot-high
+     se il suo high e' strettamente maggiore degli high delle N barre
+     a sinistra e delle N barre a destra. Simmetrico per il pivot-low.
+   - Nessun indicatore (no EMA, ADX, RSI, MACD, bollinger...).
+   - I livelli restano "attivi" fino a quando non vengono usati per un
+     trade o non sono spazzati via (close oltre il livello di X%).
 
-Pricing opzioni
----------------
-Usa il modello di Garman-Kohlhagen (estensione Black-Scholes per FX):
+2. Trigger di ingresso:
+   - Quando lo spot e' entro `proximity_pct` da un pivot-high attivo
+     -> candidato LONG CALL (bet: il livello viene rotto al rialzo).
+   - Quando lo spot e' entro `proximity_pct` da un pivot-low attivo
+     -> candidato LONG PUT  (bet: il livello viene rotto al ribasso).
+   - Strike dell'opzione: oltre il livello di `otm_pct` nella direzione
+     del breakout atteso (es. call con strike = pivot_high * (1 + 0.3%)).
+
+3. Filtro "cheap":
+   - (a) Premio stimato via Garman-Kohlhagen <= `cheap_premium_pct` * spot
+         (es. <= 0.4% dello spot).
+   - (b) Realized volatility corrente <= `cheap_vol_ratio` * media
+         mobile della realized vol (il mercato "paga poco" la vol).
+   - Se entrambi i filtri sono soddisfatti, si apre la posizione.
+
+4. Money management:
+   - Perdita massima nota a priori = premio pagato (rischio di un long
+     premium puro, niente short options).
+   - Budget di premio per trade = `risk_pct` dell'equity (default 0.5%).
+   - Numero di contratti (unita' di nozionale) = budget / premio.
+
+5. Exit:
+   - Take profit: prezzo teorico dell'opzione >= entry_premium * `tp_mult`
+     (default 2.5x).
+   - Stop tempo:  chiudi se mancano <= `min_days_to_expiry` giorni.
+   - Invalidazione: se lo spot chiude DAL LATO OPPOSTO del livello di
+     almeno `invalidation_pct`, chiudi (falsa rottura confermata).
+   - Naturale: alla scadenza il payoff intrinseco viene incassato.
+
+Pricing opzioni FX
+------------------
+Modello Garman-Kohlhagen:
 
     d1 = [ln(S/K) + (rd - rf + sigma^2/2) * T] / (sigma * sqrt(T))
     d2 = d1 - sigma * sqrt(T)
     C  = S * exp(-rf*T) * N(d1) - K * exp(-rd*T) * N(d2)
     P  = K * exp(-rd*T) * N(-d2) - S * exp(-rf*T) * N(-d1)
 
-dove S = spot, K = strike, rd = tasso domestico, rf = tasso estero,
-sigma = volatilita' implicita annua, T = tempo alla scadenza in anni.
+Note
+----
+- La realized volatility viene usata SOLO per stimare il fair value
+  dell'opzione (input sigma del modello) e per definire il filtro di
+  cheapness. NON e' un indicatore di timing.
+- In produzione rimpiazzare la realized vol con la IV di mercato
+  ottenuta dalla vol surface del broker.
 
-Dipendenze
-----------
-numpy, pandas.  I dati di prezzo possono arrivare da qualunque provider;
-questo file non include il download, ma offre un backtest su DataFrame OHLC.
+Dipendenze: numpy, pandas.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from math import erf, exp, log, sqrt
 from typing import Literal
 
@@ -78,12 +99,11 @@ def gk_price(
 
     rd: tasso risk-free domestico (quote currency, es. USD)
     rf: tasso risk-free estero    (base currency,  es. EUR)
-    sigma: volatilita' implicita annualizzata (es. 0.08 = 8%)
-    tau: tempo alla scadenza in anni (es. 30/365)
+    sigma: volatilita' annualizzata
+    tau: tempo alla scadenza in anni
     """
     if tau <= 0 or sigma <= 0:
-        intrinsic = max(0.0, spot - strike) if kind == "call" else max(0.0, strike - spot)
-        return intrinsic
+        return max(0.0, spot - strike) if kind == "call" else max(0.0, strike - spot)
 
     sqrt_t = sqrt(tau)
     d1 = (log(spot / strike) + (rd - rf + 0.5 * sigma * sigma) * tau) / (sigma * sqrt_t)
@@ -95,344 +115,336 @@ def gk_price(
 
 
 # ---------------------------------------------------------------------------
-# Indicatori tecnici
+# Livelli strutturali (pura price action)
 # ---------------------------------------------------------------------------
 
-def ema(series: pd.Series, span: int) -> pd.Series:
-    return series.ewm(span=span, adjust=False).mean()
+def find_swing_pivots(
+    df: pd.DataFrame, left: int = 5, right: int = 5
+) -> list[tuple[pd.Timestamp, float, str]]:
+    """Ritorna tutti i pivot fractal confermati.
 
+    Un pivot-high alla barra i richiede:
+        high[i] > max(high[i-left : i]) AND high[i] > max(high[i+1 : i+right+1])
+    Simmetrico per il pivot-low.
 
-def atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
-    high, low, close = df["high"], df["low"], df["close"]
-    prev_close = close.shift(1)
-    tr = pd.concat(
-        [(high - low).abs(), (high - prev_close).abs(), (low - prev_close).abs()],
-        axis=1,
-    ).max(axis=1)
-    return tr.ewm(alpha=1 / period, adjust=False).mean()
+    I pivot sono noti solo dopo `right` barre (look-ahead gestito dal backtest).
+    """
+    highs = df["high"].to_numpy()
+    lows = df["low"].to_numpy()
+    idx = df.index
+    n = len(df)
+    out: list[tuple[pd.Timestamp, float, str]] = []
 
-
-def adx(df: pd.DataFrame, period: int = 14) -> pd.Series:
-    high, low, close = df["high"], df["low"], df["close"]
-    up_move = high.diff()
-    down_move = -low.diff()
-    plus_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0.0)
-    minus_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0.0)
-
-    tr = pd.concat(
-        [(high - low).abs(),
-         (high - close.shift()).abs(),
-         (low - close.shift()).abs()],
-        axis=1,
-    ).max(axis=1)
-
-    atr_ = tr.ewm(alpha=1 / period, adjust=False).mean()
-    plus_di = 100 * pd.Series(plus_dm, index=df.index).ewm(alpha=1 / period, adjust=False).mean() / atr_
-    minus_di = 100 * pd.Series(minus_dm, index=df.index).ewm(alpha=1 / period, adjust=False).mean() / atr_
-    dx = 100 * (plus_di - minus_di).abs() / (plus_di + minus_di).replace(0, np.nan)
-    return dx.ewm(alpha=1 / period, adjust=False).mean().fillna(0)
+    for i in range(left, n - right):
+        window_h = highs[i - left : i + right + 1]
+        window_l = lows[i - left : i + right + 1]
+        if highs[i] == window_h.max() and (window_h == highs[i]).sum() == 1:
+            out.append((idx[i], float(highs[i]), "high"))
+        if lows[i] == window_l.min() and (window_l == lows[i]).sum() == 1:
+            out.append((idx[i], float(lows[i]), "low"))
+    return out
 
 
 # ---------------------------------------------------------------------------
-# Configurazione e stato
+# Configurazione
 # ---------------------------------------------------------------------------
 
 @dataclass
 class StrategyConfig:
-    # Segnale
-    ema_fast: int = 20
-    ema_slow: int = 50
-    adx_period: int = 14
-    adx_threshold: float = 25.0
-    atr_period: int = 14
-    atr_stop_mult: float = 2.0
-    atr_take_mult: float = 4.0
+    # Livelli
+    pivot_left: int = 5
+    pivot_right: int = 5
+    proximity_pct: float = 0.0015        # 0.15% di distanza dallo spot per armare il trigger
+    invalidation_pct: float = 0.004      # 0.4% di chiusura dal lato sbagliato annulla il trade
+    max_active_levels: int = 20          # livelli massimi tenuti in memoria
+
+    # Opzioni
+    otm_pct: float = 0.003               # strike 0.3% oltre il livello
+    tenor_days: int = 14                 # scadenza breve: molta gamma
+    rd: float = 0.045                    # USD
+    rf: float = 0.035                    # EUR
+    rv_window: int = 20                  # finestra realized vol
+    rv_sma_window: int = 60              # media mobile della realized vol
+
+    # Cheapness
+    cheap_premium_pct: float = 0.004     # premio <= 0.4% dello spot
+    cheap_vol_ratio: float = 0.95        # rv corrente <= 95% della sua media
 
     # Money management
     capital: float = 100_000.0
-    risk_pct: float = 0.01  # 1% per trade
+    risk_pct: float = 0.005              # 0.5% di equity come premio massimo per trade
+    max_concurrent: int = 3              # posizioni contemporaneamente aperte
 
-    # Copertura
-    hedge_enabled: bool = True
-    hedge_otm_pct: float = 0.02          # strike 2% OTM
-    hedge_tenor_days: int = 30
-    hedge_iv: float = 0.08               # vol implicita annua
-    rd: float = 0.045                    # USD
-    rf: float = 0.035                    # EUR
-    use_collar: bool = False
-    collar_short_otm_pct: float = 0.04   # gamba short del collar 4% OTM
+    # Exit
+    tp_mult: float = 2.5                 # take profit: prezzo teorico >= entry * tp_mult
+    min_days_to_expiry: int = 3          # chiusura forzata se mancano <= N giorni
 
+
+# ---------------------------------------------------------------------------
+# Stato posizioni
+# ---------------------------------------------------------------------------
 
 @dataclass
-class Position:
-    side: Literal["long", "short"]
+class OptionPosition:
     entry_date: pd.Timestamp
+    expiry: pd.Timestamp
+    level: float
+    level_kind: Literal["high", "low"]
+    kind: Literal["call", "put"]
+    strike: float
     entry_spot: float
-    units: float
-    stop: float
-    take: float
-    hedge_strike: float = 0.0
-    hedge_kind: Literal["call", "put", "none"] = "none"
-    hedge_premium_paid: float = 0.0
-    hedge_expiry: pd.Timestamp | None = None
-    collar_strike: float = 0.0
-    collar_kind: Literal["call", "put", "none"] = "none"
-    collar_premium_received: float = 0.0
+    entry_premium: float
+    units: float                         # contratti / nozionali
+    sigma_at_entry: float
 
 
 @dataclass
 class Trade:
     entry_date: pd.Timestamp
     exit_date: pd.Timestamp
-    side: str
+    kind: str
+    level: float
+    strike: float
     entry_spot: float
     exit_spot: float
+    entry_premium: float
+    exit_premium: float
     units: float
-    spot_pnl: float
-    hedge_pnl: float
-    net_pnl: float
+    pnl: float
     reason: str
 
 
 # ---------------------------------------------------------------------------
-# Core strategy
+# Strategia
 # ---------------------------------------------------------------------------
 
-class ForexHedgedStrategy:
-    """Strategia forex trend-following con copertura da opzioni."""
+class CheapOptionsLevelsStrategy:
+    """Long-gamma su livelli strutturali con filtro di cheapness."""
 
     def __init__(self, config: StrategyConfig | None = None) -> None:
         self.cfg = config or StrategyConfig()
 
-    # ---- segnali ---------------------------------------------------------
-    def build_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+    # ---- utility ---------------------------------------------------------
+    def _realized_vol(self, close: pd.Series) -> tuple[pd.Series, pd.Series]:
+        log_ret = np.log(close / close.shift(1))
+        rv = log_ret.rolling(self.cfg.rv_window).std() * sqrt(252)
+        rv_sma = rv.rolling(self.cfg.rv_sma_window).mean()
+        return rv, rv_sma
+
+    def _price_option(
+        self, spot: float, strike: float, sigma: float, days: int, kind: str
+    ) -> float:
         c = self.cfg
-        out = df.copy()
-        out["ema_fast"] = ema(out["close"], c.ema_fast)
-        out["ema_slow"] = ema(out["close"], c.ema_slow)
-        out["adx"] = adx(out, c.adx_period)
-        out["atr"] = atr(out, c.atr_period)
-
-        cross_up = (out["ema_fast"] > out["ema_slow"]) & (
-            out["ema_fast"].shift(1) <= out["ema_slow"].shift(1)
-        )
-        cross_dn = (out["ema_fast"] < out["ema_slow"]) & (
-            out["ema_fast"].shift(1) >= out["ema_slow"].shift(1)
-        )
-        strong = out["adx"] > c.adx_threshold
-
-        out["signal"] = 0
-        out.loc[cross_up & strong, "signal"] = 1
-        out.loc[cross_dn & strong, "signal"] = -1
-        return out
-
-    # ---- hedge sizing ----------------------------------------------------
-    def _open_hedge(self, side: str, spot: float, date: pd.Timestamp) -> dict:
-        c = self.cfg
-        tau = c.hedge_tenor_days / 365.0
-
-        if side == "long":
-            hedge_kind: Literal["call", "put"] = "put"
-            strike = spot * (1 - c.hedge_otm_pct)
-            collar_kind: Literal["call", "put"] = "call"
-            collar_strike = spot * (1 + c.collar_short_otm_pct)
-        else:
-            hedge_kind = "call"
-            strike = spot * (1 + c.hedge_otm_pct)
-            collar_kind = "put"
-            collar_strike = spot * (1 - c.collar_short_otm_pct)
-
-        premium = gk_price(spot, strike, c.rd, c.rf, c.hedge_iv, tau, hedge_kind)
-        collar_premium = 0.0
-        if c.use_collar:
-            collar_premium = gk_price(
-                spot, collar_strike, c.rd, c.rf, c.hedge_iv, tau, collar_kind
-            )
-
-        return {
-            "hedge_kind": hedge_kind,
-            "hedge_strike": strike,
-            "hedge_premium": premium,
-            "hedge_expiry": date + pd.Timedelta(days=c.hedge_tenor_days),
-            "collar_kind": collar_kind if c.use_collar else "none",
-            "collar_strike": collar_strike if c.use_collar else 0.0,
-            "collar_premium": collar_premium,
-        }
-
-    def _size_position(self, spot: float, stop: float, hedge_net_cost: float) -> float:
-        c = self.cfg
-        risk_budget = c.capital * c.risk_pct
-        unit_risk = abs(spot - stop) + max(hedge_net_cost, 0.0)
-        if unit_risk <= 0:
-            return 0.0
-        return risk_budget / unit_risk
-
-    # ---- exit value of the hedge ----------------------------------------
-    def _hedge_exit_value(self, pos: Position, spot: float, date: pd.Timestamp) -> float:
-        if not pos.hedge_kind or pos.hedge_kind == "none":
-            return 0.0
-        c = self.cfg
-        tau = max(0.0, (pos.hedge_expiry - date).days / 365.0) if pos.hedge_expiry else 0.0
-        long_leg = gk_price(spot, pos.hedge_strike, c.rd, c.rf, c.hedge_iv, tau, pos.hedge_kind)
-        short_leg = 0.0
-        if pos.collar_kind != "none":
-            short_leg = gk_price(
-                spot, pos.collar_strike, c.rd, c.rf, c.hedge_iv, tau, pos.collar_kind
-            )
-        return long_leg - short_leg
+        return gk_price(spot, strike, c.rd, c.rf, sigma, days / 365.0, kind)  # type: ignore[arg-type]
 
     # ---- backtest --------------------------------------------------------
     def backtest(self, df: pd.DataFrame) -> dict:
-        """Backtest su DataFrame con colonne: open, high, low, close (indice datetime)."""
+        """Backtest su OHLC daily. Atteso DataFrame con open/high/low/close."""
         c = self.cfg
-        sig = self.build_signals(df).dropna()
+        required = {"open", "high", "low", "close"}
+        if not required.issubset(df.columns):
+            raise ValueError(f"df must have columns {required}")
+
+        rv, rv_sma = self._realized_vol(df["close"])
+
+        # Pre-calcola pivot (saranno "visti" dal backtest solo dopo right barre)
+        all_pivots = find_swing_pivots(df, c.pivot_left, c.pivot_right)
+        pivots_by_idx: dict[int, list[tuple[float, str]]] = {}
+        idx_pos = {ts: i for i, ts in enumerate(df.index)}
+        for ts, level, kind in all_pivots:
+            # Disponibile dopo `right` barre
+            confirmation_i = idx_pos[ts] + c.pivot_right
+            if confirmation_i < len(df):
+                pivots_by_idx.setdefault(confirmation_i, []).append((level, kind))
+
         equity = c.capital
         equity_curve: list[tuple[pd.Timestamp, float]] = []
         trades: list[Trade] = []
-        pos: Position | None = None
+        open_positions: list[OptionPosition] = []
+        active_levels: list[tuple[float, str]] = []   # (level, "high"|"low")
 
-        for date, row in sig.iterrows():
+        for i, (date, row) in enumerate(df.iterrows()):
             spot = float(row["close"])
+            high = float(row["high"])
+            low = float(row["low"])
+            sigma = float(rv.iloc[i]) if not np.isnan(rv.iloc[i]) else np.nan
+            sigma_avg = float(rv_sma.iloc[i]) if not np.isnan(rv_sma.iloc[i]) else np.nan
 
-            # Gestione posizione aperta
-            if pos is not None:
-                hit_stop = (pos.side == "long" and row["low"] <= pos.stop) or (
-                    pos.side == "short" and row["high"] >= pos.stop
-                )
-                hit_take = (pos.side == "long" and row["high"] >= pos.take) or (
-                    pos.side == "short" and row["low"] <= pos.take
-                )
-                reverse = (pos.side == "long" and row["signal"] == -1) or (
-                    pos.side == "short" and row["signal"] == 1
-                )
+            # --- 1. Aggiungi pivot confermati in questa barra ---------------
+            for level, kind in pivots_by_idx.get(i, []):
+                active_levels.append((level, kind))
+            if len(active_levels) > c.max_active_levels:
+                active_levels = active_levels[-c.max_active_levels :]
 
-                if hit_stop or hit_take or reverse:
-                    exit_spot = (
-                        pos.stop if hit_stop else (pos.take if hit_take else spot)
+            # --- 2. Gestione posizioni aperte -------------------------------
+            still_open: list[OptionPosition] = []
+            for pos in open_positions:
+                days_left = max(0, (pos.expiry - date).days)
+                current_sigma = sigma if not np.isnan(sigma) else pos.sigma_at_entry
+                theo = self._price_option(spot, pos.strike, current_sigma, days_left, pos.kind)
+
+                # invalidazione: prezzo tornato nettamente dall'altro lato del livello
+                invalidated = False
+                if pos.level_kind == "high" and spot < pos.level * (1 - c.invalidation_pct):
+                    invalidated = True
+                if pos.level_kind == "low" and spot > pos.level * (1 + c.invalidation_pct):
+                    invalidated = True
+
+                tp_hit = theo >= pos.entry_premium * c.tp_mult
+                time_stop = days_left <= c.min_days_to_expiry
+                expired = days_left == 0
+
+                if tp_hit or time_stop or invalidated or expired:
+                    exit_premium = (
+                        max(0.0, spot - pos.strike)
+                        if pos.kind == "call"
+                        else max(0.0, pos.strike - spot)
+                    ) if expired else theo
+                    pnl = (exit_premium - pos.entry_premium) * pos.units
+                    equity += pnl
+                    reason = (
+                        "take_profit" if tp_hit else
+                        "invalidation" if invalidated else
+                        "expired" if expired else
+                        "time_stop"
                     )
-                    direction = 1 if pos.side == "long" else -1
-                    spot_pnl = direction * (exit_spot - pos.entry_spot) * pos.units
-                    hedge_value = self._hedge_exit_value(pos, exit_spot, date)
-                    net_premium = pos.hedge_premium_paid - pos.collar_premium_received
-                    hedge_pnl = (hedge_value - net_premium) * pos.units
-                    net_pnl = spot_pnl + hedge_pnl
-                    equity += net_pnl
-
                     trades.append(
                         Trade(
                             entry_date=pos.entry_date,
                             exit_date=date,
-                            side=pos.side,
+                            kind=pos.kind,
+                            level=pos.level,
+                            strike=pos.strike,
                             entry_spot=pos.entry_spot,
-                            exit_spot=exit_spot,
+                            exit_spot=spot,
+                            entry_premium=pos.entry_premium,
+                            exit_premium=exit_premium,
                             units=pos.units,
-                            spot_pnl=spot_pnl,
-                            hedge_pnl=hedge_pnl,
-                            net_pnl=net_pnl,
-                            reason="stop" if hit_stop else ("take" if hit_take else "reverse"),
+                            pnl=pnl,
+                            reason=reason,
                         )
                     )
-                    pos = None
-
-            # Apertura nuova posizione
-            if pos is None and row["signal"] != 0:
-                side = "long" if row["signal"] == 1 else "short"
-                atr_v = float(row["atr"])
-                if side == "long":
-                    stop = spot - c.atr_stop_mult * atr_v
-                    take = spot + c.atr_take_mult * atr_v
                 else:
-                    stop = spot + c.atr_stop_mult * atr_v
-                    take = spot - c.atr_take_mult * atr_v
+                    still_open.append(pos)
+            open_positions = still_open
 
-                hedge = (
-                    self._open_hedge(side, spot, date)
-                    if c.hedge_enabled
-                    else {
-                        "hedge_kind": "none",
-                        "hedge_strike": 0.0,
-                        "hedge_premium": 0.0,
-                        "hedge_expiry": None,
-                        "collar_kind": "none",
-                        "collar_strike": 0.0,
-                        "collar_premium": 0.0,
-                    }
-                )
-                net_cost = hedge["hedge_premium"] - hedge["collar_premium"]
-                units = self._size_position(spot, stop, net_cost)
-                if units > 0:
-                    pos = Position(
-                        side=side,
-                        entry_date=date,
-                        entry_spot=spot,
-                        units=units,
-                        stop=stop,
-                        take=take,
-                        hedge_strike=hedge["hedge_strike"],
-                        hedge_kind=hedge["hedge_kind"],
-                        hedge_premium_paid=hedge["hedge_premium"],
-                        hedge_expiry=hedge["hedge_expiry"],
-                        collar_strike=hedge["collar_strike"],
-                        collar_kind=hedge["collar_kind"],
-                        collar_premium_received=hedge["collar_premium"],
-                    )
+            # --- 3. Apertura nuove posizioni --------------------------------
+            if (
+                not np.isnan(sigma)
+                and not np.isnan(sigma_avg)
+                and sigma <= sigma_avg * c.cheap_vol_ratio
+                and len(open_positions) < c.max_concurrent
+            ):
+                remaining_levels: list[tuple[float, str]] = []
+                for level, kind in active_levels:
+                    triggered = False
+                    # Usa high/low della barra: il livello e' stato toccato?
+                    if kind == "high" and abs(high - level) / level <= c.proximity_pct and high <= level * (1 + c.invalidation_pct):
+                        direction: Literal["call", "put"] = "call"
+                        strike = level * (1 + c.otm_pct)
+                        triggered = True
+                    elif kind == "low" and abs(low - level) / level <= c.proximity_pct and low >= level * (1 - c.invalidation_pct):
+                        direction = "put"
+                        strike = level * (1 - c.otm_pct)
+                        triggered = True
+
+                    if not triggered:
+                        remaining_levels.append((level, kind))
+                        continue
+
+                    premium = self._price_option(spot, strike, sigma, c.tenor_days, direction)
+                    cheap = premium <= spot * c.cheap_premium_pct and premium > 0
+
+                    if cheap and len(open_positions) < c.max_concurrent:
+                        budget = equity * c.risk_pct
+                        units = budget / premium if premium > 0 else 0.0
+                        if units > 0:
+                            open_positions.append(
+                                OptionPosition(
+                                    entry_date=date,
+                                    expiry=date + pd.Timedelta(days=c.tenor_days),
+                                    level=level,
+                                    level_kind=kind,  # type: ignore[arg-type]
+                                    kind=direction,
+                                    strike=strike,
+                                    entry_spot=spot,
+                                    entry_premium=premium,
+                                    units=units,
+                                    sigma_at_entry=sigma,
+                                )
+                            )
+                        # livello consumato: non rientra in remaining_levels
+                    else:
+                        # livello ancora valido se non era cheap
+                        remaining_levels.append((level, kind))
+                active_levels = remaining_levels
 
             equity_curve.append((date, equity))
 
         curve = pd.DataFrame(equity_curve, columns=["date", "equity"]).set_index("date")
+        wins = [t for t in trades if t.pnl > 0]
         return {
             "trades": trades,
             "equity_curve": curve,
             "final_equity": equity,
             "return_pct": (equity / c.capital - 1) * 100,
             "n_trades": len(trades),
-            "win_rate": (
-                sum(1 for t in trades if t.net_pnl > 0) / len(trades) * 100
-                if trades
-                else 0.0
-            ),
+            "win_rate": len(wins) / len(trades) * 100 if trades else 0.0,
+            "avg_win": float(np.mean([t.pnl for t in wins])) if wins else 0.0,
+            "avg_loss": float(np.mean([t.pnl for t in trades if t.pnl <= 0])) if any(t.pnl <= 0 for t in trades) else 0.0,
+            "gross_profit": sum(t.pnl for t in trades if t.pnl > 0),
+            "gross_loss": sum(t.pnl for t in trades if t.pnl < 0),
         }
 
 
 # ---------------------------------------------------------------------------
-# Esempio d'uso con dati sintetici
+# Demo con dati sintetici
 # ---------------------------------------------------------------------------
 
 def _demo() -> None:
-    rng = np.random.default_rng(42)
-    n = 500
-    dates = pd.date_range("2023-01-01", periods=n, freq="B")
-    # random walk con drift debole + cicli
-    drift = 0.00015
-    shocks = rng.normal(0, 0.005, n)
-    cycle = 0.01 * np.sin(np.linspace(0, 12 * np.pi, n))
-    log_px = np.cumsum(drift + shocks) + cycle
-    close = 1.08 * np.exp(log_px)
-    high = close * (1 + rng.uniform(0, 0.003, n))
-    low = close * (1 - rng.uniform(0, 0.003, n))
-    open_ = np.roll(close, 1)
-    open_[0] = close[0]
+    rng = np.random.default_rng(7)
+    n = 750
+    dates = pd.date_range("2022-01-01", periods=n, freq="B")
+
+    # random walk con regimi di volatilita' alternati e qualche "break" brusco
+    base_vol = 0.005
+    vol_regime = np.where((np.arange(n) // 80) % 2 == 0, base_vol, base_vol * 1.8)
+    shocks = rng.normal(0, vol_regime)
+    # iniezione di 5 break bruschi
+    for k in rng.integers(100, n - 10, 5):
+        shocks[k] += rng.choice([-1, 1]) * 0.012
+    log_px = np.cumsum(0.00005 + shocks)
+    close = 1.10 * np.exp(log_px)
+    noise_h = rng.uniform(0, 0.0025, n)
+    noise_l = rng.uniform(0, 0.0025, n)
+    high = close * (1 + noise_h)
+    low = close * (1 - noise_l)
+    open_ = np.concatenate([[close[0]], close[:-1]])
 
     df = pd.DataFrame(
         {"open": open_, "high": high, "low": low, "close": close},
         index=dates,
     )
 
-    strat = ForexHedgedStrategy(StrategyConfig(use_collar=True))
+    strat = CheapOptionsLevelsStrategy()
     res = strat.backtest(df)
 
-    print(f"Trades:     {res['n_trades']}")
-    print(f"Win rate:   {res['win_rate']:.1f}%")
-    print(f"Final eq.:  {res['final_equity']:,.2f}")
-    print(f"Return:     {res['return_pct']:.2f}%")
+    print(f"Trades:       {res['n_trades']}")
+    print(f"Win rate:     {res['win_rate']:.1f}%")
+    print(f"Avg win:      {res['avg_win']:+,.2f}")
+    print(f"Avg loss:     {res['avg_loss']:+,.2f}")
+    print(f"Gross profit: {res['gross_profit']:+,.2f}")
+    print(f"Gross loss:   {res['gross_loss']:+,.2f}")
+    print(f"Final equity: {res['final_equity']:,.2f}")
+    print(f"Return:       {res['return_pct']:+.2f}%")
     if res["trades"]:
         print("\nUltimi 5 trade:")
         for t in res["trades"][-5:]:
             print(
                 f"  {t.entry_date.date()} -> {t.exit_date.date()} "
-                f"{t.side:5s} spot_pnl={t.spot_pnl:+.2f} "
-                f"hedge_pnl={t.hedge_pnl:+.2f} net={t.net_pnl:+.2f} "
-                f"({t.reason})"
+                f"{t.kind:4s} K={t.strike:.5f} "
+                f"prem {t.entry_premium:.5f}->{t.exit_premium:.5f} "
+                f"pnl={t.pnl:+.2f} ({t.reason})"
             )
 
 
