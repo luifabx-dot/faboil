@@ -111,7 +111,7 @@ table.reg .resid.z{color:var(--red);opacity:.7}
 .cl-row{display:flex;gap:.9rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:.6rem}
 .f-lbl{font-size:.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:.22rem;display:block}
 .tess-card{border:1.5px solid var(--border);border-radius:var(--radius);padding:.8rem .9rem;margin-bottom:.7rem;background:var(--surface2)}
-.tess-head{display:flex;justify-content:space-between;align-items:center;gap:.6rem;margin-bottom:.6rem}
+.tess-head{display:flex;align-items:flex-end;gap:.8rem;margin-bottom:.6rem;flex-wrap:wrap;padding-bottom:.5rem;border-bottom:1px solid var(--border)}
 .wdays{display:flex;gap:.25rem}
 .wd{width:30px;height:30px;border-radius:7px;border:1.5px solid var(--border2);background:var(--surface);font-family:var(--sans);font-weight:700;font-size:.74rem;cursor:pointer;color:var(--muted)}
 .wd.on{background:var(--accent);border-color:var(--accent);color:#fff}
@@ -160,6 +160,16 @@ table.reg .resid.z{color:var(--red);opacity:.7}
       </div>
       <input type="file" id="file-cs" accept=".xlsx,.xls" hidden>
       <div id="import-result-cs"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Clienti — Anagrafica (estesoL)</div>
+      <div class="drop" id="drop-cl">
+        <span class="ic">👥</span>
+        <h3>Trascina qui il file Clienti</h3>
+        <p>oppure <b>clicca per sceglierlo</b> — “estesoL” .xlsx (Fine mese / Prepagati / Scontati / Punti)</p>
+      </div>
+      <input type="file" id="file-cl" accept=".xlsx,.xls" hidden>
+      <div id="import-result-cl"></div>
     </div>
   </div>
 
@@ -503,64 +513,118 @@ function storeKey(){ return 'faboil_reg_'+(STATE?STATE.meta.period:''); }
 function saveStore(){ try{ localStorage.setItem(storeKey(), JSON.stringify({seq:SEQ,current:CURRENT,transfers:TRANSFERS,bseq:BSEQ,curbuono:CURBUONO,buoni:BUONI})); }catch(e){} }
 function loadStore(){ TRANSFERS=[];CURRENT=null;SEQ=1;BUONI=[];CURBUONO=null;BSEQ=1; try{ const s=localStorage.getItem(storeKey()); if(s){ const o=JSON.parse(s); TRANSFERS=o.transfers||[]; SEQ=o.seq||(TRANSFERS.length+1); CURRENT=o.current!=null?o.current:(TRANSFERS[0]&&TRANSFERS[0].id); BUONI=o.buoni||[]; BSEQ=o.bseq||(BUONI.length+1); CURBUONO=o.curbuono!=null?o.curbuono:(BUONI[0]&&BUONI[0].id); } }catch(e){} }
 
-// ---- ANAGRAFICA CLIENTI / TESSERE ----
-let CLIENTI=[], CURCLI=null, CSEQ=1, TSEQ=1;
+// ---- ANAGRAFICA CLIENTI / TESSERE (popolata da import estesoL) ----
+let CLIENTI=[], CURCLI=null;
 const WD=['L','M','M','G','V','S','D'], WDFULL=['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
+const SHEET_TIPO={'fine mese':'POST','prepagati':'PRE','scontati':'POST','punti':'POST'};
 function curCli(){ return CLIENTI.find(c=>c.id===CURCLI)||null; }
+
+function parseEstesoL(wb){
+  const str=v=>v==null?'':String(v).trim();
+  const byId={}; const counts={};
+  (wb.SheetNames||[]).forEach(sheetName=>{
+    const ws=wb.Sheets[sheetName]; if(!ws) return;
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null}); if(rows.length<2) return;
+    const head=rows[0].map(c=>String(c==null?'':c).trim().toLowerCase());
+    const find=(...n)=>{ for(const x of n){ const k=head.findIndex(h=>h===x||h.includes(x)); if(k>=0) return k; } return -1; };
+    const iId=find('idcliente'), iRag=find('ragione'), iInd=find('indirizzo'), iCitta=find('citta','città'), iProv=find('provincia'), iPiva=find('partitaiva'), iCf=find('codicefisc'), iTel=find('telefono'), iCell=find('cellulare'), iMail=find('email'), iPec=find('pec'), iNote=find('note'), iModPag=find('modpagamento'), iFidoC=find('fido cliente'), iCodT=find('codicetessera'), iTarga=find('targa'), iFidoT=find('fido tessera'), iPlaf=find('plafond');
+    if(iId<0||iCodT<0) return;
+    const cat=sheetName.trim(); const tipo=SHEET_TIPO[cat.toLowerCase()]||'POST'; counts[cat]=counts[cat]||0;
+    for(let r=1;r<rows.length;r++){
+      const row=rows[r]; if(!row) continue; const id=row[iId]; if(id==null||id==='') continue; const key=String(id);
+      if(!byId[key]){ byId[key]={ id:key, categoria:cat, tipo, ragione:str(row[iRag]), indirizzo:str(row[iInd]), citta:str(row[iCitta]), prov:str(row[iProv]), piva:str(row[iPiva]), cf:str(row[iCf]), tel:str(row[iTel]), cell:str(row[iCell]), email:str(row[iMail]), pec:str(row[iPec]), note:str(row[iNote]), modPag:str(row[iModPag]), fidoCliente:csNum(row[iFidoC]), perc:0, saldo:0, saldoData:'', consumoMese:0, tessere:[] }; counts[cat]++; }
+      const codT=row[iCodT]; if(codT==null||codT==='') continue; const tk=String(codT);
+      if(!byId[key].tessere.some(t=>t.id===tk)) byId[key].tessere.push({ id:tk, targa:str(row[iTarga]), descrizione:'', fidoTessera:csNum(row[iFidoT]), plafond:csNum(row[iPlaf]), prodotto:'GASOLIO', capienza:0, giorni:[1,1,1,1,1,0,0], escludiFestivi:true, prezzo:0, sconto:0 });
+    }
+  });
+  const clienti=Object.values(byId);
+  return { clienti, nClienti:clienti.length, nTessere:clienti.reduce((s,c)=>s+c.tessere.length,0), counts };
+}
+function mergeClienti(parsed){ // preserva i parametri inseriti a mano (consumo, %, saldo, descrizione…)
+  const prev={}; CLIENTI.forEach(c=>prev[c.id]=c);
+  parsed.clienti.forEach(nc=>{ const oc=prev[nc.id]; if(!oc) return;
+    nc.tipo=oc.tipo; nc.perc=oc.perc; nc.saldo=oc.saldo; nc.saldoData=oc.saldoData; nc.consumoMese=oc.consumoMese;
+    const ot={}; oc.tessere.forEach(t=>ot[t.id]=t);
+    nc.tessere.forEach(nt=>{ const o=ot[nt.id]; if(!o) return; nt.descrizione=o.descrizione; nt.prodotto=o.prodotto; nt.capienza=o.capienza; nt.giorni=o.giorni; nt.escludiFestivi=o.escludiFestivi; nt.prezzo=o.prezzo; nt.sconto=o.sconto; if(!nt.targa) nt.targa=o.targa; });
+  });
+  CLIENTI=parsed.clienti; CURCLI=CLIENTI.length?CLIENTI[0].id:null; saveClienti();
+}
+function handleClFile(file){
+  const res=document.getElementById('import-result-cl'); res.innerHTML='<p class="muted" style="margin-top:1rem">Lettura in corso…</p>';
+  const reader=new FileReader();
+  reader.onload=e=>{ try{ const wb=XLSX.read(e.target.result,{type:'array'}); const parsed=parseEstesoL(wb);
+    if(!parsed.nClienti) throw new Error('Nessun cliente trovato (servono colonne IdCliente e CodiceTessera).');
+    mergeClienti(parsed); renderClienti();
+    const cats=Object.entries(parsed.counts).map(([k,v])=>`${k}: ${v}`).join(' · ');
+    res.innerHTML=`<div class="ok-msg">✓ Importato: <b>${file.name}</b></div>
+      <div class="grid" style="margin-top:.9rem">
+        <div class="stat"><div class="k">Clienti</div><div class="v">${parsed.nClienti}</div></div>
+        <div class="stat"><div class="k">Tessere</div><div class="v">${parsed.nTessere}</div></div>
+      </div>
+      <p class="muted" style="margin-top:.7rem">Categorie — ${cats}. I parametri di consumo (capienza, giorni, festivi, %, saldo) restano quelli che imposti tu.</p>
+      <div style="margin-top:1rem"><button class="btn" onclick="goTab('clienti')">Vai ai Clienti →</button></div>`;
+  }catch(err){ res.innerHTML=`<div class="warn">⚠ ${err.message}</div>`; } };
+  reader.readAsArrayBuffer(file);
+}
+
 function renderClienti(){ renderClBar(); renderClDetail(); }
 function renderClBar(){
-  const bar=document.getElementById('cl-bar'); let chips='<div class="chips">';
-  CLIENTI.forEach(c=>chips+=`<button class="chip ${c.id===CURCLI?'on':''}" data-id="${c.id}">${escapeHtml(c.nome||'(senza nome)')}<span class="badge-tipo ${c.tipo==='PRE'?'pre':'post'}">${c.tipo==='PRE'?'PRE':'POST'}</span></button>`);
-  chips+=`<button class="chip chip-add" id="cl-add">+ Nuovo cliente</button></div>`;
-  bar.innerHTML=chips;
-  bar.querySelectorAll('.chip[data-id]').forEach(el=>el.addEventListener('click',()=>{ CURCLI=parseInt(el.dataset.id,10); saveClienti(); renderClienti(); }));
-  document.getElementById('cl-add').addEventListener('click',addCli);
+  const bar=document.getElementById('cl-bar');
+  if(!CLIENTI.length){ bar.innerHTML='<p class="muted">Nessun cliente. Importa il file clienti (estesoL) dalla sezione <b>Importazioni</b>.</p>'; document.getElementById('cl-detail').innerHTML=''; return; }
+  let chips='<div class="chips">';
+  CLIENTI.forEach(c=>chips+=`<button class="chip ${c.id===CURCLI?'on':''}" data-id="${escapeAttr(c.id)}">${escapeHtml(c.ragione||c.id)}<span class="badge-tipo ${c.tipo==='PRE'?'pre':'post'}">${c.tipo==='PRE'?'PRE':'POST'}</span></button>`);
+  chips+='</div>'; bar.innerHTML=chips;
+  bar.querySelectorAll('.chip[data-id]').forEach(el=>el.addEventListener('click',()=>{ CURCLI=el.dataset.id; saveClienti(); renderClienti(); }));
 }
 function renderClDetail(){
-  const cont=document.getElementById('cl-detail'); const c=curCli();
-  if(!c){ cont.innerHTML='<div class="empty-state"><span class="ic">👤</span>Crea un cliente per gestire le sue tessere.</div>'; return; }
-  let h=`<div class="cl-card"><div class="cl-row">
-    <div><span class="f-lbl">Nome cliente</span><input class="fld" id="c-nome" value="${escapeAttr(c.nome)}" placeholder="Ragione sociale / nome" style="min-width:280px"></div>
-    <div><span class="f-lbl">Tipo</span><div class="toggle" id="c-tipo"><button data-v="POST" class="${c.tipo==='POST'?'on':''}">Postpagato</button><button data-v="PRE" class="${c.tipo==='PRE'?'on':''}">Prepagato</button></div></div>
-    <div><span class="f-lbl">Percentuale</span><input class="fld sm" id="c-perc" type="number" min="0" max="100" step="1" value="${c.perc||''}" placeholder="%"></div>`;
+  const cont=document.getElementById('cl-detail'); const c=curCli(); if(!CLIENTI.length){ return; }
+  if(!c){ cont.innerHTML='<div class="empty-state"><span class="ic">👤</span>Seleziona un cliente.</div>'; return; }
+  let h=`<div class="cl-card">
+    <div class="cl-row" style="align-items:center">
+      <div style="flex:1"><div style="font-size:1.05rem;font-weight:800">${escapeHtml(c.ragione||'(senza nome)')}</div>
+        <div class="muted" style="font-family:var(--mono)">ID ${escapeHtml(c.id)}${c.piva?' · P.IVA '+escapeHtml(c.piva):''}${c.cf?' · CF '+escapeHtml(c.cf):''}${c.fidoCliente?' · Fido '+fmtInt(c.fidoCliente):''}</div></div>
+      <span class="badge-tipo ${c.tipo==='PRE'?'pre':'post'}">${escapeHtml(c.categoria||c.tipo)}</span>
+    </div>
+    <div class="cl-row">
+      <div><span class="f-lbl">Tipo</span><div class="toggle" id="c-tipo"><button data-v="POST" class="${c.tipo!=='PRE'?'on':''}">Postpagato</button><button data-v="PRE" class="${c.tipo==='PRE'?'on':''}">Prepagato</button></div></div>
+      <div><span class="f-lbl">Percentuale</span><input class="fld sm" id="c-perc" type="number" min="0" max="100" step="1" value="${c.perc||''}" placeholder="%"></div>`;
   if(c.tipo==='PRE') h+=`
-    <div><span class="f-lbl">Credito (L)</span><input class="fld sm" id="c-credito" type="number" min="0" step="1" value="${c.credito||''}"></div>
-    <div><span class="f-lbl">Consumo / mese (L)</span><input class="fld sm" id="c-consumo" type="number" min="0" step="1" value="${c.consumoMese||''}"></div>`;
-  h+=`<button class="btn sm danger" id="c-del" style="margin-left:auto">Elimina cliente</button></div>
-    <div class="card-title" style="margin-top:.4rem">Tessere / veicoli</div>`;
-  if(!c.tessere.length) h+=`<p class="muted">Nessuna tessera. Aggiungine una.</p>`;
+      <div><span class="f-lbl">Saldo credito (€)</span><input class="fld sm" id="c-saldo" type="number" step="0.01" value="${c.saldo||''}"></div>
+      <div><span class="f-lbl">alla data</span><input class="fld" id="c-saldodata" type="date" value="${escapeAttr(c.saldoData||'')}"></div>
+      <div><span class="f-lbl">Consumo / mese</span><input class="fld sm" id="c-consumo" type="number" min="0" step="1" value="${c.consumoMese||''}"></div>`;
+  h+=`</div><div class="card-title" style="margin-top:.4rem">Tessere / veicoli (${c.tessere.length})</div>`;
   c.tessere.forEach(t=>h+=tessHtml(t));
-  h+=`<button class="btn sm ghost" id="t-addtess" style="margin-top:.6rem">+ Aggiungi tessera</button></div>`;
+  h+=`</div>`;
   cont.innerHTML=h; bindClDetail(c);
 }
 function tessHtml(t){
-  let wd=''; for(let i=0;i<7;i++) wd+=`<button class="wd ${t.giorni[i]?'on':''} ${i>=5?'red':''}" data-wd="${i}" data-t="${t.id}" title="${WDFULL[i]}">${WD[i]}</button>`;
-  return `<div class="tess-card"><div class="tess-head"><input class="fld" data-tf="etichetta" data-t="${t.id}" value="${escapeAttr(t.etichetta)}" placeholder="Etichetta (es. Trattore / targa)" style="min-width:240px;font-weight:700"><button class="btn sm danger" data-deltess="${t.id}">Elimina tessera</button></div>
+  let wd=''; for(let i=0;i<7;i++) wd+=`<button class="wd ${t.giorni[i]?'on':''} ${i>=5?'red':''}" data-wd="${i}" data-t="${escapeAttr(t.id)}" title="${WDFULL[i]}">${WD[i]}</button>`;
+  return `<div class="tess-card">
+    <div class="tess-head">
+      <div><span class="f-lbl">Codice tessera</span><div style="font-family:var(--mono);font-weight:700;padding:.2rem 0">${escapeHtml(t.id)}${t.plafond?'<span class="muted"> · plafond '+fmtInt(t.plafond)+'</span>':''}</div></div>
+      <div><span class="f-lbl">Targa</span><input class="fld sm" data-tf="targa" data-t="${escapeAttr(t.id)}" value="${escapeAttr(t.targa)}" placeholder="targa"></div>
+      <div style="flex:1;min-width:200px"><span class="f-lbl">Descrizione</span><input class="fld" data-tf="descrizione" data-t="${escapeAttr(t.id)}" value="${escapeAttr(t.descrizione)}" placeholder="es. Trattore / generatore" style="width:100%"></div>
+    </div>
     <div class="cl-row">
-      <div><span class="f-lbl">Prodotto</span><select class="fld" data-tf="prodotto" data-t="${t.id}"><option value="GASOLIO" ${t.prodotto==='GASOLIO'?'selected':''}>Gasolio</option><option value="VERDE" ${t.prodotto==='VERDE'?'selected':''}>Verde</option><option value="GPL" ${t.prodotto==='GPL'?'selected':''}>GPL</option></select></div>
-      <div><span class="f-lbl">Capienza serbatoio (L)</span><input class="fld sm" data-tf="capienza" data-t="${t.id}" type="number" min="0" step="1" value="${t.capienza||''}" placeholder="es. 120"></div>
+      <div><span class="f-lbl">Prodotto</span><select class="fld" data-tf="prodotto" data-t="${escapeAttr(t.id)}"><option value="GASOLIO" ${t.prodotto==='GASOLIO'?'selected':''}>Gasolio</option><option value="VERDE" ${t.prodotto==='VERDE'?'selected':''}>Verde</option><option value="GPL" ${t.prodotto==='GPL'?'selected':''}>GPL</option></select></div>
+      <div><span class="f-lbl">Capienza serbatoio (L)</span><input class="fld sm" data-tf="capienza" data-t="${escapeAttr(t.id)}" type="number" min="0" step="1" value="${t.capienza||''}" placeholder="es. 120"></div>
       <div><span class="f-lbl">Giorni ammessi</span><div class="wdays">${wd}</div></div>
-      <div><span class="f-lbl">Festivi</span><label class="chk"><input type="checkbox" data-tf="escludiFestivi" data-t="${t.id}" ${t.escludiFestivi?'checked':''}> escludi</label></div>
-      <div><span class="f-lbl">Prezzo €/L</span><input class="fld sm" data-tf="prezzo" data-t="${t.id}" type="number" min="0" step="0.001" value="${t.prezzo||''}"></div>
-      <div><span class="f-lbl">Sconto</span><input class="fld sm" data-tf="sconto" data-t="${t.id}" type="number" step="0.001" value="${t.sconto||''}"></div>
+      <div><span class="f-lbl">Festivi</span><label class="chk"><input type="checkbox" data-tf="escludiFestivi" data-t="${escapeAttr(t.id)}" ${t.escludiFestivi?'checked':''}> escludi</label></div>
+      <div><span class="f-lbl">Prezzo €/L</span><input class="fld sm" data-tf="prezzo" data-t="${escapeAttr(t.id)}" type="number" min="0" step="0.001" value="${t.prezzo||''}"></div>
+      <div><span class="f-lbl">Sconto</span><input class="fld sm" data-tf="sconto" data-t="${escapeAttr(t.id)}" type="number" step="0.001" value="${t.sconto||''}"></div>
     </div></div>`;
 }
 function bindClDetail(c){
-  document.getElementById('c-nome').addEventListener('input',e=>{ c.nome=e.target.value; saveClienti(); const ch=document.querySelector(`#cl-bar .chip[data-id="${c.id}"]`); if(ch) ch.firstChild.textContent=c.nome||'(senza nome)'; });
-  document.getElementById('c-perc').addEventListener('input',e=>{ c.perc=parseFloat(e.target.value)||0; saveClienti(); });
-  document.querySelectorAll('#c-tipo button').forEach(b=>b.addEventListener('click',()=>{ c.tipo=b.dataset.v; saveClienti(); renderClienti(); }));
-  if(c.tipo==='PRE'){ document.getElementById('c-credito').addEventListener('input',e=>{ c.credito=parseFloat(e.target.value)||0; saveClienti(); }); document.getElementById('c-consumo').addEventListener('input',e=>{ c.consumoMese=parseFloat(e.target.value)||0; saveClienti(); }); }
-  document.getElementById('c-del').addEventListener('click',()=>delCli(c.id));
-  document.getElementById('t-addtess').addEventListener('click',()=>addTess(c));
-  document.querySelectorAll('#cl-detail [data-tf]').forEach(el=>{ const ev=el.type==='checkbox'?'change':'input'; el.addEventListener(ev,()=>{ const t=c.tessere.find(x=>x.id===parseInt(el.dataset.t,10)); if(!t) return; const f=el.dataset.tf; t[f]= el.type==='checkbox'?el.checked:(el.type==='number'?(parseFloat(el.value)||0):el.value); saveClienti(); }); });
-  document.querySelectorAll('#cl-detail .wd').forEach(b=>b.addEventListener('click',()=>{ const t=c.tessere.find(x=>x.id===parseInt(b.dataset.t,10)); const i=parseInt(b.dataset.wd,10); t.giorni[i]=t.giorni[i]?0:1; saveClienti(); b.classList.toggle('on',!!t.giorni[i]); }));
-  document.querySelectorAll('#cl-detail [data-deltess]').forEach(b=>b.addEventListener('click',()=>{ const id=parseInt(b.dataset.deltess,10); c.tessere=c.tessere.filter(x=>x.id!==id); saveClienti(); renderClDetail(); }));
+  const perc=document.getElementById('c-perc'); if(perc) perc.addEventListener('input',e=>{ c.perc=parseFloat(e.target.value)||0; saveClienti(); });
+  document.querySelectorAll('#c-tipo button').forEach(b=>b.addEventListener('click',()=>{ c.tipo=b.dataset.v; saveClienti(); renderClDetail(); }));
+  const sal=document.getElementById('c-saldo'); if(sal) sal.addEventListener('input',e=>{ c.saldo=parseFloat(e.target.value)||0; saveClienti(); });
+  const sald=document.getElementById('c-saldodata'); if(sald) sald.addEventListener('input',e=>{ c.saldoData=e.target.value; saveClienti(); });
+  const cons=document.getElementById('c-consumo'); if(cons) cons.addEventListener('input',e=>{ c.consumoMese=parseFloat(e.target.value)||0; saveClienti(); });
+  document.querySelectorAll('#cl-detail [data-tf]').forEach(el=>{ const ev=el.type==='checkbox'?'change':'input'; el.addEventListener(ev,()=>{ const t=c.tessere.find(x=>x.id===el.dataset.t); if(!t) return; const f=el.dataset.tf; t[f]= el.type==='checkbox'?el.checked:(el.type==='number'?(parseFloat(el.value)||0):el.value); saveClienti(); }); });
+  document.querySelectorAll('#cl-detail .wd').forEach(b=>b.addEventListener('click',()=>{ const t=c.tessere.find(x=>x.id===b.dataset.t); const i=parseInt(b.dataset.wd,10); t.giorni[i]=t.giorni[i]?0:1; saveClienti(); b.classList.toggle('on',!!t.giorni[i]); }));
 }
-function addCli(){ const c={id:CSEQ++,nome:'Nuovo cliente',tipo:'POST',perc:0,credito:0,consumoMese:0,tessere:[]}; CLIENTI.push(c); CURCLI=c.id; saveClienti(); renderClienti(); }
-function delCli(id){ const c=CLIENTI.find(x=>x.id===id); if(c && !confirm(`Eliminare il cliente "${c.nome}"?`)) return; CLIENTI=CLIENTI.filter(x=>x.id!==id); CURCLI=CLIENTI.length?CLIENTI[0].id:null; saveClienti(); renderClienti(); }
-function addTess(c){ c.tessere.push({id:TSEQ++,etichetta:'',prodotto:'GASOLIO',capienza:0,giorni:[1,1,1,1,1,0,0],escludiFestivi:true,prezzo:0,sconto:0}); saveClienti(); renderClDetail(); }
-function saveClienti(){ try{ localStorage.setItem('faboil_clienti', JSON.stringify({cseq:CSEQ,tseq:TSEQ,curcli:CURCLI,clienti:CLIENTI})); }catch(e){} }
-function loadClienti(){ try{ const s=localStorage.getItem('faboil_clienti'); if(s){ const o=JSON.parse(s); CLIENTI=o.clienti||[]; CSEQ=o.cseq||(CLIENTI.length+1); TSEQ=o.tseq||1; CURCLI=o.curcli!=null?o.curcli:(CLIENTI[0]&&CLIENTI[0].id); } }catch(e){} }
+function saveClienti(){ try{ localStorage.setItem('faboil_clienti', JSON.stringify({curcli:CURCLI,clienti:CLIENTI})); }catch(e){} }
+function loadClienti(){ try{ const s=localStorage.getItem('faboil_clienti'); if(s){ const o=JSON.parse(s); CLIENTI=o.clienti||[]; CURCLI=o.curcli!=null?o.curcli:(CLIENTI[0]&&CLIENTI[0].id); } }catch(e){} }
 
 // ---- export ----
 function exportRegistro(){
@@ -594,6 +658,13 @@ fileCs.addEventListener('change',e=>{ if(e.target.files[0]) handleCSFile(e.targe
 ['dragover','dragenter'].forEach(ev=>dropCs.addEventListener(ev,e=>{e.preventDefault();dropCs.classList.add('drag');}));
 ['dragleave','drop'].forEach(ev=>dropCs.addEventListener(ev,e=>{e.preventDefault();dropCs.classList.remove('drag');}));
 dropCs.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handleCSFile(f); });
+
+const dropCl=document.getElementById('drop-cl'), fileCl=document.getElementById('file-cl');
+dropCl.addEventListener('click',()=>fileCl.click());
+fileCl.addEventListener('change',e=>{ if(e.target.files[0]) handleClFile(e.target.files[0]); });
+['dragover','dragenter'].forEach(ev=>dropCl.addEventListener(ev,e=>{e.preventDefault();dropCl.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=>dropCl.addEventListener(ev,e=>{e.preventDefault();dropCl.classList.remove('drag');}));
+dropCl.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handleClFile(f); });
 
 // anagrafica clienti: indipendente dal file importato
 loadClienti(); renderClienti();
