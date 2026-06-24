@@ -854,6 +854,14 @@ function clienteCredito(c){
   const saldo=c.saldo||0;
   return { saldo, ric, cs, bu, credito: saldo+ric-cs-bu };
 }
+function clienteAutoIncompleto(c){ // ritorna lista delle mancanze (per clienti con genAuto) oppure null
+  if(!c.genAuto) return null; const miss=[];
+  if(!(c.consumoMese>0)) miss.push('Litri max/mese');
+  const act=c.tessere.filter(t=>!t.sospesa);
+  if(!act.length) miss.push('nessuna tessera attiva');
+  else { const cap=act.filter(t=>(t.capienza||0)>0); if(!cap.length) miss.push('capienza tessera'); else if(!cap.some(t=>t.giorni&&t.giorni.some(x=>x))) miss.push('giorni tessera'); }
+  return miss.length?miss:null;
+}
 function fmtEur(n){ return '€ '+(Math.round(n*100)/100).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function creditoInner(c){ const k=clienteCredito(c); const nr=ricaricheForCliente(c).length;
   return `<div><span class="f-lbl">Saldo @ data</span>${fmtEur(k.saldo)}</div>
@@ -880,14 +888,14 @@ function filterClienti(q,filt){
 }
 function filteredClienti(){ return filterClienti(CLQ,CLFILT); }
 // ---- selettore cliente per i buoni (stesso stile della sezione Clienti) ----
-let CPQ='', CPFILT='ALL', BUONO_CLI='', GEN_CLI='', PICK_CB=null;
-function openCliPicker(cb){ if(!CLIENTI.length){ alert('Importa prima i Clienti (estesoL) dalla sezione Importazioni.'); return; } PICK_CB=cb||selectBuonoCli; document.getElementById('cli-picker').style.display='flex'; renderCp(); const s=document.getElementById('cp-search'); s.value=CPQ; s.focus(); }
+let CPQ='', CPFILT='ALL', BUONO_CLI='', GEN_CLI='', PICK_CB=null, PICK_FILTER=null;
+function openCliPicker(cb,filterFn){ if(!CLIENTI.length){ alert('Importa prima i Clienti (estesoL) dalla sezione Importazioni.'); return; } PICK_CB=cb||selectBuonoCli; PICK_FILTER=filterFn||null; document.getElementById('cli-picker').style.display='flex'; renderCp(); const s=document.getElementById('cp-search'); s.value=CPQ; s.focus(); }
 function closeCliPicker(){ document.getElementById('cli-picker').style.display='none'; }
 function renderCp(){ renderCpFilters(); renderCpList(); }
 function renderCpFilters(){ const el=document.getElementById('cp-filters'); const nAll=CLIENTI.length, nPre=CLIENTI.filter(c=>c.tipo==='PRE').length;
   el.innerHTML=`<button data-f="ALL" class="${CPFILT==='ALL'?'on':''}">Tutti ${nAll}</button><button data-f="POST" class="${CPFILT==='POST'?'on':''}">Post ${nAll-nPre}</button><button data-f="PRE" class="${CPFILT==='PRE'?'on':''}">Pre ${nPre}</button>`;
   el.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ CPFILT=b.dataset.f; renderCp(); })); }
-function renderCpList(){ const box=document.getElementById('cp-list'); const list=filterClienti(CPQ,CPFILT);
+function renderCpList(){ const box=document.getElementById('cp-list'); let list=filterClienti(CPQ,CPFILT); if(PICK_FILTER) list=list.filter(PICK_FILTER);
   if(!list.length){ box.innerHTML='<p class="muted" style="padding:.8rem">Nessun risultato.</p>'; return; }
   box.innerHTML=list.map(c=>`<div class="cl-item ${c.id===BUONO_CLI?'on':''}" data-id="${escapeAttr(c.id)}"><div class="nm">${escapeHtml(c.ragione||c.id)}<div class="sub">ID ${escapeHtml(c.id)} · ${c.tessere.length} tess.${c.piva?' · '+escapeHtml(c.piva):''}</div></div><span class="badge-tipo ${c.tipo==='PRE'?'pre':'post'}">${c.tipo==='PRE'?'PRE':'POST'}</span></div>`).join('');
   box.querySelectorAll('.cl-item').forEach(el=>el.addEventListener('click',()=>{ if(PICK_CB) PICK_CB(el.dataset.id); })); }
@@ -906,7 +914,7 @@ function renderClList(){
   if(!CLIENTI.length){ box.innerHTML='<p class="muted" style="padding:.8rem">Nessun cliente. Importa il file <b>estesoL</b> dalla sezione Importazioni.</p>'; return; }
   const list=filteredClienti();
   if(!list.length){ box.innerHTML='<p class="muted" style="padding:.8rem">Nessun risultato.</p>'; return; }
-  box.innerHTML=list.map(c=>`<div class="cl-item ${c.id===CURCLI?'on':''}" data-id="${escapeAttr(c.id)}"><div class="nm">${escapeHtml(c.ragione||c.id)}<div class="sub">ID ${escapeHtml(c.id)} · ${c.tessere.length} tess.</div></div>${c.genAuto?'<span title="generazione automatica">⚙</span>':''}<span class="badge-tipo ${c.tipo==='PRE'?'pre':'post'}">${c.tipo==='PRE'?'PRE':'POST'}</span></div>`).join('');
+  box.innerHTML=list.map(c=>{ const miss=clienteAutoIncompleto(c); const ico=c.genAuto?(miss?`<span title="auto incompleto: manca ${escapeAttr(miss.join(', '))}" style="color:var(--red)">⚠</span>`:'<span title="generazione automatica">⚙</span>'):''; return `<div class="cl-item ${c.id===CURCLI?'on':''}" data-id="${escapeAttr(c.id)}"><div class="nm">${escapeHtml(c.ragione||c.id)}<div class="sub">ID ${escapeHtml(c.id)} · ${c.tessere.length} tess.</div></div>${ico}<span class="badge-tipo ${c.tipo==='PRE'?'pre':'post'}">${c.tipo==='PRE'?'PRE':'POST'}</span></div>`; }).join('');
   box.querySelectorAll('.cl-item').forEach(el=>el.addEventListener('click',()=>{ CURCLI=el.dataset.id; saveClienti(); renderClList(); renderClDetail(); }));
 }
 function renderClDetail(){
@@ -928,6 +936,7 @@ function renderClDetail(){
       <div><span class="f-lbl">Litri max / mese</span><input class="fld sm" id="c-consumo" type="number" min="0" step="1" value="${c.consumoMese||''}" title="tetto mensile per la generazione automatica"></div>`;
   h+=`</div>`;
   if(c.tipo==='PRE') h+=`<div class="cl-row" id="credito-box" style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:.6rem .85rem;font-family:var(--mono);font-size:.84rem;align-items:flex-end;margin-bottom:.6rem">${creditoInner(c)}</div>`;
+  { const miss=clienteAutoIncompleto(c); if(miss) h+=`<div class="warn" style="margin:.2rem 0 .6rem">⚠ Generazione automatica incompleta — manca: <b>${miss.map(escapeHtml).join(', ')}</b>. Finché non lo completi, questo cliente non viene generato (o solo in parte).</div>`; }
   h+=`<div class="card-title" style="margin-top:.4rem">Tessere / veicoli (${c.tessere.length})</div>`;
   c.tessere.forEach(t=>h+=tessHtml(t));
   h+=`</div>`;
@@ -986,7 +995,7 @@ document.getElementById('bf-day').addEventListener('change',e=>{ BF_DAY=e.target
 document.getElementById('b-delall').addEventListener('click',delAllBuoni);
 document.getElementById('b-cliente-btn').addEventListener('click',()=>openCliPicker(selectBuonoCli));
 document.getElementById('g-cliente-btn').addEventListener('click',()=>openCliPicker(selectGenCli));
-document.getElementById('as-cliente-btn').addEventListener('click',()=>openCliPicker(selectAssCli));
+document.getElementById('as-cliente-btn').addEventListener('click',()=>{ const ids=new Set(BUONI.map(b=>b.clienteId).filter(Boolean)); if(!ids.size){ alert('Nessun cliente ha buoni in questo mese.'); return; } openCliPicker(selectAssCli,c=>ids.has(c.id)); });
 document.getElementById('as-prod').addEventListener('change',e=>{ AS_PROD=e.target.value; renderAssegnazioni(); });
 document.getElementById('as-day').addEventListener('change',e=>{ AS_DAY=e.target.value; renderAssegnazioni(); });
 document.getElementById('g-group-add').addEventListener('click',()=>openCliPicker(addGenGroup));
