@@ -207,9 +207,14 @@ table.reg .resid.z{color:var(--red);opacity:.7}
     <div class="card" id="buono-form">
       <div class="card-title">Nuovo buono</div>
       <div class="formline">
+        <div class="f"><label>Cliente</label><select class="fld" id="b-cliente"><option value="">— nessuno —</option></select></div>
+        <div class="f"><label>Tessera</label><select class="fld" id="b-tessera"><option value="">—</option></select></div>
         <div class="f"><label>Prodotto</label><select class="fld" id="b-prod"><option value="GASOLIO">Gasolio</option><option value="VERDE">Verde</option><option value="GPL">GPL</option></select></div>
         <div class="f"><label>Data buono</label><select class="fld" id="b-day"></select></div>
-        <div class="f"><label>Litri</label><input class="fld" id="b-litri" type="number" min="1" step="1" style="width:110px" placeholder="es. 300"></div>
+        <div class="f"><label>Litri</label><input class="fld" id="b-litri" type="number" min="0" step="0.01" style="width:100px" placeholder="litri"></div>
+        <div class="f"><label>Prezzo €/L</label><input class="fld" id="b-prezzo" type="number" min="0" step="0.001" style="width:96px"></div>
+        <div class="f"><label>Sconto €/L</label><input class="fld" id="b-sconto" type="number" step="0.001" style="width:96px"></div>
+        <div class="f"><label>Totale €</label><input class="fld" id="b-totale" type="number" min="0" step="0.01" style="width:110px" placeholder="totale"></div>
         <button class="btn" id="b-add">Aggiungi buono</button>
       </div>
       <p class="muted" style="margin-top:.6rem">Priorità prelievo: domeniche/festivi → sabati → giorni normali (da inizio mese). Pistola con più margine per prima; la regola d'oro non viene mai infranta.</p>
@@ -498,7 +503,7 @@ function renderBuoni(){ if(!STATE) return; renderBuoniBar(); renderBuoniGrid(); 
 function renderBuoniBar(){
   const bar=document.getElementById('buoni-bar'); let chips='<div class="chips">';
   if(!BUONI.length){ bar.innerHTML='<p class="muted">Nessun buono inserito. Compila il form sopra e premi "Aggiungi buono".</p>'; return; }
-  BUONI.forEach(b=>{ const r=BRESULT[b.id]||{short:0}; chips+=`<button class="chip ${b.id===CURBUONO?'on':''} ${r.short>EPS?'short':''}" data-id="${b.id}">${b.prodotto} ${fmtDay(b.day)}<span class="tot">${fmtInt(b.litri)} L</span>${r.short>EPS?' ⚠':''}</button>`; });
+  BUONI.forEach(b=>{ const r=BRESULT[b.id]||{short:0}; const lab=b.clienteNome?escapeHtml(b.clienteNome.length>20?b.clienteNome.slice(0,20)+'…':b.clienteNome):b.prodotto; chips+=`<button class="chip ${b.id===CURBUONO?'on':''} ${r.short>EPS?'short':''}" data-id="${b.id}">${lab} · ${fmtDay(b.day)}<span class="tot">${fmtInt(b.litri)} L</span>${r.short>EPS?' ⚠':''}</button>`; });
   chips+='</div>';
   const b=BUONI.find(x=>x.id===CURBUONO); let info='';
   if(b){ const r=BRESULT[b.id]||{placed:0,short:0};
@@ -519,11 +524,33 @@ function renderBuoniGrid(){
     h+='</tr>'; });
   h+='</tbody></table></div>'; cont.innerHTML=h;
 }
+function fillBuonoClienti(){
+  const sel=document.getElementById('b-cliente'); if(!sel) return; const cur=sel.value;
+  sel.innerHTML='<option value="">— nessuno —</option>'+CLIENTI.map(c=>`<option value="${escapeAttr(c.id)}">${escapeHtml((c.ragione||c.id)+' ('+c.id+')')}</option>`).join('');
+  if(cur) sel.value=cur;
+}
+function fillBuonoTessere(){
+  const sel=document.getElementById('b-tessera'); const c=CLIENTI.find(x=>x.id===document.getElementById('b-cliente').value);
+  if(!c){ sel.innerHTML='<option value="">—</option>'; return; }
+  sel.innerHTML='<option value="">—</option>'+c.tessere.map(t=>`<option value="${escapeAttr(t.id)}">${escapeHtml(t.id+(t.targa?' · '+t.targa:'')+(t.descrizione?' · '+t.descrizione:''))}</option>`).join('');
+}
+function buonoEffPrezzo(){ return (parseFloat(document.getElementById('b-prezzo').value)||0) - (parseFloat(document.getElementById('b-sconto').value)||0); }
+function syncFromLitri(){ const eff=buonoEffPrezzo(); const l=parseFloat(document.getElementById('b-litri').value); if(eff>0 && !isNaN(l)) document.getElementById('b-totale').value=(Math.round(l*eff*100)/100); }
+function syncFromTotale(){ const eff=buonoEffPrezzo(); const tot=parseFloat(document.getElementById('b-totale').value); if(eff>0 && !isNaN(tot)) document.getElementById('b-litri').value=(Math.round(tot/eff*100)/100); }
+function onTesseraPick(){
+  const c=CLIENTI.find(x=>x.id===document.getElementById('b-cliente').value); const t=c&&c.tessere.find(x=>x.id===document.getElementById('b-tessera').value);
+  if(t){ if(t.prodotto) document.getElementById('b-prod').value=t.prodotto; if(t.prezzo) document.getElementById('b-prezzo').value=t.prezzo; if(t.sconto) document.getElementById('b-sconto').value=t.sconto; syncFromLitri(); }
+}
 function addBuono(){
-  const prod=document.getElementById('b-prod').value, day=document.getElementById('b-day').value, litri=parseInt(document.getElementById('b-litri').value,10);
-  if(!day || isNaN(litri) || litri<=0){ alert('Inserisci prodotto, data e litri (> 0).'); return; }
-  const b={id:BSEQ++, prodotto:prod, day, litri}; BUONI.push(b); CURBUONO=b.id;
-  document.getElementById('b-litri').value='';
+  const cliId=document.getElementById('b-cliente').value, tess=document.getElementById('b-tessera').value;
+  const prod=document.getElementById('b-prod').value, day=document.getElementById('b-day').value;
+  const litri=parseFloat(document.getElementById('b-litri').value);
+  if(!day || isNaN(litri) || litri<=0){ alert('Inserisci almeno data e litri (> 0).'); return; }
+  const cli=CLIENTI.find(x=>x.id===cliId);
+  const b={ id:BSEQ++, clienteId:cliId||'', clienteNome: cli?cli.ragione:'', tessera:tess||'', prodotto:prod, day, litri,
+    prezzo:parseFloat(document.getElementById('b-prezzo').value)||0, sconto:parseFloat(document.getElementById('b-sconto').value)||0, totale:parseFloat(document.getElementById('b-totale').value)||0 };
+  BUONI.push(b); CURBUONO=b.id;
+  ['b-litri','b-totale'].forEach(id=>document.getElementById(id).value='');
   saveStore(); recompute(); renderBuoni(); renderRegistro();
 }
 function delBuono(id){ const b=BUONI.find(x=>x.id===id); if(b && !confirm(`Eliminare il buono ${b.prodotto} ${fmtDay(b.day)} di ${fmtInt(b.litri)} L?`)) return; BUONI=BUONI.filter(x=>x.id!==id); CURBUONO=BUONI.length?BUONI[0].id:null; saveStore(); recompute(); renderBuoni(); renderRegistro(); }
@@ -588,7 +615,7 @@ function handleClFile(file){
   const reader=new FileReader();
   reader.onload=e=>{ try{ const wb=XLSX.read(e.target.result,{type:'array'}); const parsed=parseEstesoL(wb);
     if(!parsed.nClienti) throw new Error('Nessun cliente trovato (servono colonne IdCliente e CodiceTessera).');
-    mergeClienti(parsed); renderClienti();
+    mergeClienti(parsed); renderClienti(); fillBuonoClienti();
     const cats=Object.entries(parsed.counts).map(([k,v])=>`${k}: ${v}`).join(' · ');
     res.innerHTML=`<div class="ok-msg">✓ Importato: <b>${file.name}</b></div>
       <div class="grid" style="margin-top:.9rem">
@@ -696,6 +723,11 @@ function goTab(name){ document.querySelectorAll('.tab').forEach(t=>t.classList.t
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ if(!t.disabled) goTab(t.dataset.tab); }));
 document.getElementById('export-btn').addEventListener('click',exportRegistro);
 document.getElementById('b-add').addEventListener('click',addBuono);
+document.getElementById('b-cliente').addEventListener('change',()=>{ fillBuonoTessere(); });
+document.getElementById('b-tessera').addEventListener('change',onTesseraPick);
+document.getElementById('b-litri').addEventListener('input',syncFromLitri);
+document.getElementById('b-totale').addEventListener('input',syncFromTotale);
+['b-prezzo','b-sconto'].forEach(id=>document.getElementById(id).addEventListener('input',syncFromLitri));
 document.querySelectorAll('#rett-prod-toggle button').forEach(b=>b.addEventListener('click',()=>{ TPROD=b.dataset.p; document.querySelectorAll('#rett-prod-toggle button').forEach(x=>x.classList.toggle('on',x===b)); const t=curTransfer(); const bd=document.getElementById('t-badge'); if(t&&bd) bd.textContent=`${prodName(TPROD)}: ${fmtInt(transferTotalProd(t,TPROD))} L`; renderRettGrid(); }));
 document.querySelectorAll('#reg-toggle button').forEach(b=>b.addEventListener('click',()=>{ REGMODE=b.dataset.mode; document.querySelectorAll('#reg-toggle button').forEach(x=>x.classList.toggle('on',x===b)); renderRegistro(); }));
 
@@ -723,7 +755,7 @@ dropCl.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handl
 document.getElementById('cl-search').addEventListener('input',e=>{ CLQ=e.target.value; renderClList(); });
 
 // anagrafica clienti: indipendente dal file importato
-loadClienti(); renderClienti();
+loadClienti(); renderClienti(); fillBuonoClienti();
 restoreImports();
 </script>
 </body>
