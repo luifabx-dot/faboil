@@ -107,7 +107,20 @@ table.reg .resid.z{color:var(--red);opacity:.7}
 .legend{display:flex;gap:1rem;margin:.6rem 0 .5rem;font-size:.72rem;color:var(--muted);flex-wrap:wrap;align-items:center}
 .legend span{display:inline-flex;align-items:center;gap:.35rem}
 .dot{width:11px;height:11px;border-radius:3px;display:inline-block}
-.cl-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:1rem 1.1rem;margin-bottom:1rem;box-shadow:var(--shadow);max-width:960px}
+.cl-layout{display:flex;gap:1rem;align-items:flex-start}
+.cl-side{width:330px;flex-shrink:0;position:sticky;top:66px}
+.cl-main{flex:1;min-width:0}
+.cl-filters{display:flex;gap:.3rem;margin:.5rem 0}
+.cl-filters button{flex:1;font-family:var(--sans);font-size:.72rem;font-weight:700;padding:.4rem .3rem;border:1.5px solid var(--border2);background:var(--surface);border-radius:7px;cursor:pointer;color:var(--muted)}
+.cl-filters button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.cl-listbox{border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);max-height:68vh;overflow-y:auto;box-shadow:var(--shadow)}
+.cl-item{display:flex;align-items:center;gap:.5rem;padding:.5rem .7rem;border-bottom:1px solid var(--border);cursor:pointer}
+.cl-item:hover{background:var(--surface2)}
+.cl-item.on{background:var(--accent-bg)}
+.cl-item .nm{flex:1;min-width:0;font-weight:700;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cl-item .sub{font-size:.63rem;color:var(--muted);font-family:var(--mono);font-weight:400}
+@media(max-width:840px){.cl-layout{flex-direction:column}.cl-side{width:100%;position:static}}
+.cl-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:1rem 1.1rem;margin-bottom:1rem;box-shadow:var(--shadow)}
 .cl-row{display:flex;gap:.9rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:.6rem}
 .f-lbl{font-size:.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:.22rem;display:block}
 .tess-card{border:1.5px solid var(--border);border-radius:var(--radius);padding:.8rem .9rem;margin-bottom:.7rem;background:var(--surface2)}
@@ -213,8 +226,14 @@ table.reg .resid.z{color:var(--red);opacity:.7}
   <!-- CLIENTI -->
   <div class="page" id="page-clienti">
     <div class="sh"><h1>Clienti</h1><p>anagrafica per i buoni cartacei — clienti, tessere/veicoli e parametri di consumo</p></div>
-    <div class="tbar" id="cl-bar"></div>
-    <div id="cl-detail"></div>
+    <div class="cl-layout">
+      <div class="cl-side">
+        <input id="cl-search" class="fld" placeholder="Cerca: nome, ID, tessera, targa…" style="width:100%">
+        <div class="cl-filters" id="cl-filters"></div>
+        <div class="cl-listbox" id="cl-list"></div>
+      </div>
+      <div class="cl-main" id="cl-detail"></div>
+    </div>
   </div>
 
   <!-- REGISTRO -->
@@ -567,18 +586,38 @@ function handleClFile(file){
   reader.readAsArrayBuffer(file);
 }
 
-function renderClienti(){ renderClBar(); renderClDetail(); }
-function renderClBar(){
-  const bar=document.getElementById('cl-bar');
-  if(!CLIENTI.length){ bar.innerHTML='<p class="muted">Nessun cliente. Importa il file clienti (estesoL) dalla sezione <b>Importazioni</b>.</p>'; document.getElementById('cl-detail').innerHTML=''; return; }
-  let chips='<div class="chips">';
-  CLIENTI.forEach(c=>chips+=`<button class="chip ${c.id===CURCLI?'on':''}" data-id="${escapeAttr(c.id)}">${escapeHtml(c.ragione||c.id)}<span class="badge-tipo ${c.tipo==='PRE'?'pre':'post'}">${c.tipo==='PRE'?'PRE':'POST'}</span></button>`);
-  chips+='</div>'; bar.innerHTML=chips;
-  bar.querySelectorAll('.chip[data-id]').forEach(el=>el.addEventListener('click',()=>{ CURCLI=el.dataset.id; saveClienti(); renderClienti(); }));
+let CLQ='', CLFILT='ALL';
+function renderClienti(){ renderClFilters(); renderClList(); renderClDetail(); }
+function filteredClienti(){
+  const q=CLQ.trim().toLowerCase();
+  return CLIENTI.filter(c=>{
+    if(CLFILT==='PRE'&&c.tipo!=='PRE') return false;
+    if(CLFILT==='POST'&&c.tipo==='PRE') return false;
+    if(!q) return true;
+    if((c.ragione||'').toLowerCase().includes(q)) return true;
+    if(String(c.id).includes(q)) return true;
+    if((c.piva||'').toLowerCase().includes(q)) return true;
+    return c.tessere.some(t=>String(t.id).includes(q)||(t.targa||'').toLowerCase().includes(q)||(t.descrizione||'').toLowerCase().includes(q));
+  });
+}
+function renderClFilters(){
+  const el=document.getElementById('cl-filters'); if(!el) return;
+  if(!CLIENTI.length){ el.innerHTML=''; return; }
+  const nAll=CLIENTI.length, nPre=CLIENTI.filter(c=>c.tipo==='PRE').length, nPost=nAll-nPre;
+  el.innerHTML=`<button data-f="ALL" class="${CLFILT==='ALL'?'on':''}">Tutti ${nAll}</button><button data-f="POST" class="${CLFILT==='POST'?'on':''}">Post ${nPost}</button><button data-f="PRE" class="${CLFILT==='PRE'?'on':''}">Pre ${nPre}</button>`;
+  el.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ CLFILT=b.dataset.f; renderClFilters(); renderClList(); }));
+}
+function renderClList(){
+  const box=document.getElementById('cl-list'); if(!box) return;
+  if(!CLIENTI.length){ box.innerHTML='<p class="muted" style="padding:.8rem">Nessun cliente. Importa il file <b>estesoL</b> dalla sezione Importazioni.</p>'; return; }
+  const list=filteredClienti();
+  if(!list.length){ box.innerHTML='<p class="muted" style="padding:.8rem">Nessun risultato.</p>'; return; }
+  box.innerHTML=list.map(c=>`<div class="cl-item ${c.id===CURCLI?'on':''}" data-id="${escapeAttr(c.id)}"><div class="nm">${escapeHtml(c.ragione||c.id)}<div class="sub">ID ${escapeHtml(c.id)} · ${c.tessere.length} tess.</div></div><span class="badge-tipo ${c.tipo==='PRE'?'pre':'post'}">${c.tipo==='PRE'?'PRE':'POST'}</span></div>`).join('');
+  box.querySelectorAll('.cl-item').forEach(el=>el.addEventListener('click',()=>{ CURCLI=el.dataset.id; saveClienti(); renderClList(); renderClDetail(); }));
 }
 function renderClDetail(){
-  const cont=document.getElementById('cl-detail'); const c=curCli(); if(!CLIENTI.length){ return; }
-  if(!c){ cont.innerHTML='<div class="empty-state"><span class="ic">👤</span>Seleziona un cliente.</div>'; return; }
+  const cont=document.getElementById('cl-detail'); const c=curCli(); if(!CLIENTI.length){ cont.innerHTML=''; return; }
+  if(!c){ cont.innerHTML='<div class="empty-state"><span class="ic">👤</span>Seleziona un cliente dalla lista.</div>'; return; }
   let h=`<div class="cl-card">
     <div class="cl-row" style="align-items:center">
       <div style="flex:1"><div style="font-size:1.05rem;font-weight:800">${escapeHtml(c.ragione||'(senza nome)')}</div>
@@ -616,7 +655,7 @@ function tessHtml(t){
 }
 function bindClDetail(c){
   const perc=document.getElementById('c-perc'); if(perc) perc.addEventListener('input',e=>{ c.perc=parseFloat(e.target.value)||0; saveClienti(); });
-  document.querySelectorAll('#c-tipo button').forEach(b=>b.addEventListener('click',()=>{ c.tipo=b.dataset.v; saveClienti(); renderClDetail(); }));
+  document.querySelectorAll('#c-tipo button').forEach(b=>b.addEventListener('click',()=>{ c.tipo=b.dataset.v; saveClienti(); renderClFilters(); renderClList(); renderClDetail(); }));
   const sal=document.getElementById('c-saldo'); if(sal) sal.addEventListener('input',e=>{ c.saldo=parseFloat(e.target.value)||0; saveClienti(); });
   const sald=document.getElementById('c-saldodata'); if(sald) sald.addEventListener('input',e=>{ c.saldoData=e.target.value; saveClienti(); });
   const cons=document.getElementById('c-consumo'); if(cons) cons.addEventListener('input',e=>{ c.consumoMese=parseFloat(e.target.value)||0; saveClienti(); });
@@ -665,6 +704,8 @@ fileCl.addEventListener('change',e=>{ if(e.target.files[0]) handleClFile(e.targe
 ['dragover','dragenter'].forEach(ev=>dropCl.addEventListener(ev,e=>{e.preventDefault();dropCl.classList.add('drag');}));
 ['dragleave','drop'].forEach(ev=>dropCl.addEventListener(ev,e=>{e.preventDefault();dropCl.classList.remove('drag');}));
 dropCl.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handleClFile(f); });
+
+document.getElementById('cl-search').addEventListener('input',e=>{ CLQ=e.target.value; renderClList(); });
 
 // anagrafica clienti: indipendente dal file importato
 loadClienti(); renderClienti();
