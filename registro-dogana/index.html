@@ -451,9 +451,9 @@ function parseCardSmart(rows){
     const prodRaw=r[iProd]; if(prodRaw==null||prodRaw==='') continue;
     const prod=normCSProd(prodRaw); if(!prod){ skExtra++; continue; } // ADBLUE / Metano esclusi
     const day=cellDay(iErog>=0?r[iErog]:r[iReg]); if(!day) continue;
-    const q=csNum(r[iQta]); const importo=iImp>=0?csNum(r[iImp]):0; const prezzo=iPrz>=0?csNum(r[iPrz]):0; const base=q*prezzo; // netto IVA: base = qta x prezzo (senza sconto/magg)
+    const q=csNum(r[iQta]); const importo=iImp>=0?csNum(r[iImp]):0; const prezzo=iPrz>=0?csNum(r[iPrz]):0; const base=q*prezzo; // base = qta x prezzo (LORDO, senza sconto/magg)
     byDayProd[day]=byDayProd[day]||{}; byDayProd[day][prod]=(byDayProd[day][prod]||0)+q;
-    byDayBase[day]=(byDayBase[day]||0)+base; byDayImp[day]=(byDayImp[day]||0)+importo; // per corrispettivo (base) e scorporo (base - importo)
+    byDayBase[day]=(byDayBase[day]||0)+base; byDayImp[day]=(byDayImp[day]||0)+importo; // corrispettivo = base; scorporo = importo - base
     litri[prod]+=q; imp[prod]+=importo; kept++; daySet.add(day);
     const tess=iTess>=0?String(r[iTess]||'').trim():''; if(tess){ byTessera[tess]=byTessera[tess]||{}; byTessera[tess][day]=(byTessera[tess][day]||0)+importo; }
   }
@@ -565,11 +565,11 @@ function onAsCellClick(e){
 
 // ---- foglio commercialista (corrispettivo = vendite - fatturato) ----
 function venditeDay(d){ let s=0; ['GASOLIO','VERDE','GPL'].forEach(P=>{ const lit=PUMPS.filter(p=>prodOf(p)===P).reduce((a,p)=>a+grezzo(p,d),0); s+=lit*priceOfDay(P,d); }); return s; }
-const IVA_CORR=1.22; // 22% — corrispettivo in LORDO
-// Card Smart per corrispettivo: base = Σ(Qta×Prezzo) al netto IVA e SENZA sconto/magg → in lordo ×1.22.
-// Gli sconti/maggiorazioni sono SCORPORATI (esclusi dal corrispettivo) e mostrati a parte.
-function cardSmartEuroDay(d){ if(!CARDSMART) return 0; if(CARDSMART.byDayBase) return (CARDSMART.byDayBase[d]||0)*IVA_CORR; if(CARDSMART.byTessera){ let s=0; for(const t in CARDSMART.byTessera){ const v=CARDSMART.byTessera[t][d]; if(v) s+=v; } return s; } return 0; }
-function cardSmartScorporoDay(d){ if(!CARDSMART||!CARDSMART.byDayBase||!CARDSMART.byDayImp) return 0; const base=CARDSMART.byDayBase[d]||0, imp=CARDSMART.byDayImp[d]||0; return (base-imp)*IVA_CORR; }
+// Card Smart per corrispettivo: il Prezzo Unitario è già LORDO (= prezzo pompa StoreSmart),
+// verificato sui dati (giugno: 1.948/1.887/0.769 identici a StoreSmart). Nessun ×1.22.
+// base = Σ(Qta×Prezzo) lordo SENZA sconto/magg → corrispettivo. Sconto/magg SCORPORATI e mostrati a parte.
+function cardSmartEuroDay(d){ if(!CARDSMART) return 0; if(CARDSMART.byDayBase) return (CARDSMART.byDayBase[d]||0); if(CARDSMART.byTessera){ let s=0; for(const t in CARDSMART.byTessera){ const v=CARDSMART.byTessera[t][d]; if(v) s+=v; } return s; } return 0; }
+function cardSmartScorporoDay(d){ if(!CARDSMART||!CARDSMART.byDayBase||!CARDSMART.byDayImp) return 0; const base=CARDSMART.byDayBase[d]||0, imp=CARDSMART.byDayImp[d]||0; return imp-base; } // Importo − base = sconto/magg (lordo): + maggiorazione, − sconto
 function buoniEuroDay(d){ return BUONI.filter(b=>b.day===d).reduce((s,b)=>s+(b.totale||0),0); }
 function icadEuroDay(d){ return (ICAD&&ICAD.byDay[d])||0; }
 function dkvEuroDay(d){ return (DKV&&DKV.byDay[d])||0; }
