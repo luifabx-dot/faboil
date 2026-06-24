@@ -107,6 +107,20 @@ table.reg .resid.z{color:var(--red);opacity:.7}
 .legend{display:flex;gap:1rem;margin:.6rem 0 .5rem;font-size:.72rem;color:var(--muted);flex-wrap:wrap;align-items:center}
 .legend span{display:inline-flex;align-items:center;gap:.35rem}
 .dot{width:11px;height:11px;border-radius:3px;display:inline-block}
+.cl-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:1rem 1.1rem;margin-bottom:1rem;box-shadow:var(--shadow);max-width:960px}
+.cl-row{display:flex;gap:.9rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:.6rem}
+.f-lbl{font-size:.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:.22rem;display:block}
+.tess-card{border:1.5px solid var(--border);border-radius:var(--radius);padding:.8rem .9rem;margin-bottom:.7rem;background:var(--surface2)}
+.tess-head{display:flex;justify-content:space-between;align-items:center;gap:.6rem;margin-bottom:.6rem}
+.wdays{display:flex;gap:.25rem}
+.wd{width:30px;height:30px;border-radius:7px;border:1.5px solid var(--border2);background:var(--surface);font-family:var(--sans);font-weight:700;font-size:.74rem;cursor:pointer;color:var(--muted)}
+.wd.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.wd.red{border-color:#f3b4b4}
+.chk{display:inline-flex;align-items:center;gap:.4rem;font-size:.82rem;font-weight:600;cursor:pointer}
+.badge-tipo{font-size:.58rem;font-weight:800;padding:.1rem .4rem;border-radius:6px;margin-left:.35rem;letter-spacing:.03em}
+.badge-tipo.pre{background:var(--blue-bg);color:var(--blue)}
+.badge-tipo.post{background:var(--green-bg);color:var(--green)}
+.fld.sm{width:96px}
 .empty-state{text-align:center;padding:3rem 1rem;color:var(--muted);border:1.5px dashed var(--border2);border-radius:var(--radius)}
 .empty-state .ic{font-size:2.6rem;display:block;margin-bottom:.5rem;opacity:.5}
 </style>
@@ -118,6 +132,7 @@ table.reg .resid.z{color:var(--red);opacity:.7}
     <button class="tab on" data-tab="import">Importazioni</button>
     <button class="tab" data-tab="rettifiche" id="tab-rettifiche" disabled>Trasferimenti</button>
     <button class="tab" data-tab="buoni" id="tab-buoni" disabled>Buoni</button>
+    <button class="tab" data-tab="clienti" id="tab-clienti">Clienti</button>
     <button class="tab" data-tab="registro" id="tab-registro" disabled>Registro</button>
   </div>
 </div>
@@ -183,6 +198,13 @@ table.reg .resid.z{color:var(--red);opacity:.7}
       <span class="muted">— vista del buono selezionato. Date in rosso = domeniche/festivi, in blu = sabati.</span>
     </div>
     <div id="buoni-grid"></div>
+  </div>
+
+  <!-- CLIENTI -->
+  <div class="page" id="page-clienti">
+    <div class="sh"><h1>Clienti</h1><p>anagrafica per i buoni cartacei — clienti, tessere/veicoli e parametri di consumo</p></div>
+    <div class="tbar" id="cl-bar"></div>
+    <div id="cl-detail"></div>
   </div>
 
   <!-- REGISTRO -->
@@ -481,6 +503,65 @@ function storeKey(){ return 'faboil_reg_'+(STATE?STATE.meta.period:''); }
 function saveStore(){ try{ localStorage.setItem(storeKey(), JSON.stringify({seq:SEQ,current:CURRENT,transfers:TRANSFERS,bseq:BSEQ,curbuono:CURBUONO,buoni:BUONI})); }catch(e){} }
 function loadStore(){ TRANSFERS=[];CURRENT=null;SEQ=1;BUONI=[];CURBUONO=null;BSEQ=1; try{ const s=localStorage.getItem(storeKey()); if(s){ const o=JSON.parse(s); TRANSFERS=o.transfers||[]; SEQ=o.seq||(TRANSFERS.length+1); CURRENT=o.current!=null?o.current:(TRANSFERS[0]&&TRANSFERS[0].id); BUONI=o.buoni||[]; BSEQ=o.bseq||(BUONI.length+1); CURBUONO=o.curbuono!=null?o.curbuono:(BUONI[0]&&BUONI[0].id); } }catch(e){} }
 
+// ---- ANAGRAFICA CLIENTI / TESSERE ----
+let CLIENTI=[], CURCLI=null, CSEQ=1, TSEQ=1;
+const WD=['L','M','M','G','V','S','D'], WDFULL=['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
+function curCli(){ return CLIENTI.find(c=>c.id===CURCLI)||null; }
+function renderClienti(){ renderClBar(); renderClDetail(); }
+function renderClBar(){
+  const bar=document.getElementById('cl-bar'); let chips='<div class="chips">';
+  CLIENTI.forEach(c=>chips+=`<button class="chip ${c.id===CURCLI?'on':''}" data-id="${c.id}">${escapeHtml(c.nome||'(senza nome)')}<span class="badge-tipo ${c.tipo==='PRE'?'pre':'post'}">${c.tipo==='PRE'?'PRE':'POST'}</span></button>`);
+  chips+=`<button class="chip chip-add" id="cl-add">+ Nuovo cliente</button></div>`;
+  bar.innerHTML=chips;
+  bar.querySelectorAll('.chip[data-id]').forEach(el=>el.addEventListener('click',()=>{ CURCLI=parseInt(el.dataset.id,10); saveClienti(); renderClienti(); }));
+  document.getElementById('cl-add').addEventListener('click',addCli);
+}
+function renderClDetail(){
+  const cont=document.getElementById('cl-detail'); const c=curCli();
+  if(!c){ cont.innerHTML='<div class="empty-state"><span class="ic">👤</span>Crea un cliente per gestire le sue tessere.</div>'; return; }
+  let h=`<div class="cl-card"><div class="cl-row">
+    <div><span class="f-lbl">Nome cliente</span><input class="fld" id="c-nome" value="${escapeAttr(c.nome)}" placeholder="Ragione sociale / nome" style="min-width:280px"></div>
+    <div><span class="f-lbl">Tipo</span><div class="toggle" id="c-tipo"><button data-v="POST" class="${c.tipo==='POST'?'on':''}">Postpagato</button><button data-v="PRE" class="${c.tipo==='PRE'?'on':''}">Prepagato</button></div></div>
+    <div><span class="f-lbl">Percentuale</span><input class="fld sm" id="c-perc" type="number" min="0" max="100" step="1" value="${c.perc||''}" placeholder="%"></div>`;
+  if(c.tipo==='PRE') h+=`
+    <div><span class="f-lbl">Credito (L)</span><input class="fld sm" id="c-credito" type="number" min="0" step="1" value="${c.credito||''}"></div>
+    <div><span class="f-lbl">Consumo / mese (L)</span><input class="fld sm" id="c-consumo" type="number" min="0" step="1" value="${c.consumoMese||''}"></div>`;
+  h+=`<button class="btn sm danger" id="c-del" style="margin-left:auto">Elimina cliente</button></div>
+    <div class="card-title" style="margin-top:.4rem">Tessere / veicoli</div>`;
+  if(!c.tessere.length) h+=`<p class="muted">Nessuna tessera. Aggiungine una.</p>`;
+  c.tessere.forEach(t=>h+=tessHtml(t));
+  h+=`<button class="btn sm ghost" id="t-addtess" style="margin-top:.6rem">+ Aggiungi tessera</button></div>`;
+  cont.innerHTML=h; bindClDetail(c);
+}
+function tessHtml(t){
+  let wd=''; for(let i=0;i<7;i++) wd+=`<button class="wd ${t.giorni[i]?'on':''} ${i>=5?'red':''}" data-wd="${i}" data-t="${t.id}" title="${WDFULL[i]}">${WD[i]}</button>`;
+  return `<div class="tess-card"><div class="tess-head"><input class="fld" data-tf="etichetta" data-t="${t.id}" value="${escapeAttr(t.etichetta)}" placeholder="Etichetta (es. Trattore / targa)" style="min-width:240px;font-weight:700"><button class="btn sm danger" data-deltess="${t.id}">Elimina tessera</button></div>
+    <div class="cl-row">
+      <div><span class="f-lbl">Prodotto</span><select class="fld" data-tf="prodotto" data-t="${t.id}"><option value="GASOLIO" ${t.prodotto==='GASOLIO'?'selected':''}>Gasolio</option><option value="VERDE" ${t.prodotto==='VERDE'?'selected':''}>Verde</option><option value="GPL" ${t.prodotto==='GPL'?'selected':''}>GPL</option></select></div>
+      <div><span class="f-lbl">Capienza serbatoio (L)</span><input class="fld sm" data-tf="capienza" data-t="${t.id}" type="number" min="0" step="1" value="${t.capienza||''}" placeholder="es. 120"></div>
+      <div><span class="f-lbl">Giorni ammessi</span><div class="wdays">${wd}</div></div>
+      <div><span class="f-lbl">Festivi</span><label class="chk"><input type="checkbox" data-tf="escludiFestivi" data-t="${t.id}" ${t.escludiFestivi?'checked':''}> escludi</label></div>
+      <div><span class="f-lbl">Prezzo €/L</span><input class="fld sm" data-tf="prezzo" data-t="${t.id}" type="number" min="0" step="0.001" value="${t.prezzo||''}"></div>
+      <div><span class="f-lbl">Sconto</span><input class="fld sm" data-tf="sconto" data-t="${t.id}" type="number" step="0.001" value="${t.sconto||''}"></div>
+    </div></div>`;
+}
+function bindClDetail(c){
+  document.getElementById('c-nome').addEventListener('input',e=>{ c.nome=e.target.value; saveClienti(); const ch=document.querySelector(`#cl-bar .chip[data-id="${c.id}"]`); if(ch) ch.firstChild.textContent=c.nome||'(senza nome)'; });
+  document.getElementById('c-perc').addEventListener('input',e=>{ c.perc=parseFloat(e.target.value)||0; saveClienti(); });
+  document.querySelectorAll('#c-tipo button').forEach(b=>b.addEventListener('click',()=>{ c.tipo=b.dataset.v; saveClienti(); renderClienti(); }));
+  if(c.tipo==='PRE'){ document.getElementById('c-credito').addEventListener('input',e=>{ c.credito=parseFloat(e.target.value)||0; saveClienti(); }); document.getElementById('c-consumo').addEventListener('input',e=>{ c.consumoMese=parseFloat(e.target.value)||0; saveClienti(); }); }
+  document.getElementById('c-del').addEventListener('click',()=>delCli(c.id));
+  document.getElementById('t-addtess').addEventListener('click',()=>addTess(c));
+  document.querySelectorAll('#cl-detail [data-tf]').forEach(el=>{ const ev=el.type==='checkbox'?'change':'input'; el.addEventListener(ev,()=>{ const t=c.tessere.find(x=>x.id===parseInt(el.dataset.t,10)); if(!t) return; const f=el.dataset.tf; t[f]= el.type==='checkbox'?el.checked:(el.type==='number'?(parseFloat(el.value)||0):el.value); saveClienti(); }); });
+  document.querySelectorAll('#cl-detail .wd').forEach(b=>b.addEventListener('click',()=>{ const t=c.tessere.find(x=>x.id===parseInt(b.dataset.t,10)); const i=parseInt(b.dataset.wd,10); t.giorni[i]=t.giorni[i]?0:1; saveClienti(); b.classList.toggle('on',!!t.giorni[i]); }));
+  document.querySelectorAll('#cl-detail [data-deltess]').forEach(b=>b.addEventListener('click',()=>{ const id=parseInt(b.dataset.deltess,10); c.tessere=c.tessere.filter(x=>x.id!==id); saveClienti(); renderClDetail(); }));
+}
+function addCli(){ const c={id:CSEQ++,nome:'Nuovo cliente',tipo:'POST',perc:0,credito:0,consumoMese:0,tessere:[]}; CLIENTI.push(c); CURCLI=c.id; saveClienti(); renderClienti(); }
+function delCli(id){ const c=CLIENTI.find(x=>x.id===id); if(c && !confirm(`Eliminare il cliente "${c.nome}"?`)) return; CLIENTI=CLIENTI.filter(x=>x.id!==id); CURCLI=CLIENTI.length?CLIENTI[0].id:null; saveClienti(); renderClienti(); }
+function addTess(c){ c.tessere.push({id:TSEQ++,etichetta:'',prodotto:'GASOLIO',capienza:0,giorni:[1,1,1,1,1,0,0],escludiFestivi:true,prezzo:0,sconto:0}); saveClienti(); renderClDetail(); }
+function saveClienti(){ try{ localStorage.setItem('faboil_clienti', JSON.stringify({cseq:CSEQ,tseq:TSEQ,curcli:CURCLI,clienti:CLIENTI})); }catch(e){} }
+function loadClienti(){ try{ const s=localStorage.getItem('faboil_clienti'); if(s){ const o=JSON.parse(s); CLIENTI=o.clienti||[]; CSEQ=o.cseq||(CLIENTI.length+1); TSEQ=o.tseq||1; CURCLI=o.curcli!=null?o.curcli:(CLIENTI[0]&&CLIENTI[0].id); } }catch(e){} }
+
 // ---- export ----
 function exportRegistro(){
   if(!STATE) return; const R=readingAt(REGMODE);
@@ -513,6 +594,9 @@ fileCs.addEventListener('change',e=>{ if(e.target.files[0]) handleCSFile(e.targe
 ['dragover','dragenter'].forEach(ev=>dropCs.addEventListener(ev,e=>{e.preventDefault();dropCs.classList.add('drag');}));
 ['dragleave','drop'].forEach(ev=>dropCs.addEventListener(ev,e=>{e.preventDefault();dropCs.classList.remove('drag');}));
 dropCs.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handleCSFile(f); });
+
+// anagrafica clienti: indipendente dal file importato
+loadClienti(); renderClienti();
 </script>
 </body>
 </html>
