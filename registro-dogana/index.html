@@ -27,50 +27,59 @@ body{min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--s
 .tab:hover{background:var(--surface2)}
 .tab.on{color:var(--accent);background:var(--accent-bg)}
 .tab:disabled{opacity:.4;cursor:not-allowed}
-.content{padding:1.4rem 1.25rem;max-width:1500px;margin:0 auto}
+.content{padding:1.2rem 1.1rem;max-width:100%;margin:0 auto}
 .page{display:none}
 .page.on{display:block;animation:fadeUp .18s ease}
 @keyframes fadeUp{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
-.sh{margin-bottom:1.1rem}
-.sh h1{font-size:1.5rem;font-weight:800;letter-spacing:-.02em}
+.sh{margin-bottom:1rem}
+.sh h1{font-size:1.45rem;font-weight:800;letter-spacing:-.02em}
 .sh p{font-size:.78rem;color:var(--muted);font-family:var(--mono);margin-top:.25rem}
-.card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:1.2rem 1.3rem;margin-bottom:1rem;box-shadow:var(--shadow)}
+.card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:1.2rem 1.3rem;margin-bottom:1rem;box-shadow:var(--shadow);max-width:760px}
 .card-title{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.8rem}
-/* dropzone */
 .drop{border:2.5px dashed var(--border2);border-radius:14px;padding:2.6rem 1.5rem;text-align:center;cursor:pointer;transition:all .15s;background:var(--surface2)}
 .drop:hover,.drop.drag{border-color:var(--accent);background:var(--accent-bg)}
 .drop .ic{font-size:2.6rem;display:block;margin-bottom:.6rem}
 .drop h3{font-size:1rem;font-weight:700;margin-bottom:.3rem}
 .drop p{font-size:.8rem;color:var(--muted)}
 .drop b{color:var(--accent)}
-/* summary */
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.7rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.7rem}
 .stat{background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:.8rem .9rem}
 .stat .k{font-size:.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.25rem}
-.stat .v{font-size:1.25rem;font-weight:800;font-family:var(--mono);letter-spacing:-.02em}
+.stat .v{font-size:1.2rem;font-weight:800;font-family:var(--mono);letter-spacing:-.02em}
 .stat .v small{font-size:.7rem;color:var(--muted);font-weight:400}
 .warn{background:var(--red-bg);border:1.5px solid rgba(220,38,38,.25);color:#991b1b;border-radius:var(--radius);padding:.7rem .9rem;font-size:.8rem;margin-top:.7rem}
 .ok-msg{background:var(--green-bg);border:1.5px solid rgba(21,128,61,.25);color:var(--green);border-radius:var(--radius);padding:.7rem .9rem;font-size:.82rem;font-weight:600;margin-top:.7rem;display:flex;align-items:center;gap:.5rem}
-.btn{font-family:var(--sans);font-size:.85rem;font-weight:700;padding:.6rem 1.2rem;border-radius:9px;border:1.5px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;transition:all .12s}
+.btn{font-family:var(--sans);font-size:.85rem;font-weight:700;padding:.55rem 1.1rem;border-radius:9px;border:1.5px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;transition:all .12s}
 .btn:hover{filter:brightness(1.07)}
 .btn.ghost{background:none;color:var(--accent)}
-.btn:disabled{opacity:.45;cursor:not-allowed}
-.row-actions{display:flex;gap:.6rem;align-items:center;margin-bottom:1rem;flex-wrap:wrap}
+.btn.sm{font-size:.76rem;padding:.4rem .8rem}
+.row-actions{display:flex;gap:.7rem;align-items:center;margin-bottom:.8rem;flex-wrap:wrap}
 .muted{color:var(--muted);font-size:.78rem}
-/* registro table */
-.tablewrap{overflow:auto;border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);max-height:72vh}
-table.reg{border-collapse:separate;border-spacing:0;font-family:var(--mono);font-size:.74rem;white-space:nowrap}
-table.reg th,table.reg td{padding:.32rem .5rem;text-align:right;border-bottom:1px solid var(--border);border-right:1px solid var(--border)}
-table.reg thead th{position:sticky;top:0;background:var(--surface3);font-weight:700;text-align:center;z-index:2;border-bottom:1.5px solid var(--border2)}
+.toggle{display:inline-flex;border:1.5px solid var(--border2);border-radius:8px;overflow:hidden}
+.toggle button{font-family:var(--sans);font-size:.76rem;font-weight:700;padding:.4rem .9rem;border:none;background:var(--surface);color:var(--muted);cursor:pointer}
+.toggle button.on{background:var(--accent);color:#fff}
+/* tabella che riempie la larghezza, niente scroll orizzontale */
+.tablewrap{overflow-x:hidden;overflow-y:auto;border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);max-height:74vh}
+table.reg{border-collapse:separate;border-spacing:0;font-family:var(--mono);width:100%;table-layout:fixed}
+table.reg th,table.reg td{padding:.28rem .15rem;text-align:right;border-bottom:1px solid var(--border);border-right:1px solid var(--border);font-size:.68rem;overflow:hidden;text-overflow:ellipsis}
+table.reg col.pc{width:auto}
+table.reg col.dc{width:74px}
+table.reg thead th{position:sticky;top:0;background:var(--surface3);font-weight:700;text-align:center;z-index:2;border-bottom:1.5px solid var(--border2);font-size:.64rem;padding:.3rem .1rem}
 table.reg th.gas{background:var(--gas)}table.reg th.ver{background:var(--ver)}table.reg th.gpl{background:var(--gpl)}
-table.reg .datecol{position:sticky;left:0;background:var(--surface2);text-align:center;font-weight:700;z-index:1;border-right:1.5px solid var(--border2)}
+table.reg td.gas{background:rgba(232,239,226,.32)}table.reg td.ver{background:rgba(226,234,243,.32)}table.reg td.gpl{background:rgba(243,230,236,.32)}
+table.reg .datecol{position:sticky;left:0;background:var(--surface2);text-align:center;font-weight:700;z-index:1;border-right:1.5px solid var(--border2);font-size:.66rem}
 table.reg thead .datecol{z-index:3;background:var(--surface3)}
-table.reg tbody tr:hover td{background:var(--accent-bg)}
-table.reg tbody tr:hover .datecol{background:var(--accent-bg)}
+table.reg tbody tr:hover td{filter:brightness(.97)}
 table.reg td.zero{color:var(--muted2)}
 table.reg tr.base td{background:#fff8ef;font-weight:700}
 table.reg tr.base .datecol{background:#fdedd6}
-.legend{display:flex;gap:1rem;margin:.7rem 0 .3rem;font-size:.72rem;color:var(--muted);flex-wrap:wrap}
+/* input rettifiche */
+table.reg input{width:100%;border:none;background:transparent;font-family:var(--mono);font-size:.68rem;text-align:right;padding:.12rem .1rem;border-radius:4px;color:var(--text);-moz-appearance:textfield}
+table.reg input::-webkit-outer-spin-button,table.reg input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+table.reg input:focus{outline:1.5px solid var(--accent);background:#fff}
+table.reg input.has{background:var(--accent-bg);font-weight:600;color:var(--accent)}
+table.reg input.bad{outline:1.5px solid var(--red);background:var(--red-bg)}
+.legend{display:flex;gap:1rem;margin:.6rem 0 .5rem;font-size:.72rem;color:var(--muted);flex-wrap:wrap;align-items:center}
 .legend span{display:inline-flex;align-items:center;gap:.35rem}
 .dot{width:11px;height:11px;border-radius:3px;display:inline-block}
 .empty-state{text-align:center;padding:3.5rem 1rem;color:var(--muted)}
@@ -82,12 +91,13 @@ table.reg tr.base .datecol{background:#fdedd6}
   <div class="logo">Faboil<em>Registro Dogana</em></div>
   <div class="tabs">
     <button class="tab on" data-tab="import">Importazioni</button>
+    <button class="tab" data-tab="rettifiche" id="tab-rettifiche" disabled>Rettifiche</button>
     <button class="tab" data-tab="registro" id="tab-registro" disabled>Registro</button>
   </div>
 </div>
 
 <div class="content">
-  <!-- ===== IMPORTAZIONI ===== -->
+  <!-- IMPORTAZIONI -->
   <div class="page on" id="page-import">
     <div class="sh"><h1>Importazioni</h1><p>carica il report StoreSmart (.xlsx)</p></div>
     <div class="card">
@@ -102,10 +112,33 @@ table.reg tr.base .datecol{background:#fdedd6}
     </div>
   </div>
 
-  <!-- ===== REGISTRO ===== -->
+  <!-- RETTIFICHE -->
+  <div class="page" id="page-rettifiche">
+    <div class="sh"><h1>Rettifiche contatori</h1><p>litri rimessi indietro per pistola/giorno — trasferimenti interni senza DAS</p></div>
+    <div class="row-actions">
+      <span class="muted">Regola d'oro: la rettifica di un giorno non può superare lo scarico grezzo di quel giorno (il contatore non torna mai indietro rispetto a ieri).</span>
+    </div>
+    <div class="row-actions">
+      <button class="btn sm ghost" id="rett-clear">Azzera tutte</button>
+      <span class="muted" id="rett-info"></span>
+    </div>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--gas)"></i> Gasolio</span>
+      <span><i class="dot" style="background:var(--ver)"></i> Verde</span>
+      <span><i class="dot" style="background:var(--gpl)"></i> GPL</span>
+      <span class="muted">— passa col mouse su una cella per vedere lo scarico grezzo (il massimo inseribile).</span>
+    </div>
+    <div id="rett-container"></div>
+  </div>
+
+  <!-- REGISTRO -->
   <div class="page" id="page-registro">
     <div class="sh"><h1>Registro di scarico</h1><p id="reg-sub">letture progressive contatori (litri)</p></div>
     <div class="row-actions">
+      <div class="toggle" id="reg-toggle">
+        <button data-mode="netto" class="on">Netto (con rettifiche)</button>
+        <button data-mode="grezzo">Grezzo (StoreSmart)</button>
+      </div>
       <button class="btn" id="export-btn">⬇ Esporta Excel</button>
       <span class="muted" id="reg-info"></span>
     </div>
@@ -120,169 +153,158 @@ table.reg tr.base .datecol{background:#fdedd6}
 </div>
 
 <script>
-// ---------- costanti dominio ----------
 const PUMPS = ['G1_1','G1_2','G2_1','G2_2','G3_1','G3_2','G4_1','G4_2','G5_1','G5_2','G6_1','G6_2',
                'V1_3','V2_3','V3_3','V4_3','V5_3','V6_3',
                'GPL1','GPL2','GPL3','GPL4','GPL5','GPL6'];
 function prodOf(p){ if(!p) return null; if(p.startsWith('GPL')) return 'GPL'; if(p[0]==='V') return 'VERDE'; if(p[0]==='G') return 'GASOLIO'; return null; }
 function prodClass(p){ const x=prodOf(p); return x==='GASOLIO'?'gas':x==='VERDE'?'ver':'gpl'; }
 
-let STATE = null; // { days:[Date], daily:{pump:{dayKey:liters}}, readings, meta }
+let STATE=null;     // { days, daily, meta }
+let RETT={};        // { pump:{ dayKey:int } }
+let REGMODE='netto';
 
-// ---------- parsing numeri/date ----------
-function itNum(v){
-  if(v==null||v==='') return 0;
-  if(typeof v==='number') return v;
-  return parseFloat(String(v).replace(/\./g,'').replace(',','.')) || parseFloat(String(v).replace(',','.')) || 0;
-}
-function serialToDate(serial){ // Excel serial -> UTC date, no timezone drift
-  return new Date(Math.round((serial-25569)*86400*1000));
-}
-function cellDay(v){ // ritorna 'YYYY-MM-DD' oppure null
-  if(v==null||v==='') return null;
-  if(typeof v==='number'){ const d=serialToDate(v); return d.toISOString().slice(0,10); }
-  const s=String(v).trim();
-  let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return `${m[1]}-${m[2]}-${m[3]}`;
-  m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/); if(m) return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
-  return null;
-}
+function itNum(v){ if(v==null||v==='') return 0; if(typeof v==='number') return v; return parseFloat(String(v).replace(/\./g,'').replace(',','.'))||parseFloat(String(v).replace(',','.'))||0; }
+function serialToDate(s){ return new Date(Math.round((s-25569)*86400*1000)); }
+function cellDay(v){ if(v==null||v==='') return null; if(typeof v==='number'){ return serialToDate(v).toISOString().slice(0,10); } const s=String(v).trim(); let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return `${m[1]}-${m[2]}-${m[3]}`; m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/); if(m) return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`; return null; }
 function fmtDay(key){ const[y,m,d]=key.split('-'); return `${d}/${m}/${y}`; }
-function fmtNum(n){ return n.toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtInt(n){ return Math.round(n).toLocaleString('it-IT'); }
+function grezzoInt(pump,day){ return Math.round(STATE.daily[pump][day]||0); } // scarico grezzo intero del giorno
+function rettVal(pump,day){ return (RETT[pump]&&RETT[pump][day])||0; }
 
-// ---------- lettura StoreSmart ----------
+// ---------- parsing StoreSmart ----------
 function parseStoreSmart(rows){
-  // trova riga intestazione (contiene 'Pompa')
   let hr=-1;
-  for(let i=0;i<Math.min(rows.length,40);i++){
-    if(rows[i] && rows[i].some(c=>String(c).trim().toLowerCase()==='pompa')){ hr=i; break; }
-  }
+  for(let i=0;i<Math.min(rows.length,40);i++){ if(rows[i] && rows[i].some(c=>String(c).trim().toLowerCase()==='pompa')){ hr=i; break; } }
   if(hr<0) throw new Error("Intestazione non trovata: manca la colonna 'Pompa'. È un report StoreSmart?");
   const head=rows[hr].map(c=>String(c==null?'':c).trim().toLowerCase());
   const find=(...names)=>{ for(const n of names){ const k=head.findIndex(h=>h===n||h.includes(n)); if(k>=0) return k; } return -1; };
-  const iPag=find('tipo pagamento','pagamento');
-  const iData=find('data rifornimento','data');
-  const iPompa=find('pompa');
-  const iProd=find('prodotto');
-  const iQta=find('quantità','quantita');
+  const iPag=find('tipo pagamento','pagamento'), iData=find('data rifornimento','data'), iPompa=find('pompa'), iProd=find('prodotto'), iQta=find('quantità','quantita');
   if([iData,iPompa,iProd,iQta].some(x=>x<0)) throw new Error('Colonne mancanti (servono Data, Pompa, Prodotto, Quantità).');
-
   const daily={}; PUMPS.forEach(p=>daily[p]={});
-  let kept=0, skTot=0, skAdb=0, skUnknown=0;
-  const daySet=new Set(); const prodCount={GASOLIO:0,VERDE:0,GPL:0};
+  let kept=0,skTot=0,skAdb=0,skUnknown=0; const daySet=new Set(); const prodCount={GASOLIO:0,VERDE:0,GPL:0};
   for(let i=hr+1;i<rows.length;i++){
     const r=rows[i]; if(!r) continue;
-    const pag=iPag>=0?String(r[iPag]||''):'';
-    if(pag.toLowerCase().includes('totale')){ skTot++; continue; }
-    const pompa=String(r[iPompa]||'').trim();
-    const prod=String(r[iProd]||'').trim().toUpperCase();
+    const pag=iPag>=0?String(r[iPag]||''):''; if(pag.toLowerCase().includes('totale')){ skTot++; continue; }
+    const pompa=String(r[iPompa]||'').trim(); const prod=String(r[iProd]||'').trim().toUpperCase();
     if(!pompa && !prod) continue;
     if(prod==='ADBLUE'||pompa==='ADBL7'){ skAdb++; continue; }
-    const day=cellDay(r[iData]);
-    if(!day || !pompa){ continue; }
+    const day=cellDay(r[iData]); if(!day||!pompa) continue;
     if(!PUMPS.includes(pompa)){ skUnknown++; continue; }
-    const q=itNum(r[iQta]);
-    daily[pompa][day]=(daily[pompa][day]||0)+q;
-    daySet.add(day); kept++;
-    const pc=prodOf(pompa); if(pc) prodCount[pc]+=q;
+    daily[pompa][day]=(daily[pompa][day]||0)+itNum(r[iQta]); daySet.add(day); kept++;
+    const pc=prodOf(pompa); if(pc) prodCount[pc]+=itNum(r[iQta]);
   }
   const days=[...daySet].sort();
-  // letture progressive (baseline 0 al giorno prima del primo)
-  const readings={}; const cum={}; PUMPS.forEach(p=>cum[p]=0);
-  days.forEach(day=>{ readings[day]={}; PUMPS.forEach(p=>{ cum[p]+=(daily[p][day]||0); readings[day][p]=cum[p]; }); });
-  return { days, daily, readings, meta:{kept,skTot,skAdb,skUnknown,prodCount,
-           periodo: days.length? `${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—'} };
+  return { days, daily, meta:{kept,skTot,skAdb,skUnknown,prodCount, period: days.length? days[0].slice(0,7):'', periodo: days.length? `${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—'} };
 }
 
-// ---------- import handlers ----------
+// ---------- letture progressive ----------
+function readingAt(mode){ // ritorna {day:{pump:int}}
+  const out={}; const cum={}; PUMPS.forEach(p=>cum[p]=0);
+  STATE.days.forEach(day=>{ out[day]={}; PUMPS.forEach(p=>{ let s=STATE.daily[p][day]||0; if(mode==='netto') s=Math.max(0, s - rettVal(p,day)); cum[p]+=s; out[day][p]=Math.round(cum[p]); }); });
+  return out;
+}
+
+// ---------- import ----------
 function handleFile(file){
-  const res=document.getElementById('import-result');
-  res.innerHTML='<p class="muted" style="margin-top:1rem">Lettura in corso…</p>';
+  const res=document.getElementById('import-result'); res.innerHTML='<p class="muted" style="margin-top:1rem">Lettura in corso…</p>';
   const reader=new FileReader();
-  reader.onload=e=>{
-    try{
-      const wb=XLSX.read(e.target.result,{type:'array'});
-      const ws=wb.Sheets[wb.SheetNames[0]];
-      const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
-      STATE=parseStoreSmart(rows);
-      renderImportResult(file.name);
-      document.getElementById('tab-registro').disabled=false;
-      renderRegistro();
-    }catch(err){
-      res.innerHTML=`<div class="warn">⚠ ${err.message}</div>`;
-    }
-  };
+  reader.onload=e=>{ try{
+    const wb=XLSX.read(e.target.result,{type:'array'});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+    STATE=parseStoreSmart(rows);
+    loadRett();
+    renderImportResult(file.name);
+    document.getElementById('tab-registro').disabled=false;
+    document.getElementById('tab-rettifiche').disabled=false;
+    renderRettifiche(); renderRegistro();
+  }catch(err){ res.innerHTML=`<div class="warn">⚠ ${err.message}</div>`; } };
   reader.readAsArrayBuffer(file);
 }
 function renderImportResult(fname){
-  const m=STATE.meta;
-  const warns=[];
-  if(m.skUnknown) warns.push(`${m.skUnknown} righe con pistola non riconosciuta (ignorate).`);
+  const m=STATE.meta; const warns=[]; if(m.skUnknown) warns.push(`${m.skUnknown} righe con pistola non riconosciuta (ignorate).`);
   document.getElementById('import-result').innerHTML=`
     <div class="ok-msg">✓ Importato: <b>${fname}</b></div>
     <div class="grid" style="margin-top:.9rem">
-      <div class="stat"><div class="k">Periodo</div><div class="v" style="font-size:.95rem">${m.periodo}</div></div>
+      <div class="stat"><div class="k">Periodo</div><div class="v" style="font-size:.92rem">${m.periodo}</div></div>
       <div class="stat"><div class="k">Giorni</div><div class="v">${STATE.days.length}</div></div>
       <div class="stat"><div class="k">Erogazioni valide</div><div class="v">${m.kept.toLocaleString('it-IT')}</div></div>
-      <div class="stat"><div class="k">Gasolio</div><div class="v">${fmtNum(m.prodCount.GASOLIO)} <small>L</small></div></div>
-      <div class="stat"><div class="k">Verde</div><div class="v">${fmtNum(m.prodCount.VERDE)} <small>L</small></div></div>
-      <div class="stat"><div class="k">GPL</div><div class="v">${fmtNum(m.prodCount.GPL)} <small>L</small></div></div>
+      <div class="stat"><div class="k">Gasolio</div><div class="v">${fmtInt(m.prodCount.GASOLIO)} <small>L</small></div></div>
+      <div class="stat"><div class="k">Verde</div><div class="v">${fmtInt(m.prodCount.VERDE)} <small>L</small></div></div>
+      <div class="stat"><div class="k">GPL</div><div class="v">${fmtInt(m.prodCount.GPL)} <small>L</small></div></div>
     </div>
     <p class="muted" style="margin-top:.7rem">Scartate ${m.skTot} righe "Totale", ${m.skAdb} righe ADBLUE.${warns.length?' '+warns.join(' '):''}</p>
-    <div style="margin-top:1rem"><button class="btn" onclick="goTab('registro')">Vai al Registro →</button></div>`;
+    <div style="margin-top:1rem;display:flex;gap:.6rem"><button class="btn" onclick="goTab('rettifiche')">Vai alle Rettifiche →</button><button class="btn ghost" onclick="goTab('registro')">Vai al Registro →</button></div>`;
 }
+
+// ---------- colgroup condiviso ----------
+function colgroup(){ let c='<colgroup><col class="dc">'; PUMPS.forEach(()=>c+='<col class="pc">'); return c+'</colgroup>'; }
+function headRow(){ let h='<thead><tr><th class="datecol">DATA</th>'; PUMPS.forEach(p=>h+=`<th class="${prodClass(p)}">${p}</th>`); return h+'</tr></thead>'; }
 
 // ---------- registro ----------
 function renderRegistro(){
-  if(!STATE){return;}
+  if(!STATE) return;
+  const R=readingAt(REGMODE);
   document.getElementById('reg-sub').textContent=`PV-2993 · ${STATE.meta.periodo} · baseline contatori = 0`;
-  document.getElementById('reg-info').textContent=`${STATE.days.length} giorni · 24 pistole · letture ricostruite da StoreSmart`;
-  const baseKey=baselineLabel();
-  let h='<div class="tablewrap"><table class="reg"><thead><tr><th class="datecol">DATA</th>';
-  PUMPS.forEach(p=>{ h+=`<th class="${prodClass(p)}">${p}</th>`; });
-  h+='</tr></thead><tbody>';
-  // riga baseline
-  h+=`<tr class="base"><td class="datecol">${baseKey}</td>`;
-  PUMPS.forEach(()=>h+='<td>0,00</td>');
-  h+='</tr>';
-  STATE.days.forEach(day=>{
-    h+=`<tr><td class="datecol">${fmtDay(day)}</td>`;
-    PUMPS.forEach(p=>{ const v=STATE.readings[day][p]; h+=`<td class="${v===0?'zero':''}">${fmtNum(v)}</td>`; });
-    h+='</tr>';
-  });
+  document.getElementById('reg-info').textContent=`${STATE.days.length} giorni · vista ${REGMODE.toUpperCase()}`;
+  let h='<div class="tablewrap"><table class="reg">'+colgroup()+headRow()+'<tbody>';
+  h+=`<tr class="base"><td class="datecol">${baselineLabel()}</td>`; PUMPS.forEach(()=>h+='<td>0</td>'); h+='</tr>';
+  STATE.days.forEach(day=>{ h+=`<tr><td class="datecol">${fmtDay(day)}</td>`;
+    PUMPS.forEach(p=>{ const v=R[day][p]; h+=`<td class="${prodClass(p)} ${v===0?'zero':''}">${fmtInt(v)}</td>`; }); h+='</tr>'; });
   h+='</tbody></table></div>';
   document.getElementById('reg-container').innerHTML=h;
 }
-function baselineLabel(){
-  if(!STATE.days.length) return '—';
-  const[y,m,d]=STATE.days[0].split('-').map(Number);
-  const dt=new Date(Date.UTC(y,m-1,d)); dt.setUTCDate(dt.getUTCDate()-1);
-  return `${String(dt.getUTCDate()).padStart(2,'0')}/${String(dt.getUTCMonth()+1).padStart(2,'0')}/${dt.getUTCFullYear()}`;
+function baselineLabel(){ if(!STATE.days.length) return '—'; const[y,m,d]=STATE.days[0].split('-').map(Number); const dt=new Date(Date.UTC(y,m-1,d)); dt.setUTCDate(dt.getUTCDate()-1); return `${String(dt.getUTCDate()).padStart(2,'0')}/${String(dt.getUTCMonth()+1).padStart(2,'0')}/${dt.getUTCFullYear()}`; }
+
+// ---------- rettifiche ----------
+function renderRettifiche(){
+  if(!STATE) return;
+  let h='<div class="tablewrap"><table class="reg">'+colgroup()+headRow()+'<tbody>';
+  STATE.days.forEach(day=>{ h+=`<tr><td class="datecol">${fmtDay(day)}</td>`;
+    PUMPS.forEach(p=>{ const g=grezzoInt(p,day); const v=rettVal(p,day);
+      h+=`<td class="${prodClass(p)}"><input type="number" min="0" max="${g}" step="1" value="${v||''}" data-p="${p}" data-d="${day}" title="grezzo ${fmtInt(g)} L — max ${fmtInt(g)}" class="${v>0?'has':''}"></td>`; });
+    h+='</tr>'; });
+  h+='</tbody></table></div>';
+  document.getElementById('rett-container').innerHTML=h;
+  updateRettInfo();
+  document.querySelectorAll('#rett-container input').forEach(inp=>inp.addEventListener('input',onRettInput));
 }
+function onRettInput(e){
+  const inp=e.target, p=inp.dataset.p, day=inp.dataset.d, g=grezzoInt(p,day);
+  let val=parseInt(inp.value,10); if(isNaN(val)||val<0) val=0;
+  if(val>g){ val=g; inp.value=g; inp.classList.add('bad'); setTimeout(()=>inp.classList.remove('bad'),600); } // regola d'oro
+  if(!RETT[p]) RETT[p]={};
+  if(val>0) RETT[p][day]=val; else delete RETT[p][day];
+  inp.classList.toggle('has',val>0);
+  saveRett(); updateRettInfo(); renderRegistro();
+}
+function updateRettInfo(){
+  let n=0,tot=0; PUMPS.forEach(p=>{ const d=RETT[p]||{}; for(const k in d){ n++; tot+=d[k]; } });
+  document.getElementById('rett-info').textContent=`${n} rettifiche inserite · ${fmtInt(tot)} L rimessi indietro in totale`;
+}
+
+// ---------- persistenza (localStorage, single-user) ----------
+function rettKey(){ return 'faboil_rett_'+(STATE?STATE.meta.period:''); }
+function saveRett(){ try{ localStorage.setItem(rettKey(), JSON.stringify(RETT)); }catch(e){} }
+function loadRett(){ RETT={}; try{ const s=localStorage.getItem(rettKey()); if(s) RETT=JSON.parse(s); }catch(e){ RETT={}; } }
 
 // ---------- export ----------
 function exportRegistro(){
-  if(!STATE) return;
-  const aoa=[['DATA',...PUMPS]];
-  aoa.push([baselineLabel(),...PUMPS.map(()=>0)]);
-  STATE.days.forEach(day=>aoa.push([fmtDay(day),...PUMPS.map(p=>Math.round(STATE.readings[day][p]*100)/100)]));
-  const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:12},...PUMPS.map(()=>({wch:9}))];
-  ws['!freeze']={xSplit:1,ySplit:1};
+  if(!STATE) return; const R=readingAt(REGMODE);
+  const aoa=[['DATA',...PUMPS]]; aoa.push([baselineLabel(),...PUMPS.map(()=>0)]);
+  STATE.days.forEach(day=>aoa.push([fmtDay(day),...PUMPS.map(p=>R[day][p])]));
+  const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:12},...PUMPS.map(()=>({wch:9}))]; ws['!freeze']={xSplit:1,ySplit:1};
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Registro');
-  const p=STATE.days.length?STATE.days[0].slice(0,7):'registro';
-  XLSX.writeFile(wb,`Registro_dogana_${p}.xlsx`);
+  XLSX.writeFile(wb,`Registro_dogana_${STATE.meta.period||'export'}_${REGMODE}.xlsx`);
 }
 
 // ---------- nav ----------
-function goTab(name){
-  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===name));
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
-  document.getElementById('page-'+name).classList.add('on');
-}
+function goTab(name){ document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===name)); document.querySelectorAll('.page').forEach(p=>p.classList.remove('on')); document.getElementById('page-'+name).classList.add('on'); }
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ if(!t.disabled) goTab(t.dataset.tab); }));
 document.getElementById('export-btn').addEventListener('click',exportRegistro);
+document.querySelectorAll('#reg-toggle button').forEach(b=>b.addEventListener('click',()=>{ REGMODE=b.dataset.mode; document.querySelectorAll('#reg-toggle button').forEach(x=>x.classList.toggle('on',x===b)); renderRegistro(); }));
+document.getElementById('rett-clear').addEventListener('click',()=>{ if(confirm('Azzerare tutte le rettifiche inserite?')){ RETT={}; saveRett(); renderRettifiche(); renderRegistro(); } });
 
-// dropzone
 const drop=document.getElementById('drop'), fileInput=document.getElementById('file');
 drop.addEventListener('click',()=>fileInput.click());
 fileInput.addEventListener('change',e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); });
