@@ -354,6 +354,7 @@ function cellDay(v){ if(v==null||v==='') return null; if(typeof v==='number'){ r
 function fmtDay(key){ const[y,m,d]=key.split('-'); return `${d}/${m}/${y}`; }
 function fmtInt(n){ return Math.round(n).toLocaleString('it-IT'); }
 function fmt2(n){ return (Math.round(n*100)/100).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function refreshScheda(){ try{ if(CLIENTI&&CLIENTI.length) renderClDetail(); }catch(e){} } // aggiorna il box credito nella scheda cliente
 function grezzo(p,day){ return STATE.daily[p][day]||0; }
 
 // ---- calendario: rossi (domeniche+festivi nazionali), sabati ----
@@ -523,7 +524,7 @@ function onAsCellEdit(e){
   else if(existing.length){ const keep=existing[0]; keep.litri=val; const prezzo=priceOfDay(keep.prodotto,d)||keep.prezzo||0; keep.totale=Math.round(val*(prezzo-(keep.sconto||0))*100)/100; const drop=new Set(existing.slice(1)); BUONI=BUONI.filter(b=>!drop.has(b)); }
   else { const tess=c.tessere.find(x=>x.id===t); const prod=(AS_PROD!=='ALL')?AS_PROD:(tess?tess.prodotto:'GASOLIO'); const prezzo=priceOfDay(prod,d)||(tess&&tess.prezzo)||0; const sconto=(tess&&tess.sconto)||0;
     BUONI.push({ id:BSEQ++, clienteId:c.id, clienteNome:c.ragione, tessera:t==='—'?'':t, prodotto:prod, day:d, litri:val, prezzo, sconto, totale:Math.round(val*(prezzo-sconto)*100)/100, gen:false }); }
-  saveStore(); recompute(); renderAssegnazioni(); renderRegistro(); renderBuoni();
+  saveStore(); recompute(); renderAssegnazioni(); renderRegistro(); renderBuoni(); refreshScheda();
 }
 
 // ---- letture progressive ----
@@ -642,7 +643,7 @@ function renderBuoniList(){
   h+='</tbody></table></div>'; cont.innerHTML=h;
   cont.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); delBuono(parseInt(b.dataset.del,10)); }));
 }
-function delAllBuoni(){ if(!BUONI.length) return; if(!confirm(`Eliminare TUTTI i ${BUONI.length} buoni del mese? L'operazione non è reversibile.`)) return; BUONI=[]; CURBUONO=null; saveStore(); recompute(); renderBuoni(); renderRegistro(); if(typeof renderAssegnazioni==='function') renderAssegnazioni(); }
+function delAllBuoni(){ if(!BUONI.length) return; if(!confirm(`Eliminare TUTTI i ${BUONI.length} buoni del mese? L'operazione non è reversibile.`)) return; BUONI=[]; CURBUONO=null; saveStore(); recompute(); renderBuoni(); renderRegistro(); refreshScheda(); if(typeof renderAssegnazioni==='function') renderAssegnazioni(); }
 function renderBuoniGrid(){
   const cont=document.getElementById('buoni-grid'); const b=BUONI.find(x=>x.id===CURBUONO);
   if(!b){ cont.innerHTML='<div class="empty-state"><span class="ic">🧾</span>Aggiungi un buono per vederne lo spostamento.</div>'; return; }
@@ -683,8 +684,11 @@ function genForTessera(c,t,target,budget){ // budget: {euro} (tetto credito cond
   const cap=t.capienza||0; if(cap<=0||target<=0) return [];
   const days=genAllowedDays(t); if(!days.length) return [];
   const lo=cap*0.9, avg=(cap+lo)/2; const n=Math.min(days.length, Math.max(1, Math.round(target/avg)));
+  // giorni sparsi a caso (no ammucchiamento sul primo giorno)
+  const pool=days.slice(); for(let i=pool.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); const tmp=pool[i]; pool[i]=pool[j]; pool[j]=tmp; }
+  const chosen=pool.slice(0,n).sort();
   const out=[]; let sum=0;
-  for(let k=0;k<n;k++){ const day=days[Math.floor(k*days.length/n)]; let r=Math.round((lo+Math.random()*(cap-lo))*100)/100; if(Number.isInteger(r)) r+=(Math.floor(Math.random()*98)+1)/100; // mai tondo
+  for(let k=0;k<n;k++){ const day=chosen[k]; let r=Math.round((lo+Math.random()*(cap-lo))*100)/100; if(Number.isInteger(r)) r+=(Math.floor(Math.random()*98)+1)/100; // mai tondo
     if(sum+r>target) r=Math.round((target-sum)*100)/100; if(r<=0) break; // non superare il target (litri)
     const prezzo=priceOfDay(t.prodotto,day)||t.prezzo||0, sconto=t.sconto||0, eff=prezzo-sconto;
     if(budget){ if(budget.euro<=0.005) break; let tot=Math.round(r*eff*100)/100;
@@ -747,7 +751,7 @@ function generateBuoni(){
   const extra=(skipped?` Saltati ${skipped} già generati.`:'')+(nIncompleto?` ⚠ ${nIncompleto} con parametri mancanti.`:'')+(nCredito?` 💳 ${nCredito} prepagati a credito esaurito.`:'')+(rationed.length?` ⚖️ Prodotto scarso (${rationed.join(', ')}): litri distribuiti per percentuale.`:'');
   if(!newB.length){ alert(`Niente da generare.${extra}`); return; }
   BUONI.push(...newB); CURBUONO=newB[newB.length-1].id;
-  saveStore(); recompute(); renderBuoni(); renderRegistro();
+  saveStore(); recompute(); renderBuoni(); renderRegistro(); refreshScheda();
   const litri=newB.reduce((s,b)=>s+b.litri,0);
   alert(`Generati ${newB.length} buoni per ${nCli} clienti, ${fmtInt(litri)} L.${extra}`);
 }
@@ -768,9 +772,9 @@ function addBuono(){
     prezzo:parseFloat(document.getElementById('b-prezzo').value)||0, sconto:parseFloat(document.getElementById('b-sconto').value)||0, totale:parseFloat(document.getElementById('b-totale').value)||0 };
   BUONI.push(b); CURBUONO=b.id;
   ['b-litri','b-totale'].forEach(id=>document.getElementById(id).value='');
-  saveStore(); recompute(); renderBuoni(); renderRegistro();
+  saveStore(); recompute(); renderBuoni(); renderRegistro(); refreshScheda();
 }
-function delBuono(id){ const b=BUONI.find(x=>x.id===id); if(b && !confirm(`Eliminare il buono ${b.prodotto} ${fmtDay(b.day)} di ${fmtInt(b.litri)} L?`)) return; BUONI=BUONI.filter(x=>x.id!==id); CURBUONO=BUONI.length?BUONI[0].id:null; saveStore(); recompute(); renderBuoni(); renderRegistro(); if(typeof renderAssegnazioni==='function') renderAssegnazioni(); }
+function delBuono(id){ const b=BUONI.find(x=>x.id===id); if(b && !confirm(`Eliminare il buono ${b.prodotto} ${fmtDay(b.day)} di ${fmtInt(b.litri)} L?`)) return; BUONI=BUONI.filter(x=>x.id!==id); CURBUONO=BUONI.length?BUONI[0].id:null; saveStore(); recompute(); renderBuoni(); renderRegistro(); refreshScheda(); if(typeof renderAssegnazioni==='function') renderAssegnazioni(); }
 
 // ---- persistenza ----
 function storeKey(){ return 'faboil_reg_'+(STATE?STATE.meta.period:''); }
