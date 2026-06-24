@@ -683,8 +683,9 @@ function genForTessera(c,t,target){ // ritorna array di buoni
   const cap=t.capienza||0; if(cap<=0||target<=0) return [];
   const days=genAllowedDays(t); if(!days.length) return [];
   const lo=cap*0.9, avg=(cap+lo)/2; const n=Math.min(days.length, Math.max(1, Math.round(target/avg)));
-  const out=[];
+  const out=[]; let sum=0;
   for(let k=0;k<n;k++){ const day=days[Math.floor(k*days.length/n)]; let r=Math.round((lo+Math.random()*(cap-lo))*100)/100; if(Number.isInteger(r)) r+=(Math.floor(Math.random()*98)+1)/100; // mai tondo: sempre 2 decimali
+    if(sum+r>target) r=Math.round((target-sum)*100)/100; if(r<=0) break; sum+=r; // non superare il target
     const prezzo=priceOfDay(t.prodotto,day)||t.prezzo||0, sconto=t.sconto||0;
     out.push({ id:BSEQ++, clienteId:c.id, clienteNome:c.ragione, tessera:t.id, prodotto:t.prodotto, day, litri:r, prezzo, sconto, totale:Math.round(r*(prezzo-sconto)*100)/100, gen:true }); }
   return out;
@@ -705,14 +706,19 @@ function generateBuoni(){
   const todo=regen?clienti:clienti.filter(c=>!already.has(c.id));
   const skipped=clienti.length-todo.length;
   if(!todo.length){ alert(`Tutti i ${clienti.length} clienti scelti hanno già buoni generati per questo mese. Spunta "Rigenera (sostituisci)" per rifarli.`); return; }
-  const newB=[]; let nCli=0, nIncompleto=0;
+  // scarico grezzo per prodotto del mese (tetto fisico: non si puo' fatturare piu' di quanto erogato)
+  const prodScar={GASOLIO:0,VERDE:0,GPL:0}; PUMPS.forEach(p=>{ const pc=prodOf(p); STATE.days.forEach(d=>prodScar[pc]+=grezzo(p,d)); });
+  const newB=[]; let nCli=0, nIncompleto=0, nAssurdo=0;
   todo.forEach(c=>{ if(clienteAutoIncompleto(c)){ nIncompleto++; return; } // anomalia: parametri mancanti -> non genera
     const target=c.consumoMese||0; const act=c.tessere.filter(t=>!t.sospesa && (t.capienza||0)>0);
+    // tetto: somma scarico dei prodotti delle tessere attive del cliente
+    const prods=[...new Set(act.map(t=>t.prodotto))]; const tetto=prods.reduce((s,pr)=>s+(prodScar[pr]||0),0);
+    if(target>tetto){ nAssurdo++; return; } // input assurdo: piu' del realmente erogato -> non genera
     const share=target/act.length; let got=false;
     act.forEach(t=>{ const nb=genForTessera(c,t,share); if(nb.length){ newB.push(...nb); got=true; } });
     if(got) nCli++;
   });
-  const extra=(skipped?` Saltati ${skipped} già generati.`:'')+(nIncompleto?` ⚠ ${nIncompleto} clienti saltati per parametri mancanti (percentuale, litri/mese, capienza o giorni): vedi ⚠ nella sezione Clienti.`:'');
+  const extra=(skipped?` Saltati ${skipped} già generati.`:'')+(nIncompleto?` ⚠ ${nIncompleto} clienti saltati per parametri mancanti (percentuale, litri/mese, capienza o giorni): vedi ⚠ nella sezione Clienti.`:'')+(nAssurdo?` ⛔ ${nAssurdo} clienti saltati: "Litri max/mese" supera il carburante realmente erogato nel mese (input incongruente).`:'');
   if(!newB.length){ alert(`Niente da generare.${extra}`); return; }
   BUONI.push(...newB); CURBUONO=newB[newB.length-1].id;
   saveStore(); recompute(); renderBuoni(); renderRegistro();
