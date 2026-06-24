@@ -684,7 +684,9 @@ function genClientiTarget(){
 }
 function generateBuoni(){
   if(!STATE){ alert('Importa prima lo StoreSmart.'); return; }
-  const clienti=genClientiTarget(); if(!clienti.length){ alert('Seleziona almeno un cliente.'); return; }
+  const sel=genClientiTarget(); if(!sel.length){ alert('Seleziona almeno un cliente.'); return; }
+  const clienti=sel.filter(c=>c.genAuto);
+  if(!clienti.length){ alert('Nessuno dei clienti scelti ha la "Generazione automatica" attiva. Attivala nella scheda cliente.'); return; }
   const newB=[]; let nCli=0;
   clienti.forEach(c=>{ const target=c.consumoMese||0; if(target<=0) return; const act=c.tessere.filter(t=>!t.sospesa && (t.capienza||0)>0); if(!act.length) return;
     const share=target/act.length; let got=false;
@@ -756,7 +758,7 @@ function parseEstesoL(wb){
     const cat=sheetName.trim(); const tipo=SHEET_TIPO[cat.toLowerCase()]||'POST'; counts[cat]=counts[cat]||0;
     for(let r=1;r<rows.length;r++){
       const row=rows[r]; if(!row) continue; const id=row[iId]; if(id==null||id==='') continue; const key=String(id);
-      if(!byId[key]){ byId[key]={ id:key, categoria:cat, tipo, ragione:str(row[iRag]), indirizzo:str(row[iInd]), citta:str(row[iCitta]), prov:str(row[iProv]), piva:str(row[iPiva]), cf:str(row[iCf]), tel:str(row[iTel]), cell:str(row[iCell]), email:str(row[iMail]), pec:str(row[iPec]), note:str(row[iNote]), modPag:str(row[iModPag]), fidoCliente:csNum(row[iFidoC]), perc:0, saldo:0, saldoData:'', consumoMese:0, tessere:[] }; counts[cat]++; }
+      if(!byId[key]){ byId[key]={ id:key, categoria:cat, tipo, ragione:str(row[iRag]), indirizzo:str(row[iInd]), citta:str(row[iCitta]), prov:str(row[iProv]), piva:str(row[iPiva]), cf:str(row[iCf]), tel:str(row[iTel]), cell:str(row[iCell]), email:str(row[iMail]), pec:str(row[iPec]), note:str(row[iNote]), modPag:str(row[iModPag]), fidoCliente:csNum(row[iFidoC]), perc:0, saldo:0, saldoData:'', consumoMese:0, genAuto:false, tessere:[] }; counts[cat]++; }
       const codT=row[iCodT]; if(codT==null||codT==='') continue; const tk=String(codT);
       if(!byId[key].tessere.some(t=>t.id===tk)) byId[key].tessere.push({ id:tk, targa:str(row[iTarga]), descrizione:'', fidoTessera:csNum(row[iFidoT]), plafond:csNum(row[iPlaf]), prodotto:'GASOLIO', capienza:0, giorni:[1,1,1,1,1,0,0], escludiFestivi:true, sospesa:false, prezzo:0, sconto:0 });
     }
@@ -767,7 +769,7 @@ function parseEstesoL(wb){
 function mergeClienti(parsed){ // preserva i parametri inseriti a mano (consumo, %, saldo, descrizione…)
   const prev={}; CLIENTI.forEach(c=>prev[c.id]=c);
   parsed.clienti.forEach(nc=>{ const oc=prev[nc.id]; if(!oc) return;
-    nc.tipo=oc.tipo; nc.perc=oc.perc; nc.saldo=oc.saldo; nc.saldoData=oc.saldoData; nc.consumoMese=oc.consumoMese;
+    nc.tipo=oc.tipo; nc.perc=oc.perc; nc.saldo=oc.saldo; nc.saldoData=oc.saldoData; nc.consumoMese=oc.consumoMese; nc.genAuto=oc.genAuto;
     const ot={}; oc.tessere.forEach(t=>ot[t.id]=t);
     nc.tessere.forEach(nt=>{ const o=ot[nt.id]; if(!o) return; nt.descrizione=o.descrizione; nt.prodotto=o.prodotto; nt.capienza=o.capienza; nt.giorni=o.giorni; nt.escludiFestivi=o.escludiFestivi; nt.sospesa=o.sospesa; nt.prezzo=o.prezzo; nt.sconto=o.sconto; if(!nt.targa) nt.targa=o.targa; });
   });
@@ -861,6 +863,7 @@ function filterClienti(q,filt){
   return CLIENTI.filter(c=>{
     if(filt==='PRE'&&c.tipo!=='PRE') return false;
     if(filt==='POST'&&c.tipo==='PRE') return false;
+    if(filt==='AUTO'&&!c.genAuto) return false;
     if(!q) return true;
     if((c.ragione||'').toLowerCase().includes(q)) return true;
     if(String(c.id).includes(q)) return true;
@@ -887,8 +890,8 @@ function addGenGroup(id){ if(id && !GEN_GROUP.includes(id)) GEN_GROUP.push(id); 
 function renderClFilters(){
   const el=document.getElementById('cl-filters'); if(!el) return;
   if(!CLIENTI.length){ el.innerHTML=''; return; }
-  const nAll=CLIENTI.length, nPre=CLIENTI.filter(c=>c.tipo==='PRE').length, nPost=nAll-nPre;
-  el.innerHTML=`<button data-f="ALL" class="${CLFILT==='ALL'?'on':''}">Tutti ${nAll}</button><button data-f="POST" class="${CLFILT==='POST'?'on':''}">Post ${nPost}</button><button data-f="PRE" class="${CLFILT==='PRE'?'on':''}">Pre ${nPre}</button>`;
+  const nAll=CLIENTI.length, nPre=CLIENTI.filter(c=>c.tipo==='PRE').length, nPost=nAll-nPre, nAuto=CLIENTI.filter(c=>c.genAuto).length;
+  el.innerHTML=`<button data-f="ALL" class="${CLFILT==='ALL'?'on':''}">Tutti ${nAll}</button><button data-f="POST" class="${CLFILT==='POST'?'on':''}">Post ${nPost}</button><button data-f="PRE" class="${CLFILT==='PRE'?'on':''}">Pre ${nPre}</button><button data-f="AUTO" class="${CLFILT==='AUTO'?'on':''}" title="generazione automatica">⚙ ${nAuto}</button>`;
   el.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ CLFILT=b.dataset.f; renderClFilters(); renderClList(); }));
 }
 function renderClList(){
@@ -896,7 +899,7 @@ function renderClList(){
   if(!CLIENTI.length){ box.innerHTML='<p class="muted" style="padding:.8rem">Nessun cliente. Importa il file <b>estesoL</b> dalla sezione Importazioni.</p>'; return; }
   const list=filteredClienti();
   if(!list.length){ box.innerHTML='<p class="muted" style="padding:.8rem">Nessun risultato.</p>'; return; }
-  box.innerHTML=list.map(c=>`<div class="cl-item ${c.id===CURCLI?'on':''}" data-id="${escapeAttr(c.id)}"><div class="nm">${escapeHtml(c.ragione||c.id)}<div class="sub">ID ${escapeHtml(c.id)} · ${c.tessere.length} tess.</div></div><span class="badge-tipo ${c.tipo==='PRE'?'pre':'post'}">${c.tipo==='PRE'?'PRE':'POST'}</span></div>`).join('');
+  box.innerHTML=list.map(c=>`<div class="cl-item ${c.id===CURCLI?'on':''}" data-id="${escapeAttr(c.id)}"><div class="nm">${escapeHtml(c.ragione||c.id)}<div class="sub">ID ${escapeHtml(c.id)} · ${c.tessere.length} tess.</div></div>${c.genAuto?'<span title="generazione automatica">⚙</span>':''}<span class="badge-tipo ${c.tipo==='PRE'?'pre':'post'}">${c.tipo==='PRE'?'PRE':'POST'}</span></div>`).join('');
   box.querySelectorAll('.cl-item').forEach(el=>el.addEventListener('click',()=>{ CURCLI=el.dataset.id; saveClienti(); renderClList(); renderClDetail(); }));
 }
 function renderClDetail(){
@@ -910,7 +913,8 @@ function renderClDetail(){
     </div>
     <div class="cl-row">
       <div><span class="f-lbl">Tipo</span><div class="toggle" id="c-tipo"><button data-v="POST" class="${c.tipo!=='PRE'?'on':''}">Postpagato</button><button data-v="PRE" class="${c.tipo==='PRE'?'on':''}">Prepagato</button></div></div>
-      <div><span class="f-lbl">Percentuale</span><input class="fld sm" id="c-perc" type="number" min="0" max="100" step="1" value="${c.perc||''}" placeholder="%"></div>`;
+      <div><span class="f-lbl">Percentuale</span><input class="fld sm" id="c-perc" type="number" min="0" max="100" step="1" value="${c.perc||''}" placeholder="%"></div>
+      <div><span class="f-lbl">Gen. automatica</span><label class="chk" style="${c.genAuto?'color:var(--accent)':''}"><input type="checkbox" id="c-genauto" ${c.genAuto?'checked':''}> ⚙ attiva</label></div>`;
   if(c.tipo==='PRE') h+=`
       <div><span class="f-lbl">Saldo credito (€)</span><input class="fld sm" id="c-saldo" type="number" step="0.01" value="${c.saldo||''}"></div>
       <div><span class="f-lbl">alla data</span><input class="fld" id="c-saldodata" type="date" value="${escapeAttr(c.saldoData||'')}"></div>
@@ -942,6 +946,7 @@ function tessHtml(t){
 }
 function bindClDetail(c){
   const perc=document.getElementById('c-perc'); if(perc) perc.addEventListener('input',e=>{ c.perc=parseFloat(e.target.value)||0; saveClienti(); });
+  const ga=document.getElementById('c-genauto'); if(ga) ga.addEventListener('change',e=>{ c.genAuto=e.target.checked; saveClienti(); renderClFilters(); renderClList(); renderClDetail(); });
   document.querySelectorAll('#c-tipo button').forEach(b=>b.addEventListener('click',()=>{ c.tipo=b.dataset.v; saveClienti(); renderClFilters(); renderClList(); renderClDetail(); }));
   const sal=document.getElementById('c-saldo'); if(sal) sal.addEventListener('input',e=>{ c.saldo=parseFloat(e.target.value)||0; saveClienti(); refreshCredito(c); });
   const sald=document.getElementById('c-saldodata'); if(sald) sald.addEventListener('input',e=>{ c.saldoData=e.target.value; saveClienti(); refreshCredito(c); });
