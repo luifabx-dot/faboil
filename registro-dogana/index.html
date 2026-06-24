@@ -59,19 +59,24 @@ body{min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--s
 .toggle{display:inline-flex;border:1.5px solid var(--border2);border-radius:8px;overflow:hidden}
 .toggle button{font-family:var(--sans);font-size:.76rem;font-weight:700;padding:.4rem .9rem;border:none;background:var(--surface);color:var(--muted);cursor:pointer}
 .toggle button.on{background:var(--accent);color:#fff}
-/* barra trasferimenti */
 .tbar{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:.8rem .9rem;margin-bottom:.9rem;box-shadow:var(--shadow)}
 .chips{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;margin-bottom:.7rem}
 .chip{font-family:var(--sans);font-size:.78rem;font-weight:700;padding:.35rem .8rem;border-radius:20px;border:1.5px solid var(--border2);background:var(--surface2);color:var(--muted);cursor:pointer;white-space:nowrap;transition:all .12s}
 .chip:hover{border-color:var(--accent)}
 .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip.short{border-color:var(--red)}
 .chip .tot{opacity:.7;font-family:var(--mono);font-weight:400;margin-left:.3rem}
 .chip-add{border-style:dashed;color:var(--accent)}
 .tedit{display:flex;gap:.7rem;align-items:center;flex-wrap:wrap}
 .tedit label{font-size:.72rem;font-weight:700;color:var(--muted)}
-.tedit input.name{font-family:var(--sans);font-size:.88rem;font-weight:700;padding:.4rem .7rem;border:1.5px solid var(--border2);border-radius:8px;min-width:260px}
-.tedit input.name:focus{outline:1.5px solid var(--accent);border-color:var(--accent)}
+.tedit input.name,.fld{font-family:var(--sans);font-size:.86rem;font-weight:600;padding:.4rem .7rem;border:1.5px solid var(--border2);border-radius:8px}
+.tedit input.name{min-width:260px}
+.tedit input.name:focus,.fld:focus{outline:1.5px solid var(--accent);border-color:var(--accent)}
 .tbadge{font-family:var(--mono);font-size:.8rem;font-weight:600;background:var(--accent-bg);color:var(--accent);padding:.3rem .7rem;border-radius:8px}
+.tbadge.short{background:var(--red-bg);color:var(--red)}
+.formline{display:flex;gap:.7rem;align-items:flex-end;flex-wrap:wrap}
+.formline .f{display:flex;flex-direction:column;gap:.25rem}
+.formline label{font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
 .tablewrap{overflow-x:hidden;overflow-y:auto;border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);max-height:72vh}
 table.reg{border-collapse:separate;border-spacing:0;font-family:var(--mono);width:100%;table-layout:fixed}
 table.reg th,table.reg td{padding:.28rem .15rem;text-align:right;border-bottom:1px solid var(--border);border-right:1px solid var(--border);font-size:.68rem;overflow:hidden;text-overflow:ellipsis}
@@ -81,16 +86,20 @@ table.reg th.gas{background:var(--gas)}table.reg th.ver{background:var(--ver)}ta
 table.reg td.gas{background:rgba(232,239,226,.32)}table.reg td.ver{background:rgba(226,234,243,.32)}table.reg td.gpl{background:rgba(243,230,236,.32)}
 table.reg .datecol{position:sticky;left:0;background:var(--surface2);text-align:center;font-weight:700;z-index:1;border-right:1.5px solid var(--border2);font-size:.66rem}
 table.reg thead .datecol{z-index:3;background:var(--surface3)}
+table.reg .datecol.red{color:var(--red)}
+table.reg .datecol.sat{color:var(--blue)}
 table.reg tbody tr:hover td{filter:brightness(.97)}
 table.reg td.zero{color:var(--muted2)}
 table.reg tr.base td{background:#fff8ef;font-weight:700}
 table.reg tr.base .datecol{background:#fdedd6}
+table.reg td.plus{color:var(--green);font-weight:700;background:var(--green-bg)}
+table.reg td.minus{color:var(--red);font-weight:700;background:var(--red-bg)}
 table.reg input{width:100%;border:none;background:transparent;font-family:var(--mono);font-size:.68rem;text-align:right;padding:.12rem .1rem;border-radius:4px;color:var(--text);-moz-appearance:textfield}
 table.reg input::-webkit-outer-spin-button,table.reg input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 table.reg input::placeholder{color:var(--muted2);font-style:italic;opacity:.7}
 table.reg input:focus{outline:1.5px solid var(--accent);background:#fff}
 table.reg input.has{background:var(--accent-bg);font-weight:600;color:var(--accent)}
-table.reg input.other::placeholder{color:#b08; opacity:.55}
+table.reg input.other::placeholder{color:#b08;opacity:.55}
 table.reg td.full{background:rgba(220,38,38,.07)}
 table.reg input.bad{outline:1.5px solid var(--red);background:var(--red-bg)}
 .legend{display:flex;gap:1rem;margin:.6rem 0 .5rem;font-size:.72rem;color:var(--muted);flex-wrap:wrap;align-items:center}
@@ -105,7 +114,8 @@ table.reg input.bad{outline:1.5px solid var(--red);background:var(--red-bg)}
   <div class="logo">Faboil<em>Registro Dogana</em></div>
   <div class="tabs">
     <button class="tab on" data-tab="import">Importazioni</button>
-    <button class="tab" data-tab="rettifiche" id="tab-rettifiche" disabled>Rettifiche</button>
+    <button class="tab" data-tab="rettifiche" id="tab-rettifiche" disabled>Trasferimenti</button>
+    <button class="tab" data-tab="buoni" id="tab-buoni" disabled>Buoni</button>
     <button class="tab" data-tab="registro" id="tab-registro" disabled>Registro</button>
   </div>
 </div>
@@ -126,20 +136,38 @@ table.reg input.bad{outline:1.5px solid var(--red);background:var(--red-bg)}
     </div>
   </div>
 
-  <!-- RETTIFICHE -->
+  <!-- TRASFERIMENTI -->
   <div class="page" id="page-rettifiche">
-    <div class="sh"><h1>Rettifiche · Trasferimenti interni</h1><p>litri rimessi indietro, raggruppati per travaso (più pistole e più giorni)</p></div>
-    <div class="row-actions">
-      <span class="muted">Regola d'oro: su ogni cella la somma di tutti i travasi non può superare lo scarico grezzo del giorno (il contatore non torna mai indietro rispetto a ieri).</span>
-    </div>
+    <div class="sh"><h1>Trasferimenti interni</h1><p>litri rimessi indietro per pistola/giorno (prodotto entrato senza DAS)</p></div>
+    <div class="row-actions"><span class="muted">Regola d'oro: su ogni cella la somma dei travasi non può superare lo scarico grezzo del giorno.</span></div>
     <div class="tbar" id="rett-bar"></div>
     <div class="legend">
-      <span><i class="dot" style="background:var(--gas)"></i> Gasolio</span>
-      <span><i class="dot" style="background:var(--ver)"></i> Verde</span>
-      <span><i class="dot" style="background:var(--gpl)"></i> GPL</span>
-      <span class="muted">— stai modificando il travaso selezionato. Tooltip cella = grezzo · usato da altri travasi · massimo.</span>
+      <span><i class="dot" style="background:var(--gas)"></i> Gasolio</span><span><i class="dot" style="background:var(--ver)"></i> Verde</span><span><i class="dot" style="background:var(--gpl)"></i> GPL</span>
+      <span class="muted">— stai modificando il travaso selezionato. Tooltip cella = grezzo · usato da altri · max.</span>
     </div>
     <div id="rett-container"></div>
+  </div>
+
+  <!-- BUONI -->
+  <div class="page" id="page-buoni">
+    <div class="sh"><h1>Buoni cartacei</h1><p>addebiti clienti — sposta le vendite verso il giorno del buono (automatico)</p></div>
+    <div class="card" id="buono-form">
+      <div class="card-title">Nuovo buono</div>
+      <div class="formline">
+        <div class="f"><label>Prodotto</label><select class="fld" id="b-prod"><option value="GASOLIO">Gasolio</option><option value="VERDE">Verde</option><option value="GPL">GPL</option></select></div>
+        <div class="f"><label>Data buono</label><select class="fld" id="b-day"></select></div>
+        <div class="f"><label>Litri</label><input class="fld" id="b-litri" type="number" min="1" step="1" style="width:110px" placeholder="es. 300"></div>
+        <button class="btn" id="b-add">Aggiungi buono</button>
+      </div>
+      <p class="muted" style="margin-top:.6rem">Priorità prelievo: domeniche/festivi → sabati → giorni normali (da inizio mese). Pistola con più margine per prima; la regola d'oro non viene mai infranta.</p>
+    </div>
+    <div class="tbar" id="buoni-bar"></div>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--green-bg)"></i> + aumento (giorno buono)</span>
+      <span><i class="dot" style="background:var(--red-bg)"></i> − diminuzione (giorni ceduti)</span>
+      <span class="muted">— vista del buono selezionato. Date in rosso = domeniche/festivi, in blu = sabati.</span>
+    </div>
+    <div id="buoni-grid"></div>
   </div>
 
   <!-- REGISTRO -->
@@ -154,9 +182,7 @@ table.reg input.bad{outline:1.5px solid var(--red);background:var(--red-bg)}
       <span class="muted" id="reg-info"></span>
     </div>
     <div class="legend">
-      <span><i class="dot" style="background:var(--gas)"></i> Gasolio</span>
-      <span><i class="dot" style="background:var(--ver)"></i> Verde</span>
-      <span><i class="dot" style="background:var(--gpl)"></i> GPL</span>
+      <span><i class="dot" style="background:var(--gas)"></i> Gasolio</span><span><i class="dot" style="background:var(--ver)"></i> Verde</span><span><i class="dot" style="background:var(--gpl)"></i> GPL</span>
       <span class="muted">— ogni cella è la lettura cumulata; lo scarico del giorno è la differenza riga su riga.</span>
     </div>
     <div id="reg-container"></div>
@@ -165,35 +191,43 @@ table.reg input.bad{outline:1.5px solid var(--red);background:var(--red-bg)}
 
 <script>
 const PUMPS = ['G1_1','G1_2','G2_1','G2_2','G3_1','G3_2','G4_1','G4_2','G5_1','G5_2','G6_1','G6_2',
-               'V1_3','V2_3','V3_3','V4_3','V5_3','V6_3',
-               'GPL1','GPL2','GPL3','GPL4','GPL5','GPL6'];
+               'V1_3','V2_3','V3_3','V4_3','V5_3','V6_3','GPL1','GPL2','GPL3','GPL4','GPL5','GPL6'];
 function prodOf(p){ if(!p) return null; if(p.startsWith('GPL')) return 'GPL'; if(p[0]==='V') return 'VERDE'; if(p[0]==='G') return 'GASOLIO'; return null; }
 function prodClass(p){ const x=prodOf(p); return x==='GASOLIO'?'gas':x==='VERDE'?'ver':'gpl'; }
 
-let STATE=null;            // { days, daily, meta }
-let TRANSFERS=[];          // [ { id, nome, cells:{ pump:{ day:int } } } ]
-let CURRENT=null;          // id del travaso selezionato
-let SEQ=1;
+let STATE=null;
+let TRANSFERS=[], CURRENT=null, SEQ=1;
+let BUONI=[], CURBUONO=null, BSEQ=1;
+let NETTO={};        // pump->day->scarico netto (>=0 garantito)
+let BRESULT={};      // buonoId -> {placed, short, alloc:{pump:{day:signed}}}
 let REGMODE='netto';
+const EPS=1e-6;
 
 function itNum(v){ if(v==null||v==='') return 0; if(typeof v==='number') return v; return parseFloat(String(v).replace(/\./g,'').replace(',','.'))||parseFloat(String(v).replace(',','.'))||0; }
 function serialToDate(s){ return new Date(Math.round((s-25569)*86400*1000)); }
 function cellDay(v){ if(v==null||v==='') return null; if(typeof v==='number'){ return serialToDate(v).toISOString().slice(0,10); } const s=String(v).trim(); let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return `${m[1]}-${m[2]}-${m[3]}`; m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/); if(m) return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`; return null; }
 function fmtDay(key){ const[y,m,d]=key.split('-'); return `${d}/${m}/${y}`; }
 function fmtInt(n){ return Math.round(n).toLocaleString('it-IT'); }
-function grezzoInt(pump,day){ return Math.round(STATE.daily[pump][day]||0); }
+function grezzo(p,day){ return STATE.daily[p][day]||0; }
 
-// ---------- travasi: helper ----------
+// ---- calendario: rossi (domeniche+festivi nazionali), sabati ----
+function easter(y){ const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451); return {mo:Math.floor((h+l-7*m+114)/31), da:((h+l-7*m+114)%31)+1}; }
+function isRed(key){ const[y,mm,dd]=key.split('-').map(Number); const dt=new Date(Date.UTC(y,mm-1,dd)); if(dt.getUTCDay()===0) return true; const md=`${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`; if(['01-01','01-06','04-25','05-01','06-02','08-15','11-01','12-08','12-25','12-26'].includes(md)) return true; const e=easter(y); const pm=new Date(Date.UTC(y,e.mo-1,e.da)+86400000); if(pm.getUTCMonth()===mm-1 && pm.getUTCDate()===dd) return true; return false; }
+function isSat(key){ const[y,mm,dd]=key.split('-').map(Number); return new Date(Date.UTC(y,mm-1,dd)).getUTCDay()===6; }
+function dayCat(key){ return isRed(key)?0:(isSat(key)?1:2); } // 0 rosso, 1 sabato, 2 normale
+function dateClass(key){ return isRed(key)?'red':(isSat(key)?'sat':''); }
+
+// ---- trasferimenti ----
 function curTransfer(){ return TRANSFERS.find(t=>t.id===CURRENT)||null; }
 function cellOf(t,p,day){ return (t.cells[p]&&t.cells[p][day])||0; }
-function rettTotalAt(p,day){ let s=0; TRANSFERS.forEach(t=>s+=cellOf(t,p,day)); return s; }
+function trasfTotalAt(p,day){ let s=0; TRANSFERS.forEach(t=>s+=cellOf(t,p,day)); return s; }
 function otherTotalAt(p,day){ let s=0; TRANSFERS.forEach(t=>{ if(t.id!==CURRENT) s+=cellOf(t,p,day); }); return s; }
 function transferTotal(t){ let s=0; for(const p in t.cells) for(const d in t.cells[p]) s+=t.cells[p][d]; return s; }
+function gmt(p,day){ return Math.max(0, grezzo(p,day) - trasfTotalAt(p,day)); } // grezzo meno trasferimenti
 
-// ---------- parsing StoreSmart ----------
+// ---- parsing StoreSmart ----
 function parseStoreSmart(rows){
-  let hr=-1;
-  for(let i=0;i<Math.min(rows.length,40);i++){ if(rows[i] && rows[i].some(c=>String(c).trim().toLowerCase()==='pompa')){ hr=i; break; } }
+  let hr=-1; for(let i=0;i<Math.min(rows.length,40);i++){ if(rows[i] && rows[i].some(c=>String(c).trim().toLowerCase()==='pompa')){ hr=i; break; } }
   if(hr<0) throw new Error("Intestazione non trovata: manca la colonna 'Pompa'. È un report StoreSmart?");
   const head=rows[hr].map(c=>String(c==null?'':c).trim().toLowerCase());
   const find=(...names)=>{ for(const n of names){ const k=head.findIndex(h=>h===n||h.includes(n)); if(k>=0) return k; } return -1; };
@@ -216,27 +250,47 @@ function parseStoreSmart(rows){
   return { days, daily, meta:{kept,skTot,skAdb,skUnknown,prodCount, period: days.length? days[0].slice(0,7):'', periodo: days.length? `${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—'} };
 }
 
-// ---------- letture progressive ----------
+// ---- calcolo NETTO: trasferimenti poi buoni (regola d'oro garantita) ----
+function recompute(){
+  const work={}; PUMPS.forEach(p=>{ work[p]={}; STATE.days.forEach(d=>work[p][d]=gmt(p,d)); });
+  BRESULT={};
+  for(const b of BUONI){
+    const X=b.day; const pumps=PUMPS.filter(p=>prodOf(p)===b.prodotto);
+    const alloc={}; let remaining=b.litri;
+    const margin=p=>STATE.days.reduce((s,d)=> d===X?s:s+work[p][d], 0);
+    const order=[...pumps].sort((a,c)=>margin(c)-margin(a));
+    for(const p of order){
+      if(remaining<=EPS) break;
+      let take=Math.min(remaining, margin(p)); if(take<=EPS) continue;
+      const src=STATE.days.filter(d=>d!==X).sort((d1,d2)=> dayCat(d1)-dayCat(d2) || (d1<d2?-1:1));
+      let toTake=take;
+      for(const d of src){ if(toTake<=EPS) break; const avail=work[p][d]; if(avail<=EPS) continue; const t=Math.min(toTake,avail); work[p][d]-=t; toTake-=t; alloc[p]=alloc[p]||{}; alloc[p][d]=(alloc[p][d]||0)-t; }
+      const placed=take-toTake; work[p][X]=(work[p][X]||0)+placed; alloc[p]=alloc[p]||{}; alloc[p][X]=(alloc[p][X]||0)+placed; remaining-=placed;
+    }
+    BRESULT[b.id]={ placed:b.litri-remaining, short:Math.max(0,remaining), alloc };
+  }
+  NETTO=work;
+}
+
+// ---- letture progressive ----
 function readingAt(mode){
   const out={}; const cum={}; PUMPS.forEach(p=>cum[p]=0);
-  STATE.days.forEach(day=>{ out[day]={}; PUMPS.forEach(p=>{ let s=STATE.daily[p][day]||0; if(mode==='netto') s=Math.max(0, s - rettTotalAt(p,day)); cum[p]+=s; out[day][p]=Math.round(cum[p]); }); });
+  STATE.days.forEach(day=>{ out[day]={}; PUMPS.forEach(p=>{ const s=mode==='grezzo'?grezzo(p,day):NETTO[p][day]; cum[p]+=s; out[day][p]=Math.round(cum[p]); }); });
   return out;
 }
 
-// ---------- import ----------
+// ---- import ----
 function handleFile(file){
   const res=document.getElementById('import-result'); res.innerHTML='<p class="muted" style="margin-top:1rem">Lettura in corso…</p>';
   const reader=new FileReader();
   reader.onload=e=>{ try{
     const wb=XLSX.read(e.target.result,{type:'array'});
-    const ws=wb.Sheets[wb.SheetNames[0]];
-    const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:null});
     STATE=parseStoreSmart(rows);
-    loadTransfers();
+    loadStore(); recompute();
     renderImportResult(file.name);
-    document.getElementById('tab-registro').disabled=false;
-    document.getElementById('tab-rettifiche').disabled=false;
-    renderRettifiche(); renderRegistro();
+    ['tab-registro','tab-rettifiche','tab-buoni'].forEach(id=>document.getElementById(id).disabled=false);
+    fillBuonoDays(); renderRettifiche(); renderBuoni(); renderRegistro();
   }catch(err){ res.innerHTML=`<div class="warn">⚠ ${err.message}</div>`; } };
   reader.readAsArrayBuffer(file);
 }
@@ -253,94 +307,105 @@ function renderImportResult(fname){
       <div class="stat"><div class="k">GPL</div><div class="v">${fmtInt(m.prodCount.GPL)} <small>L</small></div></div>
     </div>
     <p class="muted" style="margin-top:.7rem">Scartate ${m.skTot} righe "Totale", ${m.skAdb} righe ADBLUE.${warns.length?' '+warns.join(' '):''}</p>
-    <div style="margin-top:1rem;display:flex;gap:.6rem"><button class="btn" onclick="goTab('rettifiche')">Vai alle Rettifiche →</button><button class="btn ghost" onclick="goTab('registro')">Vai al Registro →</button></div>`;
+    <div style="margin-top:1rem;display:flex;gap:.6rem"><button class="btn" onclick="goTab('rettifiche')">Trasferimenti →</button><button class="btn ghost" onclick="goTab('buoni')">Buoni →</button><button class="btn ghost" onclick="goTab('registro')">Registro →</button></div>`;
 }
 
-// ---------- tabella: colgroup/header ----------
+// ---- tabella helper ----
 function colgroup(){ let c='<colgroup><col class="dc">'; PUMPS.forEach(()=>c+='<col>'); return c+'</colgroup>'; }
 function headRow(){ let h='<thead><tr><th class="datecol">DATA</th>'; PUMPS.forEach(p=>h+=`<th class="${prodClass(p)}">${p}</th>`); return h+'</tr></thead>'; }
 
-// ---------- registro ----------
+// ---- registro ----
 function renderRegistro(){
-  if(!STATE) return;
-  const R=readingAt(REGMODE);
+  if(!STATE) return; const R=readingAt(REGMODE);
   document.getElementById('reg-sub').textContent=`PV-2993 · ${STATE.meta.periodo} · baseline contatori = 0`;
   document.getElementById('reg-info').textContent=`${STATE.days.length} giorni · vista ${REGMODE.toUpperCase()}`;
   let h='<div class="tablewrap"><table class="reg">'+colgroup()+headRow()+'<tbody>';
   h+=`<tr class="base"><td class="datecol">${baselineLabel()}</td>`; PUMPS.forEach(()=>h+='<td>0</td>'); h+='</tr>';
-  STATE.days.forEach(day=>{ h+=`<tr><td class="datecol">${fmtDay(day)}</td>`;
+  STATE.days.forEach(day=>{ h+=`<tr><td class="datecol ${dateClass(day)}">${fmtDay(day)}</td>`;
     PUMPS.forEach(p=>{ const v=R[day][p]; h+=`<td class="${prodClass(p)} ${v===0?'zero':''}">${fmtInt(v)}</td>`; }); h+='</tr>'; });
-  h+='</tbody></table></div>';
-  document.getElementById('reg-container').innerHTML=h;
+  h+='</tbody></table></div>'; document.getElementById('reg-container').innerHTML=h;
 }
 function baselineLabel(){ if(!STATE.days.length) return '—'; const[y,m,d]=STATE.days[0].split('-').map(Number); const dt=new Date(Date.UTC(y,m-1,d)); dt.setUTCDate(dt.getUTCDate()-1); return `${String(dt.getUTCDate()).padStart(2,'0')}/${String(dt.getUTCMonth()+1).padStart(2,'0')}/${dt.getUTCFullYear()}`; }
 
-// ---------- RETTIFICHE / TRASFERIMENTI ----------
+// ---- TRASFERIMENTI ----
 function renderRettifiche(){ if(!STATE) return; renderTransferBar(); renderRettGrid(); }
-
 function renderTransferBar(){
-  const bar=document.getElementById('rett-bar');
-  let chips='<div class="chips">';
-  TRANSFERS.forEach(t=>{ chips+=`<button class="chip ${t.id===CURRENT?'on':''}" data-id="${t.id}">${escapeHtml(t.nome)}<span class="tot">${fmtInt(transferTotal(t))} L</span></button>`; });
+  const bar=document.getElementById('rett-bar'); let chips='<div class="chips">';
+  TRANSFERS.forEach(t=>chips+=`<button class="chip ${t.id===CURRENT?'on':''}" data-id="${t.id}">${escapeHtml(t.nome)}<span class="tot">${fmtInt(transferTotal(t))} L</span></button>`);
   chips+=`<button class="chip chip-add" id="t-add">+ Nuovo trasferimento</button></div>`;
   const t=curTransfer();
-  let edit='';
-  if(t){
-    edit=`<div class="tedit">
-      <label>Nome travaso</label>
-      <input class="name" id="t-name" value="${escapeAttr(t.nome)}" placeholder="es. Travaso Casaluce gasolio">
-      <span class="tbadge">Totale: ${fmtInt(transferTotal(t))} L</span>
-      <button class="btn sm danger" id="t-del">Elimina travaso</button>
-    </div>`;
-  } else {
-    edit=`<p class="muted">Nessun trasferimento. Creane uno per iniziare a inserire le rettifiche.</p>`;
-  }
-  bar.innerHTML=chips+edit;
+  bar.innerHTML=chips+(t?`<div class="tedit"><label>Nome travaso</label><input class="name" id="t-name" value="${escapeAttr(t.nome)}" placeholder="es. Travaso Casaluce gasolio"><span class="tbadge">Totale: ${fmtInt(transferTotal(t))} L</span><button class="btn sm danger" id="t-del">Elimina travaso</button></div>`:`<p class="muted">Nessun trasferimento. Creane uno per iniziare.</p>`);
   bar.querySelectorAll('.chip[data-id]').forEach(c=>c.addEventListener('click',()=>{ CURRENT=parseInt(c.dataset.id,10); renderRettifiche(); }));
   document.getElementById('t-add').addEventListener('click',addTransfer);
-  if(t){
-    document.getElementById('t-name').addEventListener('input',e=>{ t.nome=e.target.value; saveTransfers(); renderChipsOnly(); });
-    document.getElementById('t-del').addEventListener('click',()=>delTransfer(t.id));
-  }
+  if(t){ document.getElementById('t-name').addEventListener('input',e=>{ t.nome=e.target.value; saveStore(); renderChipsOnly(); }); document.getElementById('t-del').addEventListener('click',()=>delTransfer(t.id)); }
 }
-function renderChipsOnly(){ // aggiorna solo le etichette chip senza ricostruire tutto (mantiene focus sul nome)
-  TRANSFERS.forEach(t=>{ const c=document.querySelector(`.chip[data-id="${t.id}"]`); if(c) c.innerHTML=`${escapeHtml(t.nome)}<span class="tot">${fmtInt(transferTotal(t))} L</span>`; });
-}
+function renderChipsOnly(){ TRANSFERS.forEach(t=>{ const c=document.querySelector(`#rett-bar .chip[data-id="${t.id}"]`); if(c) c.innerHTML=`${escapeHtml(t.nome)}<span class="tot">${fmtInt(transferTotal(t))} L</span>`; }); }
 function renderRettGrid(){
-  const cont=document.getElementById('rett-container');
-  const t=curTransfer();
+  const cont=document.getElementById('rett-container'); const t=curTransfer();
   if(!t){ cont.innerHTML='<div class="empty-state"><span class="ic">🚚</span>Crea un trasferimento interno per inserire le rettifiche.</div>'; return; }
   let h='<div class="tablewrap"><table class="reg">'+colgroup()+headRow()+'<tbody>';
-  STATE.days.forEach(day=>{ h+=`<tr><td class="datecol">${fmtDay(day)}</td>`;
-    PUMPS.forEach(p=>{ const g=grezzoInt(p,day); const other=otherTotalAt(p,day); const v=cellOf(t,p,day); const max=Math.max(0,g-other);
-      const full=max===0&&g>0;
-      const ph=other>0?String(other):'';
-      h+=`<td class="${prodClass(p)} ${full?'full':''}"><input type="number" min="0" max="${max}" step="1" value="${v||''}" placeholder="${ph}" data-p="${p}" data-d="${day}" title="grezzo ${fmtInt(g)} · altri travasi ${fmtInt(other)} · max ${fmtInt(max)}" class="${v>0?'has':''} ${other>0&&v===0?'other':''}"></td>`; });
+  STATE.days.forEach(day=>{ h+=`<tr><td class="datecol ${dateClass(day)}">${fmtDay(day)}</td>`;
+    PUMPS.forEach(p=>{ const g=Math.round(grezzo(p,day)); const other=otherTotalAt(p,day); const v=cellOf(t,p,day); const max=Math.max(0,g-other); const full=max===0&&g>0;
+      h+=`<td class="${prodClass(p)} ${full?'full':''}"><input type="number" min="0" max="${max}" step="1" value="${v||''}" placeholder="${other>0?other:''}" data-p="${p}" data-d="${day}" title="grezzo ${fmtInt(g)} · altri travasi ${fmtInt(other)} · max ${fmtInt(max)}" class="${v>0?'has':''} ${other>0&&v===0?'other':''}"></td>`; });
     h+='</tr>'; });
-  h+='</tbody></table></div>';
-  cont.innerHTML=h;
+  h+='</tbody></table></div>'; cont.innerHTML=h;
   cont.querySelectorAll('input').forEach(inp=>inp.addEventListener('input',onRettInput));
 }
 function onRettInput(e){
   const t=curTransfer(); if(!t) return;
-  const inp=e.target, p=inp.dataset.p, day=inp.dataset.d, g=grezzoInt(p,day), max=Math.max(0,g-otherTotalAt(p,day));
+  const inp=e.target, p=inp.dataset.p, day=inp.dataset.d, g=Math.round(grezzo(p,day)), max=Math.max(0,g-otherTotalAt(p,day));
   let val=parseInt(inp.value,10); if(isNaN(val)||val<0) val=0;
   if(val>max){ val=max; inp.value=max||''; inp.classList.add('bad'); setTimeout(()=>inp.classList.remove('bad'),600); }
-  if(!t.cells[p]) t.cells[p]={};
-  if(val>0) t.cells[p][day]=val; else delete t.cells[p][day];
+  if(!t.cells[p]) t.cells[p]={}; if(val>0) t.cells[p][day]=val; else delete t.cells[p][day];
   inp.classList.toggle('has',val>0);
-  saveTransfers(); renderChipsOnly(); updateBadge(); renderRegistro();
+  saveStore(); renderChipsOnly(); const b=document.querySelector('#rett-bar .tbadge'); if(b) b.textContent=`Totale: ${fmtInt(transferTotal(t))} L`;
+  recompute(); renderRegistro();
 }
-function updateBadge(){ const t=curTransfer(); const b=document.querySelector('.tbadge'); if(t&&b) b.textContent=`Totale: ${fmtInt(transferTotal(t))} L`; }
-function addTransfer(){ const t={id:SEQ++, nome:'Trasferimento '+(TRANSFERS.length+1), cells:{}}; TRANSFERS.push(t); CURRENT=t.id; saveTransfers(); renderRettifiche(); }
-function delTransfer(id){ const t=TRANSFERS.find(x=>x.id===id); if(t&&transferTotal(t)>0 && !confirm(`Eliminare "${t.nome}" (${fmtInt(transferTotal(t))} L)?`)) return; TRANSFERS=TRANSFERS.filter(x=>x.id!==id); CURRENT=TRANSFERS.length?TRANSFERS[0].id:null; saveTransfers(); renderRettifiche(); renderRegistro(); }
+function addTransfer(){ const t={id:SEQ++, nome:'Trasferimento '+(TRANSFERS.length+1), cells:{}}; TRANSFERS.push(t); CURRENT=t.id; saveStore(); renderRettifiche(); }
+function delTransfer(id){ const t=TRANSFERS.find(x=>x.id===id); if(t&&transferTotal(t)>0 && !confirm(`Eliminare "${t.nome}" (${fmtInt(transferTotal(t))} L)?`)) return; TRANSFERS=TRANSFERS.filter(x=>x.id!==id); CURRENT=TRANSFERS.length?TRANSFERS[0].id:null; saveStore(); recompute(); renderRettifiche(); renderRegistro(); }
 
-// ---------- persistenza ----------
-function storeKey(){ return 'faboil_transfers_'+(STATE?STATE.meta.period:''); }
-function saveTransfers(){ try{ localStorage.setItem(storeKey(), JSON.stringify({seq:SEQ,current:CURRENT,transfers:TRANSFERS})); }catch(e){} }
-function loadTransfers(){ TRANSFERS=[]; CURRENT=null; SEQ=1; try{ const s=localStorage.getItem(storeKey()); if(s){ const o=JSON.parse(s); TRANSFERS=o.transfers||[]; SEQ=o.seq||(TRANSFERS.length+1); CURRENT=o.current!=null?o.current:(TRANSFERS[0]&&TRANSFERS[0].id); } }catch(e){ TRANSFERS=[]; } }
+// ---- BUONI ----
+function fillBuonoDays(){ const sel=document.getElementById('b-day'); sel.innerHTML=STATE.days.map(d=>`<option value="${d}">${fmtDay(d)}</option>`).join(''); }
+function renderBuoni(){ if(!STATE) return; renderBuoniBar(); renderBuoniGrid(); }
+function renderBuoniBar(){
+  const bar=document.getElementById('buoni-bar'); let chips='<div class="chips">';
+  if(!BUONI.length){ bar.innerHTML='<p class="muted">Nessun buono inserito. Compila il form sopra e premi "Aggiungi buono".</p>'; return; }
+  BUONI.forEach(b=>{ const r=BRESULT[b.id]||{short:0}; chips+=`<button class="chip ${b.id===CURBUONO?'on':''} ${r.short>EPS?'short':''}" data-id="${b.id}">${b.prodotto} ${fmtDay(b.day)}<span class="tot">${fmtInt(b.litri)} L</span>${r.short>EPS?' ⚠':''}</button>`; });
+  chips+='</div>';
+  const b=BUONI.find(x=>x.id===CURBUONO); let info='';
+  if(b){ const r=BRESULT[b.id]||{placed:0,short:0};
+    info=`<div class="tedit"><span class="tbadge ${r.short>EPS?'short':''}">${r.short>EPS?`⚠ Capienza insufficiente: collocati ${fmtInt(r.placed)}/${fmtInt(b.litri)} L (mancano ${fmtInt(r.short)})`:`✓ Collocati ${fmtInt(b.litri)} L`}</span><button class="btn sm danger" id="b-del">Elimina buono</button></div>`; }
+  bar.innerHTML=chips+info;
+  bar.querySelectorAll('.chip[data-id]').forEach(c=>c.addEventListener('click',()=>{ CURBUONO=parseInt(c.dataset.id,10); saveStore(); renderBuoni(); }));
+  const db=document.getElementById('b-del'); if(db) db.addEventListener('click',()=>delBuono(CURBUONO));
+}
+function renderBuoniGrid(){
+  const cont=document.getElementById('buoni-grid'); const b=BUONI.find(x=>x.id===CURBUONO);
+  if(!b){ cont.innerHTML='<div class="empty-state"><span class="ic">🧾</span>Aggiungi un buono per vederne lo spostamento.</div>'; return; }
+  const alloc=(BRESULT[b.id]||{}).alloc||{};
+  let h='<div class="tablewrap"><table class="reg">'+colgroup()+headRow()+'<tbody>';
+  STATE.days.forEach(day=>{ h+=`<tr><td class="datecol ${dateClass(day)}">${fmtDay(day)}</td>`;
+    PUMPS.forEach(p=>{ const v=(alloc[p]&&alloc[p][day])||0; const rv=Math.round(v);
+      let cls=prodClass(p), txt=''; if(rv>0){ cls='plus'; txt='+'+fmtInt(rv); } else if(rv<0){ cls='minus'; txt='−'+fmtInt(-rv); }
+      h+=`<td class="${cls}">${txt}</td>`; });
+    h+='</tr>'; });
+  h+='</tbody></table></div>'; cont.innerHTML=h;
+}
+function addBuono(){
+  const prod=document.getElementById('b-prod').value, day=document.getElementById('b-day').value, litri=parseInt(document.getElementById('b-litri').value,10);
+  if(!day || isNaN(litri) || litri<=0){ alert('Inserisci prodotto, data e litri (> 0).'); return; }
+  const b={id:BSEQ++, prodotto:prod, day, litri}; BUONI.push(b); CURBUONO=b.id;
+  document.getElementById('b-litri').value='';
+  saveStore(); recompute(); renderBuoni(); renderRegistro();
+}
+function delBuono(id){ const b=BUONI.find(x=>x.id===id); if(b && !confirm(`Eliminare il buono ${b.prodotto} ${fmtDay(b.day)} di ${fmtInt(b.litri)} L?`)) return; BUONI=BUONI.filter(x=>x.id!==id); CURBUONO=BUONI.length?BUONI[0].id:null; saveStore(); recompute(); renderBuoni(); renderRegistro(); }
 
-// ---------- export ----------
+// ---- persistenza ----
+function storeKey(){ return 'faboil_reg_'+(STATE?STATE.meta.period:''); }
+function saveStore(){ try{ localStorage.setItem(storeKey(), JSON.stringify({seq:SEQ,current:CURRENT,transfers:TRANSFERS,bseq:BSEQ,curbuono:CURBUONO,buoni:BUONI})); }catch(e){} }
+function loadStore(){ TRANSFERS=[];CURRENT=null;SEQ=1;BUONI=[];CURBUONO=null;BSEQ=1; try{ const s=localStorage.getItem(storeKey()); if(s){ const o=JSON.parse(s); TRANSFERS=o.transfers||[]; SEQ=o.seq||(TRANSFERS.length+1); CURRENT=o.current!=null?o.current:(TRANSFERS[0]&&TRANSFERS[0].id); BUONI=o.buoni||[]; BSEQ=o.bseq||(BUONI.length+1); CURBUONO=o.curbuono!=null?o.curbuono:(BUONI[0]&&BUONI[0].id); } }catch(e){} }
+
+// ---- export ----
 function exportRegistro(){
   if(!STATE) return; const R=readingAt(REGMODE);
   const aoa=[['DATA',...PUMPS]]; aoa.push([baselineLabel(),...PUMPS.map(()=>0)]);
@@ -350,14 +415,12 @@ function exportRegistro(){
   XLSX.writeFile(wb,`Registro_dogana_${STATE.meta.period||'export'}_${REGMODE}.xlsx`);
 }
 
-// ---------- util ----------
 function escapeHtml(s){ return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 function escapeAttr(s){ return String(s).replace(/"/g,'&quot;'); }
-
-// ---------- nav ----------
 function goTab(name){ document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===name)); document.querySelectorAll('.page').forEach(p=>p.classList.remove('on')); document.getElementById('page-'+name).classList.add('on'); }
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ if(!t.disabled) goTab(t.dataset.tab); }));
 document.getElementById('export-btn').addEventListener('click',exportRegistro);
+document.getElementById('b-add').addEventListener('click',addBuono);
 document.querySelectorAll('#reg-toggle button').forEach(b=>b.addEventListener('click',()=>{ REGMODE=b.dataset.mode; document.querySelectorAll('#reg-toggle button').forEach(x=>x.classList.toggle('on',x===b)); renderRegistro(); }));
 
 const drop=document.getElementById('drop'), fileInput=document.getElementById('file');
