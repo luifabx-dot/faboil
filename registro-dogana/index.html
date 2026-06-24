@@ -192,6 +192,18 @@ table.reg tbody tr.brow:hover td{background:var(--surface2)}
       <div id="import-result-cs"></div>
     </div>
     <div class="card">
+      <div class="card-title">iCad — Fatture (ElencoTransazioniFatture)</div>
+      <div class="drop" id="drop-icad"><span class="ic">🧾</span><h3>Trascina qui il file iCad</h3><p>oppure <b>clicca per sceglierlo</b> — .xlsx</p></div>
+      <input type="file" id="file-icad" accept=".xlsx,.xls" hidden>
+      <div id="import-result-icad"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">DKV — Erogazioni</div>
+      <div class="drop" id="drop-dkv"><span class="ic">🧾</span><h3>Trascina qui il file DKV</h3><p>oppure <b>clicca per sceglierlo</b> — .xlsx</p></div>
+      <input type="file" id="file-dkv" accept=".xlsx,.xls" hidden>
+      <div id="import-result-dkv"></div>
+    </div>
+    <div class="card">
       <div class="card-title">Clienti — Anagrafica (estesoL)</div>
       <div class="drop" id="drop-cl">
         <span class="ic">👥</span>
@@ -328,7 +340,7 @@ table.reg tbody tr.brow:hover td{background:var(--surface2)}
     <div class="sh"><h1>Foglio commercialista</h1><p>corrispettivo = vendite − fatturato (per giorno)</p></div>
     <div class="row-actions">
       <button class="btn" id="comm-export">⬇ Esporta Excel</button>
-      <span class="muted">Fatturato = Card Smart + buoni. <b>Mancano iCad, DKV e il POS</b> (da importare/definire).</span>
+      <span class="muted">Fatturato = Card Smart + iCad + DKV + buoni. <b>Manca solo il POS/contanti</b> (da definire).</span>
     </div>
     <div id="comm-container"></div>
   </div>
@@ -554,21 +566,23 @@ function onAsCellClick(e){
 function venditeDay(d){ let s=0; ['GASOLIO','VERDE','GPL'].forEach(P=>{ const lit=PUMPS.filter(p=>prodOf(p)===P).reduce((a,p)=>a+grezzo(p,d),0); s+=lit*priceOfDay(P,d); }); return s; }
 function cardSmartEuroDay(d){ if(!CARDSMART||!CARDSMART.byTessera) return 0; let s=0; for(const t in CARDSMART.byTessera){ const v=CARDSMART.byTessera[t][d]; if(v) s+=v; } return s; }
 function buoniEuroDay(d){ return BUONI.filter(b=>b.day===d).reduce((s,b)=>s+(b.totale||0),0); }
-function commRows(){ return STATE.days.map(d=>{ const v=venditeDay(d), cs=cardSmartEuroDay(d), bu=buoniEuroDay(d), fatt=cs+bu; return { d, v, cs, bu, fatt, corr:v-fatt }; }); }
+function icadEuroDay(d){ return (ICAD&&ICAD.byDay[d])||0; }
+function dkvEuroDay(d){ return (DKV&&DKV.byDay[d])||0; }
+function commRows(){ return STATE.days.map(d=>{ const v=venditeDay(d), cs=cardSmartEuroDay(d), ic=icadEuroDay(d), dk=dkvEuroDay(d), bu=buoniEuroDay(d), fatt=cs+ic+dk+bu; return { d, v, cs, ic, dk, bu, fatt, corr:v-fatt }; }); }
 function renderCommercialista(){
   if(!STATE) return; const rows=commRows();
-  const tot=rows.reduce((a,r)=>({v:a.v+r.v,cs:a.cs+r.cs,bu:a.bu+r.bu,fatt:a.fatt+r.fatt,corr:a.corr+r.corr}),{v:0,cs:0,bu:0,fatt:0,corr:0});
-  let h='<div class="tablewrap" style="max-height:74vh"><table class="reg"><thead><tr><th class="datecol" style="text-align:left">DATA</th><th>Vendite €</th><th>Fatt. Card Smart</th><th>Fatt. Buoni</th><th>Tot. fatturato</th><th>Corrispettivo</th></tr></thead><tbody>';
-  rows.forEach(r=>{ h+=`<tr><td class="datecol ${dateClass(r.d)}" style="text-align:left">${fmtDay(r.d)}</td><td>${fmtEur(r.v)}</td><td>${fmtEur(r.cs)}</td><td>${fmtEur(r.bu)}</td><td>${fmtEur(r.fatt)}</td><td style="font-weight:700;color:${r.corr<0?'var(--red)':'var(--text)'}">${fmtEur(r.corr)}</td></tr>`; });
-  h+=`<tr class="base"><td class="datecol" style="text-align:left">TOTALE</td><td>${fmtEur(tot.v)}</td><td>${fmtEur(tot.cs)}</td><td>${fmtEur(tot.bu)}</td><td>${fmtEur(tot.fatt)}</td><td style="font-weight:800">${fmtEur(tot.corr)}</td></tr>`;
+  const tot=rows.reduce((a,r)=>({v:a.v+r.v,cs:a.cs+r.cs,ic:a.ic+r.ic,dk:a.dk+r.dk,bu:a.bu+r.bu,fatt:a.fatt+r.fatt,corr:a.corr+r.corr}),{v:0,cs:0,ic:0,dk:0,bu:0,fatt:0,corr:0});
+  let h='<div class="tablewrap" style="max-height:74vh"><table class="reg"><thead><tr><th class="datecol" style="text-align:left">DATA</th><th>Vendite €</th><th>Card Smart</th><th>iCad</th><th>DKV</th><th>Buoni</th><th>Tot. fatturato</th><th>Corrispettivo</th></tr></thead><tbody>';
+  rows.forEach(r=>{ h+=`<tr><td class="datecol ${dateClass(r.d)}" style="text-align:left">${fmtDay(r.d)}</td><td>${fmtEur(r.v)}</td><td>${fmtEur(r.cs)}</td><td>${fmtEur(r.ic)}</td><td>${fmtEur(r.dk)}</td><td>${fmtEur(r.bu)}</td><td>${fmtEur(r.fatt)}</td><td style="font-weight:700;color:${r.corr<0?'var(--red)':'var(--text)'}">${fmtEur(r.corr)}</td></tr>`; });
+  h+=`<tr class="base"><td class="datecol" style="text-align:left">TOTALE</td><td>${fmtEur(tot.v)}</td><td>${fmtEur(tot.cs)}</td><td>${fmtEur(tot.ic)}</td><td>${fmtEur(tot.dk)}</td><td>${fmtEur(tot.bu)}</td><td>${fmtEur(tot.fatt)}</td><td style="font-weight:800">${fmtEur(tot.corr)}</td></tr>`;
   h+='</tbody></table></div>';
   document.getElementById('comm-container').innerHTML=h;
 }
 function exportCommercialista(){
   if(!STATE) return; const rows=commRows();
-  const aoa=[['DATA','Vendite','Fatt. CardSmart','Fatt. Buoni','Tot. fatturato','Corrispettivo']];
-  rows.forEach(r=>aoa.push([fmtDay(r.d), r.v, r.cs, r.bu, r.fatt, r.corr].map((x,i)=>i===0?x:Math.round(x*100)/100)));
-  const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:12},{wch:12},{wch:14},{wch:12},{wch:14},{wch:14}];
+  const aoa=[['DATA','Vendite','Card Smart','iCad','DKV','Buoni','Tot. fatturato','Corrispettivo']];
+  rows.forEach(r=>aoa.push([fmtDay(r.d), r.v, r.cs, r.ic, r.dk, r.bu, r.fatt, r.corr].map((x,i)=>i===0?x:Math.round(x*100)/100)));
+  const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:14},{wch:14}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Corrispettivo');
   XLSX.writeFile(wb,`Commercialista_${STATE.meta.period||'export'}.xlsx`);
 }
@@ -815,6 +829,32 @@ function loadStore(){ TRANSFERS=[];CURRENT=null;SEQ=1;BUONI=[];CURBUONO=null;BSE
 // ---- persistenza file importati (StoreSmart / Card Smart) ----
 function saveSS(){ try{ localStorage.setItem('faboil_ss', JSON.stringify(STATE)); }catch(e){} }
 function saveCS(){ try{ localStorage.setItem('faboil_cs', JSON.stringify(CARDSMART)); }catch(e){} }
+
+// ---- iCad / DKV (fatturazione) ----
+let ICAD=null, DKV=null;
+function parseFatt(rows, dataNames, impNames){
+  if(!rows.length) throw new Error('File vuoto.');
+  const head=rows[0].map(c=>String(c==null?'':c).trim().toLowerCase());
+  const find=(...n)=>{ for(const x of n){ const k=head.findIndex(h=>h===x||h.includes(x)); if(k>=0) return k; } return -1; };
+  const iData=find(...dataNames), iImp=find(...impNames);
+  if(iData<0||iImp<0) throw new Error('Colonne mancanti (data / importo).');
+  const byDay={}; let n=0; const dset=new Set();
+  for(let i=1;i<rows.length;i++){ const r=rows[i]; if(!r) continue; const d=cellDay(r[iData]); if(!d) continue; byDay[d]=(byDay[d]||0)+csNum(r[iImp]); n++; dset.add(d); }
+  const days=[...dset].sort();
+  return { byDay, meta:{ n, tot:Object.values(byDay).reduce((a,b)=>a+b,0), periodo: days.length?`${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—' } };
+}
+function handleFattFile(file, kind){
+  const id=kind==='ICAD'?'import-result-icad':'import-result-dkv';
+  const res=document.getElementById(id); res.innerHTML='<p class="muted" style="margin-top:1rem">Lettura in corso…</p>';
+  const reader=new FileReader();
+  reader.onload=e=>{ try{ const wb=XLSX.read(e.target.result,{type:'array'}); const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:null});
+    let parsed; if(kind==='ICAD'){ parsed=parseFatt(rows,['data transazione','data'],['importo transazione','importo fattura','importo']); ICAD=parsed; localStorage.setItem('faboil_icad',JSON.stringify(ICAD)); }
+    else { parsed=parseFatt(rows,['data'],['importo']); DKV=parsed; localStorage.setItem('faboil_dkv',JSON.stringify(DKV)); }
+    res.innerHTML=`<div class="ok-msg">✓ Importato: <b>${file.name}</b></div><p class="muted" style="margin-top:.5rem">Periodo ${parsed.meta.periodo} · ${parsed.meta.n} righe · ${fmtEur(parsed.meta.tot)} fatturati.</p>`;
+    renderCommercialista();
+  }catch(err){ res.innerHTML=`<div class="warn">⚠ ${err.message}</div>`; } };
+  reader.readAsArrayBuffer(file);
+}
 function restoreImports(){
   try{ const s=localStorage.getItem('faboil_ss'); if(s){ STATE=JSON.parse(s); loadStore(); recompute();
     ['tab-registro','tab-rettifiche','tab-buoni','tab-assegnazioni','tab-commercialista'].forEach(id=>document.getElementById(id).disabled=false);
@@ -824,6 +864,8 @@ function restoreImports(){
   try{ const c=localStorage.getItem('faboil_cs'); if(c){ CARDSMART=JSON.parse(c); const m=CARDSMART.meta;
     document.getElementById('import-result-cs').innerHTML=`<div class="ok-msg">✓ Card Smart ripristinato: <b>${m.periodo}</b></div><p class="muted" style="margin-top:.5rem">Gasolio ${fmtInt(m.litri.GASOLIO)} · Verde ${fmtInt(m.litri.VERDE)} · GPL ${fmtInt(m.litri.GPL)} L fatturati (salvati nel browser).</p>`;
   } }catch(e){}
+  try{ const x=localStorage.getItem('faboil_icad'); if(x){ ICAD=JSON.parse(x); document.getElementById('import-result-icad').innerHTML=`<div class="ok-msg">✓ iCad ripristinato: <b>${ICAD.meta.periodo}</b> · ${fmtEur(ICAD.meta.tot)}</div>`; } }catch(e){}
+  try{ const x=localStorage.getItem('faboil_dkv'); if(x){ DKV=JSON.parse(x); document.getElementById('import-result-dkv').innerHTML=`<div class="ok-msg">✓ DKV ripristinato: <b>${DKV.meta.periodo}</b> · ${fmtEur(DKV.meta.tot)}</div>`; } }catch(e){}
 }
 
 // ---- ANAGRAFICA CLIENTI / TESSERE (popolata da import estesoL) ----
@@ -1129,6 +1171,14 @@ fileCs.addEventListener('change',e=>{ if(e.target.files[0]) handleCSFile(e.targe
 ['dragover','dragenter'].forEach(ev=>dropCs.addEventListener(ev,e=>{e.preventDefault();dropCs.classList.add('drag');}));
 ['dragleave','drop'].forEach(ev=>dropCs.addEventListener(ev,e=>{e.preventDefault();dropCs.classList.remove('drag');}));
 dropCs.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handleCSFile(f); });
+[['drop-icad','file-icad','ICAD'],['drop-dkv','file-dkv','DKV']].forEach(([dz,fi,kind])=>{
+  const d=document.getElementById(dz), f=document.getElementById(fi);
+  d.addEventListener('click',()=>f.click());
+  f.addEventListener('change',e=>{ if(e.target.files[0]) handleFattFile(e.target.files[0],kind); });
+  ['dragover','dragenter'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.add('drag');}));
+  ['dragleave','drop'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.remove('drag');}));
+  d.addEventListener('drop',e=>{ const x=e.dataTransfer.files[0]; if(x) handleFattFile(x,kind); });
+});
 
 const dropCl=document.getElementById('drop-cl'), fileCl=document.getElementById('file-cl');
 dropCl.addEventListener('click',()=>fileCl.click());
