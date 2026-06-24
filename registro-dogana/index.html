@@ -128,6 +128,10 @@ table.reg .resid.z{color:var(--red);opacity:.7}
 .f-lbl{font-size:.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:.22rem;display:block}
 .tess-card{border:1.5px solid var(--border);border-radius:var(--radius);padding:.8rem .9rem;margin-bottom:.7rem;background:var(--surface2)}
 .tess-card.susp{opacity:.55;background:repeating-linear-gradient(45deg,var(--surface2),var(--surface2) 10px,#f0e4e4 10px,#f0e4e4 20px)}
+.tablewrap.x{overflow-x:auto}
+table.as-table{table-layout:auto;min-width:100%}
+table.as-table .ascol,table.as-table th.ascol{width:160px;min-width:160px}
+table.as-table td input{min-width:34px}
 .tess-head{display:flex;align-items:flex-end;gap:.8rem;margin-bottom:.6rem;flex-wrap:wrap;padding-bottom:.5rem;border-bottom:1px solid var(--border)}
 .wdays{display:flex;gap:.25rem}
 .wd{width:30px;height:30px;border-radius:7px;border:1.5px solid var(--border2);background:var(--surface);font-family:var(--sans);font-weight:700;font-size:.74rem;cursor:pointer;color:var(--muted)}
@@ -149,6 +153,7 @@ table.reg .resid.z{color:var(--red);opacity:.7}
     <button class="tab on" data-tab="import">Importazioni</button>
     <button class="tab" data-tab="rettifiche" id="tab-rettifiche" disabled>Trasferimenti</button>
     <button class="tab" data-tab="buoni" id="tab-buoni" disabled>Buoni</button>
+    <button class="tab" data-tab="assegnazioni" id="tab-assegnazioni" disabled>Assegnazioni</button>
     <button class="tab" data-tab="clienti" id="tab-clienti">Clienti</button>
     <button class="tab" data-tab="registro" id="tab-registro" disabled>Registro</button>
   </div>
@@ -253,6 +258,21 @@ table.reg .resid.z{color:var(--red);opacity:.7}
       <span class="muted">— vista del buono selezionato. Date in rosso = domeniche/festivi, in blu = sabati.</span>
     </div>
     <div id="buoni-grid"></div>
+  </div>
+
+  <!-- ASSEGNAZIONI -->
+  <div class="page" id="page-assegnazioni">
+    <div class="sh"><h1>Assegnazioni buoni</h1><p>come sono piazzate le erogazioni, per giorno — clic su una cella per modificare/eliminare</p></div>
+    <div class="row-actions">
+      <button type="button" class="btn ghost" id="as-cliente-btn">— scegli cliente —</button>
+      <span class="muted" id="as-info"></span>
+    </div>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--green-bg)"></i> + giorno del buono</span>
+      <span><i class="dot" style="background:var(--red-bg)"></i> − giorni ceduti (modificabili)</span>
+      <span class="muted">— ogni cella mostra il margine disponibile (regola d'oro). Date rosse=festivi, blu=sabati.</span>
+    </div>
+    <div id="as-container"></div>
   </div>
 
   <!-- CLIENTI -->
@@ -424,20 +444,73 @@ function recompute(){
   BRESULT={};
   for(const b of BUONI){
     const X=b.day; const pumps=PUMPS.filter(p=>prodOf(p)===b.prodotto);
-    const alloc={}; let remaining=b.litri;
-    const margin=p=>STATE.days.reduce((s,d)=> d===X?s:s+work[p][d], 0);
-    const order=[...pumps].sort((a,c)=>margin(c)-margin(a));
-    for(const p of order){
-      if(remaining<=EPS) break;
-      let take=Math.min(remaining, margin(p)); if(take<=EPS) continue;
-      const src=STATE.days.filter(d=>d!==X).sort((d1,d2)=> dayCat(d1)-dayCat(d2) || (d1<d2?-1:1));
-      let toTake=take;
-      for(const d of src){ if(toTake<=EPS) break; const avail=work[p][d]; if(avail<=EPS) continue; const t=Math.min(toTake,avail); work[p][d]-=t; toTake-=t; alloc[p]=alloc[p]||{}; alloc[p][d]=(alloc[p][d]||0)-t; }
-      const placed=take-toTake; work[p][X]=(work[p][X]||0)+placed; alloc[p]=alloc[p]||{}; alloc[p][X]=(alloc[p][X]||0)+placed; remaining-=placed;
+    const dayAvail=d=> pumps.reduce((s,p)=>s+(work[p][d]||0),0); // disponibile del prodotto in un giorno (somma pompe)
+    // 1) decidi i prelievi per giorno (sorgenti, escluso X)
+    const removals={};
+    if(b.manual && b.dayAlloc){
+      for(const d in b.dayAlloc){ if(d===X||!(d in work[pumps[0]])) continue; removals[d]=Math.max(0, Math.min(b.dayAlloc[d], dayAvail(d))); }
+    } else {
+      let remaining=b.litri;
+      const src=STATE.days.filter(d=>d!==X).sort((a,c)=>dayCat(a)-dayCat(c)||(a<c?-1:1)); // rossi->sabati->normali, da inizio mese
+      for(const d of src){ if(remaining<=EPS) break; const av=dayAvail(d); if(av<=EPS) continue; const take=Math.min(remaining,av); removals[d]=take; remaining-=take; }
     }
-    BRESULT[b.id]={ placed:b.litri-remaining, short:Math.max(0,remaining), alloc };
+    // 2) applica i prelievi: dentro al giorno, distribuzione automatica sulle pompe (proporzionale al disponibile)
+    const alloc={}; let placed=0;
+    for(const d in removals){ const A=removals[d]; if(A<=EPS) continue; const tot=dayAvail(d); if(tot<=EPS) continue;
+      pumps.forEach(p=>{ const share=A*(work[p][d]||0)/tot; if(share>EPS){ work[p][d]-=share; alloc[p]=alloc[p]||{}; alloc[p][d]=(alloc[p][d]||0)-share; } });
+      placed+=A;
+    }
+    // 3) aggiungi 'placed' sul giorno X, distribuito sulle pompe (proporzionale allo scarico di X, o equo)
+    if(placed>EPS){ const totX=pumps.reduce((s,p)=>s+(work[p][X]||0),0);
+      pumps.forEach(p=>{ const w=totX>EPS?(work[p][X]||0)/totX:1/pumps.length; const add=placed*w; work[p][X]=(work[p][X]||0)+add; alloc[p]=alloc[p]||{}; alloc[p][X]=(alloc[p][X]||0)+add; });
+    }
+    BRESULT[b.id]={ placed, short:Math.max(0,b.litri-placed), alloc, removals };
   }
   NETTO=work;
+}
+// alloc per giorno (somma pompe) di un buono, dal risultato calcolato
+function buonoDayAlloc(b){ const r=BRESULT[b.id]; const out={}; if(!r) return out; for(const p in r.alloc) for(const d in r.alloc[p]) out[d]=(out[d]||0)+r.alloc[p][d]; return out; }
+function prodNettoDay(prod,d){ return PUMPS.filter(p=>prodOf(p)===prod).reduce((s,p)=>s+(NETTO[p][d]||0),0); }
+
+// ---- (Assegnazioni) ----
+let ASS_CLI='';
+function selectAssCli(id){ ASS_CLI=id||''; const c=CLIENTI.find(x=>x.id===id); document.getElementById('as-cliente-btn').textContent=c?`${c.ragione||c.id} · ${c.tipo==='PRE'?'PRE':'POST'}`:'— scegli cliente —'; renderAssegnazioni(); closeCliPicker(); }
+function renderAssegnazioni(){
+  const cont=document.getElementById('as-container'); if(!STATE){ cont.innerHTML='<div class="empty-state">Importa lo StoreSmart.</div>'; return; }
+  const c=CLIENTI.find(x=>x.id===ASS_CLI);
+  if(!c){ cont.innerHTML='<div class="empty-state"><span class="ic">📋</span>Scegli un cliente per vedere le sue assegnazioni.</div>'; document.getElementById('as-info').textContent=''; return; }
+  const buoni=BUONI.filter(b=>b.clienteId===c.id);
+  document.getElementById('as-info').textContent=`${buoni.length} buoni`;
+  if(!buoni.length){ cont.innerHTML='<div class="empty-state"><span class="ic">🧾</span>Nessun buono per questo cliente.</div>'; return; }
+  let h='<div class="tablewrap x"><table class="reg as-table"><colgroup><col class="ascol"><col class="dc">'+STATE.days.map(()=>'<col>').join('')+'</colgroup>';
+  h+='<thead><tr><th class="datecol ascol" style="text-align:left">BUONO</th><th class="dc"></th>'+STATE.days.map(d=>`<th class="${dateClass(d)}">${d.slice(8)}</th>`).join('')+'</tr></thead><tbody>';
+  buoni.forEach(b=>{ const da=buonoDayAlloc(b); const r=BRESULT[b.id]||{placed:0,short:0};
+    const lab=`${b.prodotto.slice(0,3)} ${fmtDay(b.day)} · ${fmtInt(b.litri)}L${b.tessera?' · '+escapeHtml(b.tessera):''}`;
+    const badge=b.manual?'<span class="badge-tipo pre" style="margin-left:.3rem">MAN</span>':'';
+    const sh=r.short>EPS?` <span style="color:var(--red)">⚠ -${fmtInt(r.short)}</span>`:'';
+    h+=`<tr><td class="datecol ascol" style="text-align:left;font-size:.66rem">${lab}${badge}${sh}</td>`;
+    h+=`<td class="dc" style="white-space:nowrap">${b.manual?`<button class="btn sm ghost" data-auto="${b.id}" style="padding:.15rem .4rem;font-size:.62rem">auto</button>`:''}<button class="btn sm danger" data-delb="${b.id}" style="padding:.15rem .4rem;font-size:.62rem">✕</button></td>`;
+    STATE.days.forEach(d=>{ const v=da[d]||0;
+      if(d===b.day){ h+=`<td class="plus">+${fmtInt(v)}</td>`; }
+      else { const rem=v<0?Math.round(-v):0; const avail=Math.round(prodNettoDay(b.prodotto,d)+rem);
+        h+=`<td class="${rem>0?'minus':''}"><input type="number" min="0" max="${avail}" step="1" value="${rem||''}" data-ab="${b.id}" data-ad="${d}" title="disponibile ${fmtInt(avail)} L" style="color:${rem>0?'var(--red)':'inherit'}"></td>`; }
+    });
+    h+='</tr>';
+  });
+  h+='</tbody></table></div>';
+  cont.innerHTML=h;
+  cont.querySelectorAll('input[data-ab]').forEach(inp=>inp.addEventListener('change',onAssInput));
+  cont.querySelectorAll('[data-auto]').forEach(b=>b.addEventListener('click',()=>{ const bo=BUONI.find(x=>x.id===parseInt(b.dataset.auto,10)); if(bo){ bo.manual=false; delete bo.dayAlloc; saveStore(); recompute(); renderAssegnazioni(); renderRegistro(); } }));
+  cont.querySelectorAll('[data-delb]').forEach(b=>b.addEventListener('click',()=>{ delBuono(parseInt(b.dataset.delb,10)); renderAssegnazioni(); }));
+}
+function onAssInput(e){
+  const inp=e.target, b=BUONI.find(x=>x.id===parseInt(inp.dataset.ab,10)), d=inp.dataset.ad; if(!b) return;
+  const cur=(()=>{ const da=buonoDayAlloc(b); return da[d]<0?-da[d]:0; })();
+  const avail=prodNettoDay(b.prodotto,d)+cur;
+  let val=parseInt(inp.value,10); if(isNaN(val)||val<0) val=0; if(val>avail) val=Math.round(avail);
+  if(!b.manual){ b.manual=true; b.dayAlloc=Object.assign({}, (BRESULT[b.id]&&BRESULT[b.id].removals)||{}); }
+  if(val>0) b.dayAlloc[d]=val; else delete b.dayAlloc[d];
+  saveStore(); recompute(); renderAssegnazioni(); renderRegistro();
 }
 
 // ---- letture progressive ----
@@ -458,8 +531,8 @@ function handleFile(file){
     saveSS();
     loadStore(); recompute();
     renderImportResult(file.name);
-    ['tab-registro','tab-rettifiche','tab-buoni'].forEach(id=>document.getElementById(id).disabled=false);
-    fillBuonoDays(); renderRettifiche(); renderBuoni(); renderRegistro();
+    ['tab-registro','tab-rettifiche','tab-buoni','tab-assegnazioni'].forEach(id=>document.getElementById(id).disabled=false);
+    fillBuonoDays(); renderRettifiche(); renderBuoni(); renderAssegnazioni(); renderRegistro();
   }catch(err){ res.innerHTML=`<div class="warn">⚠ ${err.message}</div>`; } };
   reader.readAsArrayBuffer(file);
 }
@@ -649,8 +722,8 @@ function saveSS(){ try{ localStorage.setItem('faboil_ss', JSON.stringify(STATE))
 function saveCS(){ try{ localStorage.setItem('faboil_cs', JSON.stringify(CARDSMART)); }catch(e){} }
 function restoreImports(){
   try{ const s=localStorage.getItem('faboil_ss'); if(s){ STATE=JSON.parse(s); loadStore(); recompute();
-    ['tab-registro','tab-rettifiche','tab-buoni'].forEach(id=>document.getElementById(id).disabled=false);
-    fillBuonoDays(); renderRettifiche(); renderBuoni(); renderRegistro();
+    ['tab-registro','tab-rettifiche','tab-buoni','tab-assegnazioni'].forEach(id=>document.getElementById(id).disabled=false);
+    fillBuonoDays(); renderRettifiche(); renderBuoni(); renderAssegnazioni(); renderRegistro();
     document.getElementById('import-result').innerHTML=`<div class="ok-msg">✓ StoreSmart ripristinato: <b>${STATE.meta.periodo}</b> · ${STATE.meta.kept.toLocaleString('it-IT')} erogazioni</div><p class="muted" style="margin-top:.5rem">I dati sono salvati nel browser. Carica un nuovo file solo se vuoi cambiare periodo.</p><div style="margin-top:.8rem;display:flex;gap:.6rem"><button class="btn ghost" onclick="goTab('rettifiche')">Trasferimenti →</button><button class="btn ghost" onclick="goTab('buoni')">Buoni →</button><button class="btn ghost" onclick="goTab('registro')">Registro →</button></div>`;
   } }catch(e){}
   try{ const c=localStorage.getItem('faboil_cs'); if(c){ CARDSMART=JSON.parse(c); const m=CARDSMART.meta;
@@ -891,6 +964,7 @@ document.getElementById('export-btn').addEventListener('click',exportRegistro);
 document.getElementById('b-add').addEventListener('click',addBuono);
 document.getElementById('b-cliente-btn').addEventListener('click',()=>openCliPicker(selectBuonoCli));
 document.getElementById('g-cliente-btn').addEventListener('click',()=>openCliPicker(selectGenCli));
+document.getElementById('as-cliente-btn').addEventListener('click',()=>openCliPicker(selectAssCli));
 document.getElementById('g-group-add').addEventListener('click',()=>openCliPicker(addGenGroup));
 document.querySelectorAll('#g-scope button').forEach(b=>b.addEventListener('click',()=>{ GEN_SCOPE=b.dataset.s; document.querySelectorAll('#g-scope button').forEach(x=>x.classList.toggle('on',x===b)); renderGenScope(); }));
 document.getElementById('g-add').addEventListener('click',generateBuoni);
