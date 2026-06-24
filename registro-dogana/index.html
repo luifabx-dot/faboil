@@ -351,7 +351,7 @@ function handleCSFile(file){
   reader.onload=e=>{ try{
     const wb=XLSX.read(e.target.result,{type:'array'});
     const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:null});
-    CARDSMART=parseCardSmart(rows); renderCSResult(file.name);
+    CARDSMART=parseCardSmart(rows); saveCS(); renderCSResult(file.name);
   }catch(err){ res.innerHTML=`<div class="warn">⚠ ${err.message}</div>`; } };
   reader.readAsArrayBuffer(file);
 }
@@ -410,6 +410,7 @@ function handleFile(file){
     const wb=XLSX.read(e.target.result,{type:'array'});
     const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:null});
     STATE=parseStoreSmart(rows);
+    saveSS();
     loadStore(); recompute();
     renderImportResult(file.name);
     ['tab-registro','tab-rettifiche','tab-buoni'].forEach(id=>document.getElementById(id).disabled=false);
@@ -531,6 +532,20 @@ function delBuono(id){ const b=BUONI.find(x=>x.id===id); if(b && !confirm(`Elimi
 function storeKey(){ return 'faboil_reg_'+(STATE?STATE.meta.period:''); }
 function saveStore(){ try{ localStorage.setItem(storeKey(), JSON.stringify({seq:SEQ,current:CURRENT,transfers:TRANSFERS,bseq:BSEQ,curbuono:CURBUONO,buoni:BUONI})); }catch(e){} }
 function loadStore(){ TRANSFERS=[];CURRENT=null;SEQ=1;BUONI=[];CURBUONO=null;BSEQ=1; try{ const s=localStorage.getItem(storeKey()); if(s){ const o=JSON.parse(s); TRANSFERS=o.transfers||[]; SEQ=o.seq||(TRANSFERS.length+1); CURRENT=o.current!=null?o.current:(TRANSFERS[0]&&TRANSFERS[0].id); BUONI=o.buoni||[]; BSEQ=o.bseq||(BUONI.length+1); CURBUONO=o.curbuono!=null?o.curbuono:(BUONI[0]&&BUONI[0].id); } }catch(e){} }
+
+// ---- persistenza file importati (StoreSmart / Card Smart) ----
+function saveSS(){ try{ localStorage.setItem('faboil_ss', JSON.stringify(STATE)); }catch(e){} }
+function saveCS(){ try{ localStorage.setItem('faboil_cs', JSON.stringify(CARDSMART)); }catch(e){} }
+function restoreImports(){
+  try{ const s=localStorage.getItem('faboil_ss'); if(s){ STATE=JSON.parse(s); loadStore(); recompute();
+    ['tab-registro','tab-rettifiche','tab-buoni'].forEach(id=>document.getElementById(id).disabled=false);
+    fillBuonoDays(); renderRettifiche(); renderBuoni(); renderRegistro();
+    document.getElementById('import-result').innerHTML=`<div class="ok-msg">✓ StoreSmart ripristinato: <b>${STATE.meta.periodo}</b> · ${STATE.meta.kept.toLocaleString('it-IT')} erogazioni</div><p class="muted" style="margin-top:.5rem">I dati sono salvati nel browser. Carica un nuovo file solo se vuoi cambiare periodo.</p><div style="margin-top:.8rem;display:flex;gap:.6rem"><button class="btn ghost" onclick="goTab('rettifiche')">Trasferimenti →</button><button class="btn ghost" onclick="goTab('buoni')">Buoni →</button><button class="btn ghost" onclick="goTab('registro')">Registro →</button></div>`;
+  } }catch(e){}
+  try{ const c=localStorage.getItem('faboil_cs'); if(c){ CARDSMART=JSON.parse(c); const m=CARDSMART.meta;
+    document.getElementById('import-result-cs').innerHTML=`<div class="ok-msg">✓ Card Smart ripristinato: <b>${m.periodo}</b></div><p class="muted" style="margin-top:.5rem">Gasolio ${fmtInt(m.litri.GASOLIO)} · Verde ${fmtInt(m.litri.VERDE)} · GPL ${fmtInt(m.litri.GPL)} L fatturati (salvati nel browser).</p>`;
+  } }catch(e){}
+}
 
 // ---- ANAGRAFICA CLIENTI / TESSERE (popolata da import estesoL) ----
 let CLIENTI=[], CURCLI=null;
@@ -709,6 +724,7 @@ document.getElementById('cl-search').addEventListener('input',e=>{ CLQ=e.target.
 
 // anagrafica clienti: indipendente dal file importato
 loadClienti(); renderClienti();
+restoreImports();
 </script>
 </body>
 </html>
