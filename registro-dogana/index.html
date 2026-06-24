@@ -53,16 +53,28 @@ body{min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--s
 .btn:hover{filter:brightness(1.07)}
 .btn.ghost{background:none;color:var(--accent)}
 .btn.sm{font-size:.76rem;padding:.4rem .8rem}
+.btn.danger{border-color:var(--red);color:var(--red);background:none}
 .row-actions{display:flex;gap:.7rem;align-items:center;margin-bottom:.8rem;flex-wrap:wrap}
 .muted{color:var(--muted);font-size:.78rem}
 .toggle{display:inline-flex;border:1.5px solid var(--border2);border-radius:8px;overflow:hidden}
 .toggle button{font-family:var(--sans);font-size:.76rem;font-weight:700;padding:.4rem .9rem;border:none;background:var(--surface);color:var(--muted);cursor:pointer}
 .toggle button.on{background:var(--accent);color:#fff}
-/* tabella che riempie la larghezza, niente scroll orizzontale */
-.tablewrap{overflow-x:hidden;overflow-y:auto;border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);max-height:74vh}
+/* barra trasferimenti */
+.tbar{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:.8rem .9rem;margin-bottom:.9rem;box-shadow:var(--shadow)}
+.chips{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;margin-bottom:.7rem}
+.chip{font-family:var(--sans);font-size:.78rem;font-weight:700;padding:.35rem .8rem;border-radius:20px;border:1.5px solid var(--border2);background:var(--surface2);color:var(--muted);cursor:pointer;white-space:nowrap;transition:all .12s}
+.chip:hover{border-color:var(--accent)}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip .tot{opacity:.7;font-family:var(--mono);font-weight:400;margin-left:.3rem}
+.chip-add{border-style:dashed;color:var(--accent)}
+.tedit{display:flex;gap:.7rem;align-items:center;flex-wrap:wrap}
+.tedit label{font-size:.72rem;font-weight:700;color:var(--muted)}
+.tedit input.name{font-family:var(--sans);font-size:.88rem;font-weight:700;padding:.4rem .7rem;border:1.5px solid var(--border2);border-radius:8px;min-width:260px}
+.tedit input.name:focus{outline:1.5px solid var(--accent);border-color:var(--accent)}
+.tbadge{font-family:var(--mono);font-size:.8rem;font-weight:600;background:var(--accent-bg);color:var(--accent);padding:.3rem .7rem;border-radius:8px}
+.tablewrap{overflow-x:hidden;overflow-y:auto;border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);max-height:72vh}
 table.reg{border-collapse:separate;border-spacing:0;font-family:var(--mono);width:100%;table-layout:fixed}
 table.reg th,table.reg td{padding:.28rem .15rem;text-align:right;border-bottom:1px solid var(--border);border-right:1px solid var(--border);font-size:.68rem;overflow:hidden;text-overflow:ellipsis}
-table.reg col.pc{width:auto}
 table.reg col.dc{width:74px}
 table.reg thead th{position:sticky;top:0;background:var(--surface3);font-weight:700;text-align:center;z-index:2;border-bottom:1.5px solid var(--border2);font-size:.64rem;padding:.3rem .1rem}
 table.reg th.gas{background:var(--gas)}table.reg th.ver{background:var(--ver)}table.reg th.gpl{background:var(--gpl)}
@@ -73,17 +85,19 @@ table.reg tbody tr:hover td{filter:brightness(.97)}
 table.reg td.zero{color:var(--muted2)}
 table.reg tr.base td{background:#fff8ef;font-weight:700}
 table.reg tr.base .datecol{background:#fdedd6}
-/* input rettifiche */
 table.reg input{width:100%;border:none;background:transparent;font-family:var(--mono);font-size:.68rem;text-align:right;padding:.12rem .1rem;border-radius:4px;color:var(--text);-moz-appearance:textfield}
 table.reg input::-webkit-outer-spin-button,table.reg input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+table.reg input::placeholder{color:var(--muted2);font-style:italic;opacity:.7}
 table.reg input:focus{outline:1.5px solid var(--accent);background:#fff}
 table.reg input.has{background:var(--accent-bg);font-weight:600;color:var(--accent)}
+table.reg input.other::placeholder{color:#b08; opacity:.55}
+table.reg td.full{background:rgba(220,38,38,.07)}
 table.reg input.bad{outline:1.5px solid var(--red);background:var(--red-bg)}
 .legend{display:flex;gap:1rem;margin:.6rem 0 .5rem;font-size:.72rem;color:var(--muted);flex-wrap:wrap;align-items:center}
 .legend span{display:inline-flex;align-items:center;gap:.35rem}
 .dot{width:11px;height:11px;border-radius:3px;display:inline-block}
-.empty-state{text-align:center;padding:3.5rem 1rem;color:var(--muted)}
-.empty-state .ic{font-size:3rem;display:block;margin-bottom:.6rem;opacity:.5}
+.empty-state{text-align:center;padding:3rem 1rem;color:var(--muted);border:1.5px dashed var(--border2);border-radius:var(--radius)}
+.empty-state .ic{font-size:2.6rem;display:block;margin-bottom:.5rem;opacity:.5}
 </style>
 </head>
 <body>
@@ -114,19 +128,16 @@ table.reg input.bad{outline:1.5px solid var(--red);background:var(--red-bg)}
 
   <!-- RETTIFICHE -->
   <div class="page" id="page-rettifiche">
-    <div class="sh"><h1>Rettifiche contatori</h1><p>litri rimessi indietro per pistola/giorno — trasferimenti interni senza DAS</p></div>
+    <div class="sh"><h1>Rettifiche · Trasferimenti interni</h1><p>litri rimessi indietro, raggruppati per travaso (più pistole e più giorni)</p></div>
     <div class="row-actions">
-      <span class="muted">Regola d'oro: la rettifica di un giorno non può superare lo scarico grezzo di quel giorno (il contatore non torna mai indietro rispetto a ieri).</span>
+      <span class="muted">Regola d'oro: su ogni cella la somma di tutti i travasi non può superare lo scarico grezzo del giorno (il contatore non torna mai indietro rispetto a ieri).</span>
     </div>
-    <div class="row-actions">
-      <button class="btn sm ghost" id="rett-clear">Azzera tutte</button>
-      <span class="muted" id="rett-info"></span>
-    </div>
+    <div class="tbar" id="rett-bar"></div>
     <div class="legend">
       <span><i class="dot" style="background:var(--gas)"></i> Gasolio</span>
       <span><i class="dot" style="background:var(--ver)"></i> Verde</span>
       <span><i class="dot" style="background:var(--gpl)"></i> GPL</span>
-      <span class="muted">— passa col mouse su una cella per vedere lo scarico grezzo (il massimo inseribile).</span>
+      <span class="muted">— stai modificando il travaso selezionato. Tooltip cella = grezzo · usato da altri travasi · massimo.</span>
     </div>
     <div id="rett-container"></div>
   </div>
@@ -159,8 +170,10 @@ const PUMPS = ['G1_1','G1_2','G2_1','G2_2','G3_1','G3_2','G4_1','G4_2','G5_1','G
 function prodOf(p){ if(!p) return null; if(p.startsWith('GPL')) return 'GPL'; if(p[0]==='V') return 'VERDE'; if(p[0]==='G') return 'GASOLIO'; return null; }
 function prodClass(p){ const x=prodOf(p); return x==='GASOLIO'?'gas':x==='VERDE'?'ver':'gpl'; }
 
-let STATE=null;     // { days, daily, meta }
-let RETT={};        // { pump:{ dayKey:int } }
+let STATE=null;            // { days, daily, meta }
+let TRANSFERS=[];          // [ { id, nome, cells:{ pump:{ day:int } } } ]
+let CURRENT=null;          // id del travaso selezionato
+let SEQ=1;
 let REGMODE='netto';
 
 function itNum(v){ if(v==null||v==='') return 0; if(typeof v==='number') return v; return parseFloat(String(v).replace(/\./g,'').replace(',','.'))||parseFloat(String(v).replace(',','.'))||0; }
@@ -168,8 +181,14 @@ function serialToDate(s){ return new Date(Math.round((s-25569)*86400*1000)); }
 function cellDay(v){ if(v==null||v==='') return null; if(typeof v==='number'){ return serialToDate(v).toISOString().slice(0,10); } const s=String(v).trim(); let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return `${m[1]}-${m[2]}-${m[3]}`; m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/); if(m) return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`; return null; }
 function fmtDay(key){ const[y,m,d]=key.split('-'); return `${d}/${m}/${y}`; }
 function fmtInt(n){ return Math.round(n).toLocaleString('it-IT'); }
-function grezzoInt(pump,day){ return Math.round(STATE.daily[pump][day]||0); } // scarico grezzo intero del giorno
-function rettVal(pump,day){ return (RETT[pump]&&RETT[pump][day])||0; }
+function grezzoInt(pump,day){ return Math.round(STATE.daily[pump][day]||0); }
+
+// ---------- travasi: helper ----------
+function curTransfer(){ return TRANSFERS.find(t=>t.id===CURRENT)||null; }
+function cellOf(t,p,day){ return (t.cells[p]&&t.cells[p][day])||0; }
+function rettTotalAt(p,day){ let s=0; TRANSFERS.forEach(t=>s+=cellOf(t,p,day)); return s; }
+function otherTotalAt(p,day){ let s=0; TRANSFERS.forEach(t=>{ if(t.id!==CURRENT) s+=cellOf(t,p,day); }); return s; }
+function transferTotal(t){ let s=0; for(const p in t.cells) for(const d in t.cells[p]) s+=t.cells[p][d]; return s; }
 
 // ---------- parsing StoreSmart ----------
 function parseStoreSmart(rows){
@@ -190,17 +209,17 @@ function parseStoreSmart(rows){
     if(prod==='ADBLUE'||pompa==='ADBL7'){ skAdb++; continue; }
     const day=cellDay(r[iData]); if(!day||!pompa) continue;
     if(!PUMPS.includes(pompa)){ skUnknown++; continue; }
-    daily[pompa][day]=(daily[pompa][day]||0)+itNum(r[iQta]); daySet.add(day); kept++;
-    const pc=prodOf(pompa); if(pc) prodCount[pc]+=itNum(r[iQta]);
+    const q=itNum(r[iQta]); daily[pompa][day]=(daily[pompa][day]||0)+q; daySet.add(day); kept++;
+    const pc=prodOf(pompa); if(pc) prodCount[pc]+=q;
   }
   const days=[...daySet].sort();
   return { days, daily, meta:{kept,skTot,skAdb,skUnknown,prodCount, period: days.length? days[0].slice(0,7):'', periodo: days.length? `${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—'} };
 }
 
 // ---------- letture progressive ----------
-function readingAt(mode){ // ritorna {day:{pump:int}}
+function readingAt(mode){
   const out={}; const cum={}; PUMPS.forEach(p=>cum[p]=0);
-  STATE.days.forEach(day=>{ out[day]={}; PUMPS.forEach(p=>{ let s=STATE.daily[p][day]||0; if(mode==='netto') s=Math.max(0, s - rettVal(p,day)); cum[p]+=s; out[day][p]=Math.round(cum[p]); }); });
+  STATE.days.forEach(day=>{ out[day]={}; PUMPS.forEach(p=>{ let s=STATE.daily[p][day]||0; if(mode==='netto') s=Math.max(0, s - rettTotalAt(p,day)); cum[p]+=s; out[day][p]=Math.round(cum[p]); }); });
   return out;
 }
 
@@ -213,7 +232,7 @@ function handleFile(file){
     const ws=wb.Sheets[wb.SheetNames[0]];
     const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null});
     STATE=parseStoreSmart(rows);
-    loadRett();
+    loadTransfers();
     renderImportResult(file.name);
     document.getElementById('tab-registro').disabled=false;
     document.getElementById('tab-rettifiche').disabled=false;
@@ -237,8 +256,8 @@ function renderImportResult(fname){
     <div style="margin-top:1rem;display:flex;gap:.6rem"><button class="btn" onclick="goTab('rettifiche')">Vai alle Rettifiche →</button><button class="btn ghost" onclick="goTab('registro')">Vai al Registro →</button></div>`;
 }
 
-// ---------- colgroup condiviso ----------
-function colgroup(){ let c='<colgroup><col class="dc">'; PUMPS.forEach(()=>c+='<col class="pc">'); return c+'</colgroup>'; }
+// ---------- tabella: colgroup/header ----------
+function colgroup(){ let c='<colgroup><col class="dc">'; PUMPS.forEach(()=>c+='<col>'); return c+'</colgroup>'; }
 function headRow(){ let h='<thead><tr><th class="datecol">DATA</th>'; PUMPS.forEach(p=>h+=`<th class="${prodClass(p)}">${p}</th>`); return h+'</tr></thead>'; }
 
 // ---------- registro ----------
@@ -256,37 +275,70 @@ function renderRegistro(){
 }
 function baselineLabel(){ if(!STATE.days.length) return '—'; const[y,m,d]=STATE.days[0].split('-').map(Number); const dt=new Date(Date.UTC(y,m-1,d)); dt.setUTCDate(dt.getUTCDate()-1); return `${String(dt.getUTCDate()).padStart(2,'0')}/${String(dt.getUTCMonth()+1).padStart(2,'0')}/${dt.getUTCFullYear()}`; }
 
-// ---------- rettifiche ----------
-function renderRettifiche(){
-  if(!STATE) return;
+// ---------- RETTIFICHE / TRASFERIMENTI ----------
+function renderRettifiche(){ if(!STATE) return; renderTransferBar(); renderRettGrid(); }
+
+function renderTransferBar(){
+  const bar=document.getElementById('rett-bar');
+  let chips='<div class="chips">';
+  TRANSFERS.forEach(t=>{ chips+=`<button class="chip ${t.id===CURRENT?'on':''}" data-id="${t.id}">${escapeHtml(t.nome)}<span class="tot">${fmtInt(transferTotal(t))} L</span></button>`; });
+  chips+=`<button class="chip chip-add" id="t-add">+ Nuovo trasferimento</button></div>`;
+  const t=curTransfer();
+  let edit='';
+  if(t){
+    edit=`<div class="tedit">
+      <label>Nome travaso</label>
+      <input class="name" id="t-name" value="${escapeAttr(t.nome)}" placeholder="es. Travaso Casaluce gasolio">
+      <span class="tbadge">Totale: ${fmtInt(transferTotal(t))} L</span>
+      <button class="btn sm danger" id="t-del">Elimina travaso</button>
+    </div>`;
+  } else {
+    edit=`<p class="muted">Nessun trasferimento. Creane uno per iniziare a inserire le rettifiche.</p>`;
+  }
+  bar.innerHTML=chips+edit;
+  bar.querySelectorAll('.chip[data-id]').forEach(c=>c.addEventListener('click',()=>{ CURRENT=parseInt(c.dataset.id,10); renderRettifiche(); }));
+  document.getElementById('t-add').addEventListener('click',addTransfer);
+  if(t){
+    document.getElementById('t-name').addEventListener('input',e=>{ t.nome=e.target.value; saveTransfers(); renderChipsOnly(); });
+    document.getElementById('t-del').addEventListener('click',()=>delTransfer(t.id));
+  }
+}
+function renderChipsOnly(){ // aggiorna solo le etichette chip senza ricostruire tutto (mantiene focus sul nome)
+  TRANSFERS.forEach(t=>{ const c=document.querySelector(`.chip[data-id="${t.id}"]`); if(c) c.innerHTML=`${escapeHtml(t.nome)}<span class="tot">${fmtInt(transferTotal(t))} L</span>`; });
+}
+function renderRettGrid(){
+  const cont=document.getElementById('rett-container');
+  const t=curTransfer();
+  if(!t){ cont.innerHTML='<div class="empty-state"><span class="ic">🚚</span>Crea un trasferimento interno per inserire le rettifiche.</div>'; return; }
   let h='<div class="tablewrap"><table class="reg">'+colgroup()+headRow()+'<tbody>';
   STATE.days.forEach(day=>{ h+=`<tr><td class="datecol">${fmtDay(day)}</td>`;
-    PUMPS.forEach(p=>{ const g=grezzoInt(p,day); const v=rettVal(p,day);
-      h+=`<td class="${prodClass(p)}"><input type="number" min="0" max="${g}" step="1" value="${v||''}" data-p="${p}" data-d="${day}" title="grezzo ${fmtInt(g)} L — max ${fmtInt(g)}" class="${v>0?'has':''}"></td>`; });
+    PUMPS.forEach(p=>{ const g=grezzoInt(p,day); const other=otherTotalAt(p,day); const v=cellOf(t,p,day); const max=Math.max(0,g-other);
+      const full=max===0&&g>0;
+      const ph=other>0?String(other):'';
+      h+=`<td class="${prodClass(p)} ${full?'full':''}"><input type="number" min="0" max="${max}" step="1" value="${v||''}" placeholder="${ph}" data-p="${p}" data-d="${day}" title="grezzo ${fmtInt(g)} · altri travasi ${fmtInt(other)} · max ${fmtInt(max)}" class="${v>0?'has':''} ${other>0&&v===0?'other':''}"></td>`; });
     h+='</tr>'; });
   h+='</tbody></table></div>';
-  document.getElementById('rett-container').innerHTML=h;
-  updateRettInfo();
-  document.querySelectorAll('#rett-container input').forEach(inp=>inp.addEventListener('input',onRettInput));
+  cont.innerHTML=h;
+  cont.querySelectorAll('input').forEach(inp=>inp.addEventListener('input',onRettInput));
 }
 function onRettInput(e){
-  const inp=e.target, p=inp.dataset.p, day=inp.dataset.d, g=grezzoInt(p,day);
+  const t=curTransfer(); if(!t) return;
+  const inp=e.target, p=inp.dataset.p, day=inp.dataset.d, g=grezzoInt(p,day), max=Math.max(0,g-otherTotalAt(p,day));
   let val=parseInt(inp.value,10); if(isNaN(val)||val<0) val=0;
-  if(val>g){ val=g; inp.value=g; inp.classList.add('bad'); setTimeout(()=>inp.classList.remove('bad'),600); } // regola d'oro
-  if(!RETT[p]) RETT[p]={};
-  if(val>0) RETT[p][day]=val; else delete RETT[p][day];
+  if(val>max){ val=max; inp.value=max||''; inp.classList.add('bad'); setTimeout(()=>inp.classList.remove('bad'),600); }
+  if(!t.cells[p]) t.cells[p]={};
+  if(val>0) t.cells[p][day]=val; else delete t.cells[p][day];
   inp.classList.toggle('has',val>0);
-  saveRett(); updateRettInfo(); renderRegistro();
+  saveTransfers(); renderChipsOnly(); updateBadge(); renderRegistro();
 }
-function updateRettInfo(){
-  let n=0,tot=0; PUMPS.forEach(p=>{ const d=RETT[p]||{}; for(const k in d){ n++; tot+=d[k]; } });
-  document.getElementById('rett-info').textContent=`${n} rettifiche inserite · ${fmtInt(tot)} L rimessi indietro in totale`;
-}
+function updateBadge(){ const t=curTransfer(); const b=document.querySelector('.tbadge'); if(t&&b) b.textContent=`Totale: ${fmtInt(transferTotal(t))} L`; }
+function addTransfer(){ const t={id:SEQ++, nome:'Trasferimento '+(TRANSFERS.length+1), cells:{}}; TRANSFERS.push(t); CURRENT=t.id; saveTransfers(); renderRettifiche(); }
+function delTransfer(id){ const t=TRANSFERS.find(x=>x.id===id); if(t&&transferTotal(t)>0 && !confirm(`Eliminare "${t.nome}" (${fmtInt(transferTotal(t))} L)?`)) return; TRANSFERS=TRANSFERS.filter(x=>x.id!==id); CURRENT=TRANSFERS.length?TRANSFERS[0].id:null; saveTransfers(); renderRettifiche(); renderRegistro(); }
 
-// ---------- persistenza (localStorage, single-user) ----------
-function rettKey(){ return 'faboil_rett_'+(STATE?STATE.meta.period:''); }
-function saveRett(){ try{ localStorage.setItem(rettKey(), JSON.stringify(RETT)); }catch(e){} }
-function loadRett(){ RETT={}; try{ const s=localStorage.getItem(rettKey()); if(s) RETT=JSON.parse(s); }catch(e){ RETT={}; } }
+// ---------- persistenza ----------
+function storeKey(){ return 'faboil_transfers_'+(STATE?STATE.meta.period:''); }
+function saveTransfers(){ try{ localStorage.setItem(storeKey(), JSON.stringify({seq:SEQ,current:CURRENT,transfers:TRANSFERS})); }catch(e){} }
+function loadTransfers(){ TRANSFERS=[]; CURRENT=null; SEQ=1; try{ const s=localStorage.getItem(storeKey()); if(s){ const o=JSON.parse(s); TRANSFERS=o.transfers||[]; SEQ=o.seq||(TRANSFERS.length+1); CURRENT=o.current!=null?o.current:(TRANSFERS[0]&&TRANSFERS[0].id); } }catch(e){ TRANSFERS=[]; } }
 
 // ---------- export ----------
 function exportRegistro(){
@@ -298,12 +350,15 @@ function exportRegistro(){
   XLSX.writeFile(wb,`Registro_dogana_${STATE.meta.period||'export'}_${REGMODE}.xlsx`);
 }
 
+// ---------- util ----------
+function escapeHtml(s){ return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function escapeAttr(s){ return String(s).replace(/"/g,'&quot;'); }
+
 // ---------- nav ----------
 function goTab(name){ document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===name)); document.querySelectorAll('.page').forEach(p=>p.classList.remove('on')); document.getElementById('page-'+name).classList.add('on'); }
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ if(!t.disabled) goTab(t.dataset.tab); }));
 document.getElementById('export-btn').addEventListener('click',exportRegistro);
 document.querySelectorAll('#reg-toggle button').forEach(b=>b.addEventListener('click',()=>{ REGMODE=b.dataset.mode; document.querySelectorAll('#reg-toggle button').forEach(x=>x.classList.toggle('on',x===b)); renderRegistro(); }));
-document.getElementById('rett-clear').addEventListener('click',()=>{ if(confirm('Azzerare tutte le rettifiche inserite?')){ RETT={}; saveRett(); renderRettifiche(); renderRegistro(); } });
 
 const drop=document.getElementById('drop'), fileInput=document.getElementById('file');
 drop.addEventListener('click',()=>fileInput.click());
