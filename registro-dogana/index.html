@@ -412,7 +412,7 @@ function parseStoreSmart(rows){
   if(hr<0) throw new Error("Intestazione non trovata: manca la colonna 'Pompa'. È un report StoreSmart?");
   const head=rows[hr].map(c=>String(c==null?'':c).trim().toLowerCase());
   const find=(...names)=>{ for(const n of names){ const k=head.findIndex(h=>h===n||h.includes(n)); if(k>=0) return k; } return -1; };
-  const iPag=find('tipo pagamento','pagamento'), iData=find('data rifornimento','data'), iPompa=find('pompa'), iProd=find('prodotto'), iQta=find('quantità','quantita'), iPrezzo=find('prezzo');
+  const iPag=find('tipo pagamento','pagamento'), iData=find('data rifornimento','data'), iPompa=find('pompa'), iProd=find('prodotto'), iQta=find('quantità','quantita'), iPrezzo=find('prezzo'), iImp=find('importo');
   if([iData,iPompa,iProd,iQta].some(x=>x<0)) throw new Error('Colonne mancanti (servono Data, Pompa, Prodotto, Quantità).');
   const daily={}; PUMPS.forEach(p=>daily[p]={});
   const prezzoDay={}, prezzoTs={}; // prezzo dell'ultima erogazione del giorno per prodotto (per gli ADDEBITI CARTACEI)
@@ -428,9 +428,11 @@ function parseStoreSmart(rows){
     if(!PUMPS.includes(pompa)){ skUnknown++; continue; }
     const q=itNum(r[iQta]); daily[pompa][day]=(daily[pompa][day]||0)+q; daySet.add(day); kept++;
     const pc=prodOf(pompa); if(pc) prodCount[pc]+=q;
-    if(pc && iPrezzo>=0){ const prezzo=itNum(r[iPrezzo]);
-      venditeEur[day]=venditeEur[day]||{}; venditeEur[day][pc]=(venditeEur[day][pc]||0)+q*prezzo; // vendite esatte: prezzo della singola riga
-      const ts=(typeof r[iData]==='number')?r[iData]:(Date.parse(String(r[iData]))||0); prezzoDay[day]=prezzoDay[day]||{}; prezzoTs[day]=prezzoTs[day]||{}; if(!(pc in prezzoTs[day])||ts>=prezzoTs[day][pc]){ prezzoTs[day][pc]=ts; prezzoDay[day][pc]=prezzo; } }
+    if(pc && (iImp>=0||iPrezzo>=0)){
+      // vendite esatte: usa l'Importo € di StoreSmart (già arrotondato a transazione); fallback qta×prezzo
+      const importo=iImp>=0?itNum(r[iImp]):q*itNum(r[iPrezzo]);
+      venditeEur[day]=venditeEur[day]||{}; venditeEur[day][pc]=(venditeEur[day][pc]||0)+importo;
+      if(iPrezzo>=0){ const prezzo=itNum(r[iPrezzo]); const ts=(typeof r[iData]==='number')?r[iData]:(Date.parse(String(r[iData]))||0); prezzoDay[day]=prezzoDay[day]||{}; prezzoTs[day]=prezzoTs[day]||{}; if(!(pc in prezzoTs[day])||ts>=prezzoTs[day][pc]){ prezzoTs[day][pc]=ts; prezzoDay[day][pc]=prezzo; } } }
   }
   const days=[...daySet].sort();
   return { days, daily, prezzoDay, venditeEur, meta:{kept,skTot,skAdb,skUnknown,prodCount, period: days.length? days[0].slice(0,7):'', periodo: days.length? `${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—'} };

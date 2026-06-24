@@ -41,9 +41,10 @@ Ultimo aggiornamento: 2026-06-24.
 - **Registro netto** = grezzo StoreSmart − trasferimenti interni, poi engine buoni (`recompute()`).
   Regola d'oro: contatore mai indietro / scarico netto ≥ 0. Conservazione del prodotto.
 - **Due prezzi distinti (importante):**
-  - **Vendite (corrispettivo)** = `STATE.venditeEur[day][prod]` = Σ (quantità × prezzo della **singola**
-    transazione StoreSmart) → vendite **ESATTE** (gestisce i cambi prezzo in giornata).
-    Fallback per backup vecchi senza `venditeEur`: litri × prezzo di fine giornata.
+  - **Vendite (corrispettivo)** = `STATE.venditeEur[day][prod]` = Σ della colonna **Importo €** di
+    StoreSmart (già arrotondato per transazione) → vendite **ESATTE**, combaciano al centesimo col
+    totale vendite reale. Fallback: Σ qta×prezzo se manca Importo; poi litri×prezzoDay per backup vecchi.
+    NOTA: il riferimento "totale vendite" dell'utente È la somma della colonna Importo € di StoreSmart.
   - **Addebiti cartacei (buoni)** = prezzo di **fine giornata** (`prezzoDay` = ultima erogazione del
     giorno per prodotto). NON usare il prezzo esatto qui: i buoni si prezzano al riferimento di chiusura.
 - **Corrispettivo/giorno** = vendite − (Card Smart + iCad + DKV + buoni).
