@@ -246,6 +246,7 @@ table.reg tbody tr.brow:hover td{background:var(--surface2)}
       <div class="formline">
         <div class="f"><label>Ambito</label><div class="toggle" id="g-scope"><button data-s="ALL" class="on">Tutti</button><button data-s="ONE">Singolo</button><button data-s="GROUP">Gruppo</button></div></div>
         <div class="f" id="g-one-wrap" style="display:none"><label>Cliente</label><button type="button" class="fld" id="g-cliente-btn" style="min-width:240px;text-align:left;cursor:pointer">— scegli cliente —</button></div>
+        <div class="f"><label>&nbsp;</label><label class="chk"><input type="checkbox" id="g-regen"> Rigenera (sostituisci)</label></div>
         <button class="btn" id="g-add">Genera</button>
       </div>
       <div id="g-group-wrap" style="display:none;margin-top:.6rem">
@@ -687,17 +688,23 @@ function generateBuoni(){
   const sel=genClientiTarget(); if(!sel.length){ alert('Seleziona almeno un cliente.'); return; }
   const clienti=sel.filter(c=>c.genAuto);
   if(!clienti.length){ alert('Nessuno dei clienti scelti ha la "Generazione automatica" attiva. Attivala nella scheda cliente.'); return; }
+  const regen=document.getElementById('g-regen').checked; const ids=new Set(clienti.map(c=>c.id));
+  if(regen) BUONI=BUONI.filter(b=>!(b.gen && ids.has(b.clienteId))); // sostituisci: via i vecchi automatici
+  const already=new Set(BUONI.filter(b=>b.gen).map(b=>b.clienteId));
+  const todo=regen?clienti:clienti.filter(c=>!already.has(c.id));
+  const skipped=clienti.length-todo.length;
+  if(!todo.length){ alert(`Tutti i ${clienti.length} clienti scelti hanno già buoni generati per questo mese. Spunta "Rigenera (sostituisci)" per rifarli.`); return; }
   const newB=[]; let nCli=0;
-  clienti.forEach(c=>{ const target=c.consumoMese||0; if(target<=0) return; const act=c.tessere.filter(t=>!t.sospesa && (t.capienza||0)>0); if(!act.length) return;
+  todo.forEach(c=>{ const target=c.consumoMese||0; if(target<=0) return; const act=c.tessere.filter(t=>!t.sospesa && (t.capienza||0)>0); if(!act.length) return;
     const share=target/act.length; let got=false;
     act.forEach(t=>{ const nb=genForTessera(c,t,share); if(nb.length){ newB.push(...nb); got=true; } });
     if(got) nCli++;
   });
-  if(!newB.length){ alert('Niente da generare. Controlla che i clienti scelti abbiano "Litri max/mese" e tessere attive con capienza e giorni.'); return; }
+  if(!newB.length){ alert(`Niente da generare${skipped?` (${skipped} clienti già fatti, saltati)`:''}. Controlla "Litri max/mese" e tessere attive con capienza e giorni.`); return; }
   BUONI.push(...newB); CURBUONO=newB[newB.length-1].id;
   saveStore(); recompute(); renderBuoni(); renderRegistro();
   const litri=newB.reduce((s,b)=>s+b.litri,0);
-  alert(`Generati ${newB.length} buoni per ${nCli} clienti, ${fmtInt(litri)} L totali.`);
+  alert(`Generati ${newB.length} buoni per ${nCli} clienti, ${fmtInt(litri)} L${skipped?`. Saltati ${skipped} clienti già generati (usa "Rigenera" per rifarli)`:''}.`);
 }
 function renderGenScope(){
   document.getElementById('g-one-wrap').style.display=GEN_SCOPE==='ONE'?'':'none';
