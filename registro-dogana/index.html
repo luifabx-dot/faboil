@@ -258,7 +258,7 @@ table.reg tbody tr.brow:hover td{background:var(--surface2)}
   <!-- TRASFERIMENTI -->
   <div class="page" id="page-rettifiche">
     <div class="sh"><h1>Trasferimenti interni</h1><p>litri rimessi indietro per pistola/giorno (prodotto entrato senza DAS)</p></div>
-    <div class="row-actions"><span class="muted">Regola d'oro: su ogni cella la somma dei travasi non può superare lo scarico grezzo del giorno.</span></div>
+    <div class="row-actions"><span class="muted">Regola d'oro: su ogni cella la somma dei travasi non può superare il valore del registro (coi buoni) di quel giorno.</span></div>
     <div class="tbar" id="rett-bar"></div>
     <div class="row-actions"><div class="toggle" id="rett-prod-toggle">
       <button data-p="GASOLIO" class="on">Gasolio</button><button data-p="VERDE">Verde</button><button data-p="GPL">GPL</button>
@@ -405,7 +405,8 @@ let CARDSMART=null;  // { byDayProd:{day:{prod:litri}}, meta }
 let TRANSFERS=[], CURRENT=null, SEQ=1;
 let BUONI=[], CURBUONO=null, BSEQ=1;
 let TPROD='GASOLIO'; // prodotto visualizzato nella pagina Trasferimenti
-let NETTO={};        // pump->day->scarico netto (>=0 garantito)
+let NETTO={};        // pump->day->scarico netto finale (>=0 garantito)
+let REGBUONI={};     // pump->day->registro coi buoni (senza travasi): tetto dei travasi
 let BRESULT={};      // buonoId -> {placed, short, alloc:{pump:{day:signed}}}
 let REGMODE='netto';
 const EPS=1e-6;
@@ -524,55 +525,48 @@ function renderCSResult(fname){
     <p class="muted" style="margin-top:.7rem">Scartate ${m.skTot} righe "Totale", ${m.skExtra} righe ADBLUE/Metano (non carburanti dei 3 prodotti).</p>${subset}`;
 }
 
-// ---- calcolo NETTO: trasferimenti poi buoni (regola d'oro garantita) ----
-// simulaNetto: motore puro su (buoni, transfers) candidati. Segnala violazioni regola d'oro.
+// ---- calcolo NETTO: BUONI (su singola pistola) poi TRASFERIMENTI (regola d'oro garantita) ----
+// simulaNetto: motore puro su (buoni, transfers). Segnala violazioni regola d'oro.
+// Ordine: 1) i buoni spostano vendite sul grezzo, una pistola alla volta (più margine per prima);
+//         2) i travasi sottraggono dal registro coi buoni (il loro tetto è il netto post-buoni).
 function simulaNetto(buoni, transfers){
-  const work={}; let transferViol=false;
-  PUMPS.forEach(p=>{ work[p]={}; STATE.days.forEach(d=>{
-    let tr=0; transfers.forEach(t=>{ tr+=(t.cells[p]&&t.cells[p][d])||0; });
-    const base=grezzo(p,d)-tr; if(base<-EPS) transferViol=true; // travaso > grezzo: contatore andrebbe sotto 0
-    work[p][d]=Math.max(0,base);
-  }); });
+  // FASE 1 — buoni sul grezzo
+  const work={}; PUMPS.forEach(p=>{ work[p]={}; STATE.days.forEach(d=>work[p][d]=grezzo(p,d)); });
+  const tierDays=tier=>STATE.days.filter(d=>dayCat(d)===tier);
   const bres={};
   for(const b of buoni){
-    const X=b.day; const pumps=PUMPS.filter(p=>prodOf(p)===b.prodotto); if(!pumps.length) continue;
-    const dayAvail=d=> pumps.reduce((s,p)=>s+(work[p][d]||0),0); // disponibile del prodotto in un giorno (somma pompe)
-    // 1) decidi i prelievi per giorno (sorgenti, escluso X)
-    const removals={};
-    if(b.manual && b.dayAlloc){
-      for(const d in b.dayAlloc){ if(d===X||!(d in work[pumps[0]])) continue; removals[d]=Math.max(0, Math.min(b.dayAlloc[d], dayAvail(d))); }
-    } else {
-      let remaining=b.litri;
-      const others=STATE.days.filter(d=>d!==X);
-      // prelievo per FASCE (0 rossi → 1 sabati → 2 normali); dentro la fascia, PROPORZIONALE
-      // all'estraibile (disponibile − pavimento), così nessun giorno va a 0.
-      for(let tier=0; tier<=2 && remaining>EPS; tier++){
-        const tierDays=others.filter(d=>dayCat(d)===tier);
-        const ext={}; let totExt=0;
-        tierDays.forEach(d=>{ const e=Math.max(0, dayAvail(d)-FLOOR_LT); ext[d]=e; totExt+=e; });
-        if(totExt<=EPS) continue;
-        const amount=Math.min(remaining, totExt);
-        tierDays.forEach(d=>{ if(ext[d]>EPS){ removals[d]=(removals[d]||0)+amount*ext[d]/totExt; } });
-        remaining-=amount;
-      }
+    const X=b.day; const pumps=PUMPS.filter(p=>prodOf(p)===b.prodotto);
+    if(!pumps.length){ bres[b.id]={placed:0,short:b.litri,alloc:{}}; continue; }
+    const alloc={}; let remaining=b.litri;
+    const margin=p=>STATE.days.reduce((s,d)=>s+Math.max(0,work[p][d]-FLOOR_LT),0); // quanto può cedere una pistola
+    const ordered=pumps.slice().sort((a,c)=>margin(c)-margin(a)); // più margine per prima
+    for(const p of ordered){
+      if(remaining<=EPS) break;
+      // sposta da 'days' (≠X) verso X, proporzionale all'estraibile, pavimento 100
+      const drain=days=>{ if(remaining<=EPS) return; const ext={}; let tot=0; days.forEach(d=>{ const e=Math.max(0,work[p][d]-FLOOR_LT); ext[d]=e; tot+=e; }); if(tot<=EPS) return;
+        const amount=Math.min(remaining,tot);
+        days.forEach(d=>{ if(ext[d]>EPS){ const take=amount*ext[d]/tot; work[p][d]-=take; work[p][X]+=take; alloc[p]=alloc[p]||{}; alloc[p][d]=(alloc[p][d]||0)-take; alloc[p][X]=(alloc[p][X]||0)+take; } });
+        remaining-=amount; };
+      drain(tierDays(0).filter(d=>d!==X)); // festivi
+      drain(tierDays(1).filter(d=>d!==X)); // sabati
+      if(remaining>EPS){ const cap=Math.max(0,grezzo(p,X)-FLOOR_LT); const take=Math.min(remaining,cap); remaining-=take; } // il giorno stesso: vendite proprie di X (nessun movimento)
+      drain(tierDays(2).filter(d=>d!==X)); // altri normali, dove c'è possibilità
     }
-    // 2) applica i prelievi: dentro al giorno, distribuzione automatica sulle pompe (proporzionale al disponibile)
-    const alloc={}; let placed=0;
-    for(const d in removals){ const A=removals[d]; if(A<=EPS) continue; const tot=dayAvail(d); if(tot<=EPS) continue;
-      pumps.forEach(p=>{ const share=A*(work[p][d]||0)/tot; if(share>EPS){ work[p][d]-=share; alloc[p]=alloc[p]||{}; alloc[p][d]=(alloc[p][d]||0)-share; } });
-      placed+=A;
-    }
-    // 3) aggiungi 'placed' sul giorno X, distribuito sulle pompe (proporzionale allo scarico di X, o equo)
-    if(placed>EPS){ const totX=pumps.reduce((s,p)=>s+(work[p][X]||0),0);
-      pumps.forEach(p=>{ const w=totX>EPS?(work[p][X]||0)/totX:1/pumps.length; const add=placed*w; work[p][X]=(work[p][X]||0)+add; alloc[p]=alloc[p]||{}; alloc[p][X]=(alloc[p][X]||0)+add; });
-    }
-    bres[b.id]={ placed, short:Math.max(0,b.litri-placed), alloc, removals };
+    bres[b.id]={ placed:b.litri-Math.max(0,remaining), short:Math.max(0,remaining), alloc };
   }
+  // registro coi buoni (senza travasi): è il tetto dei travasi per cella
+  const regBuoni={}; PUMPS.forEach(p=>{ regBuoni[p]={}; STATE.days.forEach(d=>regBuoni[p][d]=work[p][d]); });
+  // FASE 2 — travasi: sottraggono dal registro coi buoni
+  let transferViol=false;
+  PUMPS.forEach(p=>STATE.days.forEach(d=>{
+    let tr=0; transfers.forEach(t=>{ tr+=(t.cells[p]&&t.cells[p][d])||0; });
+    const v=work[p][d]-tr; if(v<-EPS) transferViol=true; work[p][d]=Math.max(0,v);
+  }));
   let buonoShort=false; const shortByProd={GASOLIO:0,VERDE:0,GPL:0};
   for(const b of buoni){ const r=bres[b.id]; if(r && r.short>EPS){ buonoShort=true; shortByProd[b.prodotto]=(shortByProd[b.prodotto]||0)+r.short; } }
-  return { work, bres, transferViol, buonoShort, shortByProd, feasible: !transferViol && !buonoShort };
+  return { work, regBuoni, bres, transferViol, buonoShort, shortByProd, feasible: !transferViol && !buonoShort };
 }
-function recompute(){ const r=simulaNetto(BUONI, TRANSFERS); NETTO=r.work; BRESULT=r.bres; }
+function recompute(){ const r=simulaNetto(BUONI, TRANSFERS); NETTO=r.work; REGBUONI=r.regBuoni; BRESULT=r.bres; }
 // alloc per giorno (somma pompe) di un buono, dal risultato calcolato
 function buonoDayAlloc(b){ const r=BRESULT[b.id]; const out={}; if(!r) return out; for(const p in r.alloc) for(const d in r.alloc[p]) out[d]=(out[d]||0)+r.alloc[p][d]; return out; }
 function prodNettoDay(prod,d){ return PUMPS.filter(p=>prodOf(p)===prod).reduce((s,p)=>s+(NETTO[p][d]||0),0); }
@@ -738,25 +732,19 @@ function renderRettGrid(){
   const pumps=PUMPS.filter(p=>prodOf(p)===TPROD);
   let h='<div class="tablewrap"><table class="reg">'+colgroup(pumps)+headRow(pumps)+'<tbody>';
   STATE.days.forEach(day=>{ h+=`<tr><td class="datecol ${dateClass(day)}">${fmtDay(day)}</td>`;
-    pumps.forEach(p=>{ const g=Math.round(grezzo(p,day)); const other=otherTotalAt(p,day); const v=cellOf(t,p,day); const max=Math.max(0,g-other); const full=max===0&&g>0; const resid=Math.max(0,max-v);
-      h+=`<td class="${prodClass(p)} ${full?'full':''}"><input type="number" min="0" max="${max}" step="1" value="${v||''}" data-p="${p}" data-d="${day}" title="grezzo ${fmtInt(g)} · altri travasi ${fmtInt(other)} · max ${fmtInt(max)}" class="${v>0?'has':''}"><span class="resid ${resid===0?'z':''}" data-r="${p}|${day}">↓${fmtInt(resid)}</span></td>`; });
+    pumps.forEach(p=>{ const base=Math.round(regBuoniVal(p,day)); const other=otherTotalAt(p,day); const v=cellOf(t,p,day); const max=Math.max(0,base-other); const full=max===0&&base>0; const resid=Math.max(0,max-v);
+      h+=`<td class="${prodClass(p)} ${full?'full':''}"><input type="number" min="0" max="${max}" step="1" value="${v||''}" data-p="${p}" data-d="${day}" title="registro coi buoni ${fmtInt(base)} · altri travasi ${fmtInt(other)} · max ${fmtInt(max)}" class="${v>0?'has':''}"><span class="resid ${resid===0?'z':''}" data-r="${p}|${day}">↓${fmtInt(resid)}</span></td>`; });
     h+='</tr>'; });
   h+='</tbody></table></div>'; cont.innerHTML=h;
   cont.querySelectorAll('input').forEach(inp=>inp.addEventListener('input',onRettInput));
 }
+function regBuoniVal(p,day){ return (REGBUONI[p]&&REGBUONI[p][day]!=null)?REGBUONI[p][day]:grezzo(p,day); } // registro coi buoni (tetto travaso)
 function onRettInput(e){
   const t=curTransfer(); if(!t) return;
-  const inp=e.target, p=inp.dataset.p, day=inp.dataset.d, g=Math.round(grezzo(p,day)), max=Math.max(0,g-otherTotalAt(p,day));
+  const inp=e.target, p=inp.dataset.p, day=inp.dataset.d, base=Math.round(regBuoniVal(p,day)), max=Math.max(0,base-otherTotalAt(p,day));
   let val=parseInt(inp.value,10); if(isNaN(val)||val<0) val=0;
   if(val>max){ val=max; inp.value=max||''; inp.classList.add('bad'); setTimeout(()=>inp.classList.remove('bad'),600); }
-  const prev=(t.cells[p]&&t.cells[p][day])||0;
   if(!t.cells[p]) t.cells[p]={}; if(val>0) t.cells[p][day]=val; else delete t.cells[p][day];
-  // GUARDIA REGOLA D'ORO: il travaso non deve mandare short un buono già inserito
-  if(val>prev){ const sim=simulaNetto(BUONI, TRANSFERS); if(sim.buonoShort){
-    if(prev>0) t.cells[p][day]=prev; else delete t.cells[p][day]; inp.value=prev||'';
-    inp.classList.add('bad'); setTimeout(()=>inp.classList.remove('bad'),900);
-    alert(`⛔ Questo travaso toglie prodotto necessario a un buono già inserito: romperebbe la regola d'oro.\nRiduci il travaso o sistema prima i buoni.`);
-    return; } }
   inp.classList.toggle('has',val>0);
   const resid=Math.max(0,max-val); const rs=inp.parentElement.querySelector('.resid'); if(rs){ rs.textContent='↓'+fmtInt(resid); rs.classList.toggle('z',resid===0); }
   saveStore(); renderChipsOnly(); const b=document.getElementById('t-badge'); if(b) b.textContent=`${prodName(TPROD)}: ${fmtInt(transferTotalProd(t,TPROD))} L`;

@@ -40,10 +40,15 @@ Ultimo aggiornamento: 2026-06-24.
 ## Formule chiave
 - **Registro netto** = grezzo StoreSmart − trasferimenti interni, poi engine buoni (`recompute()`).
   Regola d'oro: contatore mai indietro / scarico netto ≥ 0. Conservazione del prodotto.
-- **Prelievo buoni per FASCE + proporzionale + pavimento:** ogni buono preleva le vendite dalle
-  domeniche/festivi → sabati → giorni normali; dentro la fascia in modo **proporzionale**
-  all'estraibile, lasciando sempre **almeno 100 L** (`FLOOR_LT`) su ogni giorno-sorgente. Così i
-  giorni rossi calano insieme e nessuno va a 0 (prima si svuotavano in ordine di data).
+- **Ordine motore: BUONI poi TRAVASI** (`simulaNetto`). 1) i buoni spostano vendite sul grezzo;
+  2) i travasi sottraggono dal registro-coi-buoni. Il **tetto del travaso per cella = netto
+  post-buoni** (`REGBUONI[p][d]`), non il grezzo (es. se G1_1 mostra 1.120, si rettifica fino a 1.120).
+- **Buono su SINGOLA pistola:** ogni buono lavora sulla pistola con **più margine** per prima;
+  aggiunge i litri al **suo** giorno su **quella** pistola (può superare il grezzo, è normale) e li
+  preleva dai giorni-sorgente **della stessa pistola** nell'ordine **festivi → sabati → giorno stesso
+  del buono → altri normali**, in modo proporzionale, pavimento **100 L** (`FLOOR_LT`). Passa alla
+  pistola successiva solo se la prima non basta. Il "giorno stesso" è soddisfatto dalle vendite
+  proprie di X (nessun movimento). **Totale conservato** (i buoni spostano, non tolgono).
 - **Regola d'oro come vincolo INVALICABILE (guardiano unico `simulaNetto`):** ogni aggiunta/modifica
   manuale di buono e ogni aggiunta/aumento di travaso viene prima simulata; se renderebbe un netto < 0
   o lascerebbe un buono **short** (non piazzabile per intero), l'operazione è **rifiutata** con messaggio.
