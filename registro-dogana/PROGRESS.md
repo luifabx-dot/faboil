@@ -88,6 +88,7 @@ colonna "Sc./Magg.".
 | Commercialista: Card Smart / iCad / DKV / buoni | ✅ |
 | Sconti/maggiorazioni scorporati (CS, iCad, DKV) | ✅ |
 | Backup/Restore JSON | ✅ |
+| Responsive telefono (CSS, opz. A) | ✅ tab scrollabili, tabelle con scroll orizz. e colonna DATA congelata, tocchi grandi |
 | **POS / contanti (file CTRL CASSE)** | ❌ da fare |
 | Ordine prepagati/postpagati su corrispettivo contanti | ❌ parcheggiato |
 

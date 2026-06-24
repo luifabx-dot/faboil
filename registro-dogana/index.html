@@ -150,6 +150,36 @@ table.reg tbody tr.brow:hover td{background:var(--surface2)}
 .fld.sm{width:96px}
 .empty-state{text-align:center;padding:3rem 1rem;color:var(--muted);border:1.5px dashed var(--border2);border-radius:var(--radius)}
 .empty-state .ic{font-size:2.6rem;display:block;margin-bottom:.5rem;opacity:.5}
+
+/* ===== MOBILE / TELEFONO ===== */
+/* tab bar scorrevole quando non ci stanno (tablet stretti e telefoni) */
+@media(max-width:780px){
+  .topbar{flex-wrap:wrap;padding:.6rem .8rem;gap:.5rem}
+  .tabs{margin-left:0;width:100%;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:thin;padding-bottom:.15rem}
+  .tabs::-webkit-scrollbar{height:4px}
+  .tab{flex:0 0 auto}
+}
+@media(max-width:640px){
+  html{font-size:15px}
+  .content{padding:.7rem .5rem}
+  .sh h1{font-size:1.2rem}
+  .card{padding:.9rem .8rem}
+  /* tabelle: scroll orizzontale con la colonna DATA congelata */
+  .tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table.reg{table-layout:auto;width:auto;min-width:100%}
+  table.reg th,table.reg td{min-width:46px;font-size:.7rem}
+  table.reg .datecol{min-width:62px}
+  table.reg input{font-size:.74rem}
+  /* tocchi più grandi */
+  .btn{padding:.6rem 1rem;font-size:.85rem}
+  .tab{padding:.45rem .8rem;font-size:.84rem}
+  .fld,.tedit input.name{font-size:16px;padding:.5rem .7rem} /* 16px = niente zoom auto su iOS */
+  .chip{padding:.45rem .85rem}
+  .wd{width:34px;height:34px}
+  /* modale a tutta larghezza */
+  .modal-overlay{padding:2vh .5rem}
+  .formline{gap:.5rem}
+}
 </style>
 </head>
 <body>
