@@ -158,6 +158,7 @@ table.reg tbody tr.brow:hover td{background:var(--surface2)}
     <button class="tab" data-tab="buoni" id="tab-buoni" disabled>Buoni</button>
     <button class="tab" data-tab="assegnazioni" id="tab-assegnazioni" disabled>Assegnazioni</button>
     <button class="tab" data-tab="clienti" id="tab-clienti">Clienti</button>
+    <button class="tab" data-tab="ricariche" id="tab-ricariche">Ricariche</button>
     <button class="tab" data-tab="registro" id="tab-registro" disabled>Registro</button>
   </div>
 </div>
@@ -195,16 +196,6 @@ table.reg tbody tr.brow:hover td{background:var(--surface2)}
       </div>
       <input type="file" id="file-cl" accept=".xlsx,.xls" hidden>
       <div id="import-result-cl"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Ricariche prepagati (SituazioneRicariche)</div>
-      <div class="drop" id="drop-ric">
-        <span class="ic">💳</span>
-        <h3>Trascina qui il file Ricariche</h3>
-        <p>oppure <b>clicca per sceglierlo</b> — solo le ricariche effettuate (Residuo ignorato)</p>
-      </div>
-      <input type="file" id="file-ric" accept=".xlsx,.xls" hidden>
-      <div id="import-result-ric"></div>
     </div>
     <div class="card">
       <div class="card-title">Backup / Ripristino</div>
@@ -308,6 +299,24 @@ table.reg tbody tr.brow:hover td{background:var(--surface2)}
       <div class="cl-filters" id="cp-filters"></div>
       <div class="cl-listbox" id="cp-list" style="max-height:55vh"></div>
     </div>
+  </div>
+
+  <!-- RICARICHE -->
+  <div class="page" id="page-ricariche">
+    <div class="sh"><h1>Ricariche prepagati</h1><p>registra una ricarica per un cliente prepagato con generazione automatica — emette ricevuta</p></div>
+    <div class="card" id="ric-form">
+      <div class="card-title">Nuova ricarica</div>
+      <div class="formline">
+        <div class="f"><label>Cliente (PRE + ⚙)</label><button type="button" class="fld" id="ric-cliente-btn" style="min-width:260px;text-align:left;cursor:pointer">— scegli cliente —</button></div>
+        <div class="f"><label>Data</label><input class="fld" id="ric-data" type="date"></div>
+        <div class="f"><label>Importo €</label><input class="fld" id="ric-importo" type="number" min="0" step="0.01" style="width:120px" placeholder="0,00"></div>
+        <button class="btn" id="ric-add">Registra ricarica</button>
+      </div>
+      <p class="muted" style="margin-top:.6rem">Solo clienti <b>prepagati</b> con <b>⚙ generazione automatica</b>. La ricarica aumenta il credito disponibile.</p>
+      <div id="ric-add-result"></div>
+    </div>
+    <div class="row-actions"><span class="muted" id="ric-count"></span></div>
+    <div id="ric-storico"></div>
   </div>
 
   <!-- REGISTRO -->
@@ -832,49 +841,57 @@ function handleClFile(file){
 }
 
 let CLQ='', CLFILT='ALL';
-// ---- RICARICHE prepagati ----
-let RICARICHE=null; // { byName:{ normNome:{ nome, ricariche:[{data,importo}] } }, meta }
-function normName(s){ return String(s||'').toUpperCase().replace(/\s+/g,' ').trim(); }
-function parseRicariche(rows){
-  let hr=-1; for(let i=0;i<Math.min(rows.length,20);i++){ if(rows[i] && rows[i].some(c=>String(c).trim().toLowerCase().includes('data ricarica'))){ hr=i; break; } }
-  if(hr<0) throw new Error("Intestazione non trovata ('Data Ricarica'). È il file SituazioneRicariche?");
-  const head=rows[hr].map(c=>String(c==null?'':c).trim().toLowerCase());
-  const iData=head.findIndex(h=>h.includes('data ricarica')); const iImp=head.findIndex(h=>h.includes('importo'));
-  const byName={}; let cur=null, nRic=0; const dset=new Set();
-  for(let i=hr+1;i<rows.length;i++){
-    const r=rows[i]; if(!r) continue;
-    const cell=r[iData]; const imp=r[iImp];
-    if(r.some(c=>String(c).toLowerCase().includes('totali')||String(c).trim().toLowerCase()==='totale')){ cur=null; continue; }
-    if(r.some(c=>String(c).trim().toUpperCase()==='CLIENTE')) continue;
-    const day=cellDay(cell);
-    if(day && imp!=null && imp!=='') { if(cur){ cur.ricariche.push({data:day, importo:csNum(imp)}); nRic++; dset.add(day); } continue; }
-    // riga nome cliente (testo non-data in colonna Data Ricarica)
-    if(cell!=null && cell!=='' && !day){ const nome=String(cell).trim(); const k=normName(nome); cur=byName[k]||(byName[k]={nome, ricariche:[]}); }
-  }
-  const days=[...dset].sort();
-  return { byName, meta:{ nClienti:Object.keys(byName).length, nRicariche:nRic, periodo: days.length?`${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—' } };
+// ---- RICARICHE prepagati (manuali, con ricevuta) ----
+let RICMAN={ seq:1, list:[] }; // list: [{id, clienteId, clienteNome, piva, data, importo, num}]
+let RIC_CLI='';
+function ricaricheForCliente(c){ return RICMAN.list.filter(r=>r.clienteId===c.id); }
+function saveRic(){ try{ localStorage.setItem('faboil_ricariche_man', JSON.stringify(RICMAN)); }catch(e){} }
+function loadRic(){ try{ const s=localStorage.getItem('faboil_ricariche_man'); if(s){ const o=JSON.parse(s); RICMAN={ seq:o.seq||1, list:o.list||[] }; } }catch(e){} }
+function selectRicCli(id){ RIC_CLI=id||''; const c=CLIENTI.find(x=>x.id===id); document.getElementById('ric-cliente-btn').textContent=c?`${c.ragione||c.id} · ${c.piva||''}`:'— scegli cliente —'; closeCliPicker(); }
+function addRicarica(){
+  const c=CLIENTI.find(x=>x.id===RIC_CLI); if(!c){ alert('Scegli un cliente.'); return; }
+  if(c.tipo!=='PRE'||!c.genAuto){ alert('Le ricariche sono solo per clienti prepagati con generazione automatica.'); return; }
+  const data=document.getElementById('ric-data').value; const importo=parseFloat(document.getElementById('ric-importo').value);
+  if(!data){ alert('Inserisci la data.'); return; } if(isNaN(importo)||importo<=0){ alert('Inserisci un importo > 0.'); return; }
+  const rec={ id:'r'+(RICMAN.seq), clienteId:c.id, clienteNome:c.ragione, piva:c.piva||'', data, importo:Math.round(importo*100)/100, num:RICMAN.seq };
+  RICMAN.seq++; RICMAN.list.push(rec); saveRic();
+  document.getElementById('ric-importo').value=''; document.getElementById('ric-add-result').innerHTML=`<div class="ok-msg" style="margin-top:.7rem">✓ Ricarica n. ${rec.num} registrata: ${fmtEur(rec.importo)} a ${escapeHtml(c.ragione)}. <button class="btn sm ghost" onclick="ricevutaPDF('${rec.id}')">📄 Ricevuta PDF</button></div>`;
+  renderRicariche(); refreshScheda();
 }
-function ricaricheForCliente(c){ if(!RICARICHE) return []; const m=RICARICHE.byName[normName(c.ragione)]; return m?m.ricariche:[]; }
-function handleRicFile(file){
-  const res=document.getElementById('import-result-ric'); res.innerHTML='<p class="muted" style="margin-top:1rem">Lettura in corso…</p>';
-  const reader=new FileReader();
-  reader.onload=e=>{ try{ const wb=XLSX.read(e.target.result,{type:'array'}); const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:null});
-    RICARICHE=parseRicariche(rows); saveRic(); renderRicResult(file.name); renderClDetail();
-  }catch(err){ res.innerHTML=`<div class="warn">⚠ ${err.message}</div>`; } };
-  reader.readAsArrayBuffer(file);
+function delRicarica(id){ const r=RICMAN.list.find(x=>x.id===id); if(r && !confirm(`Eliminare la ricarica n. ${r.num} (${fmtEur(r.importo)})?`)) return; RICMAN.list=RICMAN.list.filter(x=>x.id!==id); saveRic(); renderRicariche(); refreshScheda(); }
+function renderRicariche(){
+  const cont=document.getElementById('ric-storico'); const cnt=document.getElementById('ric-count'); if(!cont) return;
+  const list=[...RICMAN.list].sort((a,b)=>b.num-a.num);
+  cnt.textContent=`${list.length} ricariche · ${fmtEur(list.reduce((s,r)=>s+r.importo,0))} totali`;
+  if(!list.length){ cont.innerHTML='<p class="muted">Nessuna ricarica registrata.</p>'; return; }
+  let h='<div class="tablewrap" style="max-height:60vh"><table class="reg"><thead><tr><th>N.</th><th>Data</th><th style="text-align:left">Cliente</th><th>P.IVA</th><th>Importo</th><th></th></tr></thead><tbody>';
+  list.forEach(r=>{ h+=`<tr><td>${r.num}</td><td>${fmtDay(r.data)}</td><td style="text-align:left">${escapeHtml(r.clienteNome||'')}</td><td>${escapeHtml(r.piva||'')}</td><td>${fmtEur(r.importo)}</td><td style="white-space:nowrap"><button class="btn sm ghost" onclick="ricevutaPDF('${r.id}')" style="padding:.05rem .4rem">📄</button> <button class="btn sm danger" onclick="delRicarica('${r.id}')" style="padding:.05rem .35rem">✕</button></td></tr>`; });
+  h+='</tbody></table></div>'; cont.innerHTML=h;
 }
-function renderRicResult(fname){ const m=RICARICHE.meta;
-  // quanti agganciati all'anagrafica
-  let matched=0; if(CLIENTI.length){ const names=new Set(CLIENTI.map(c=>normName(c.ragione))); matched=Object.keys(RICARICHE.byName).filter(k=>names.has(k)).length; }
-  document.getElementById('import-result-ric').innerHTML=`<div class="ok-msg">✓ Importato: <b>${fname}</b></div>
-    <div class="grid" style="margin-top:.9rem">
-      <div class="stat"><div class="k">Clienti con ricariche</div><div class="v">${m.nClienti}</div></div>
-      <div class="stat"><div class="k">Ricariche</div><div class="v">${m.nRicariche}</div></div>
-      <div class="stat"><div class="k">Periodo</div><div class="v" style="font-size:.9rem">${m.periodo}</div></div>
-    </div>
-    <p class="muted" style="margin-top:.7rem">${CLIENTI.length?`${matched} agganciati all'anagrafica per ragione sociale.`:'Importa anche i Clienti (estesoL) per agganciarle.'} Residuo e Tot. movimenti ignorati.</p>`;
+function ricevutaPDF(id){
+  const r=RICMAN.list.find(x=>x.id===id); if(!r) return; const c=CLIENTI.find(x=>x.id===r.clienteId)||{};
+  const w=window.open('','_blank','width=720,height=900'); if(!w){ alert('Abilita i popup per stampare la ricevuta.'); return; }
+  const ind=[c.indirizzo,c.citta,c.prov].filter(Boolean).join(' · ');
+  w.document.write(`<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><title>Ricevuta n. ${r.num}</title>
+  <style>body{font-family:Arial,Helvetica,sans-serif;color:#111;max-width:600px;margin:40px auto;padding:0 24px}
+  h1{color:#e07b00;font-size:22px;margin:0 0 2px}.sub{color:#666;font-size:12px;margin-bottom:24px}
+  .box{border:1.5px solid #ccc;border-radius:10px;padding:20px 22px}.row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #eee;font-size:14px}.row:last-child{border:0}
+  .lbl{color:#666}.val{font-weight:700}.imp{font-size:26px;font-weight:800;color:#15803d;text-align:right;margin-top:14px}
+  .ft{margin-top:30px;font-size:12px;color:#666}.firma{margin-top:50px;border-top:1px solid #999;width:240px;padding-top:6px;font-size:12px;color:#666}</style></head>
+  <body><h1>Faboil — Ricevuta di ricarica</h1><div class="sub">PV-2993 · EUROSPEED Lusciano</div>
+  <div class="box">
+    <div class="row"><span class="lbl">Ricevuta n.</span><span class="val">${r.num}</span></div>
+    <div class="row"><span class="lbl">Data</span><span class="val">${fmtDay(r.data)}</span></div>
+    <div class="row"><span class="lbl">Cliente</span><span class="val">${escapeHtml(r.clienteNome||'')}</span></div>
+    ${r.piva?`<div class="row"><span class="lbl">P.IVA</span><span class="val">${escapeHtml(r.piva)}</span></div>`:''}
+    ${ind?`<div class="row"><span class="lbl">Indirizzo</span><span class="val">${escapeHtml(ind)}</span></div>`:''}
+    <div class="imp">${fmtEur(r.importo)}</div>
+  </div>
+  <div class="ft">Ricarica del credito prepagato. Documento non fiscale.</div>
+  <div class="firma">Firma</div>
+  <script>window.onload=function(){window.print();}<\/script></body></html>`);
+  w.document.close();
 }
-function saveRic(){ try{ localStorage.setItem('faboil_ric', JSON.stringify(RICARICHE)); }catch(e){} }
 
 // ---- credito prepagato: saldo@data + ricariche − (Card Smart + buoni) ----
 function clienteCredito(c){
@@ -1084,17 +1101,14 @@ document.getElementById('bk-export').addEventListener('click',exportBackup);
 document.getElementById('bk-import-btn').addEventListener('click',()=>document.getElementById('bk-import').click());
 document.getElementById('bk-import').addEventListener('change',e=>{ if(e.target.files[0]) importBackup(e.target.files[0]); });
 
-const dropRic=document.getElementById('drop-ric'), fileRic=document.getElementById('file-ric');
-dropRic.addEventListener('click',()=>fileRic.click());
-fileRic.addEventListener('change',e=>{ if(e.target.files[0]) handleRicFile(e.target.files[0]); });
-['dragover','dragenter'].forEach(ev=>dropRic.addEventListener(ev,e=>{e.preventDefault();dropRic.classList.add('drag');}));
-['dragleave','drop'].forEach(ev=>dropRic.addEventListener(ev,e=>{e.preventDefault();dropRic.classList.remove('drag');}));
-dropRic.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handleRicFile(f); });
+// ricariche manuali
+document.getElementById('ric-cliente-btn').addEventListener('click',()=>openCliPicker(selectRicCli, c=>c.tipo==='PRE'&&c.genAuto));
+document.getElementById('ric-add').addEventListener('click',addRicarica);
 
 // anagrafica clienti: indipendente dal file importato
 loadClienti(); renderClienti(); fillBuonoClienti();
+loadRic(); renderRicariche();
 restoreImports();
-try{ const rc=localStorage.getItem('faboil_ric'); if(rc){ RICARICHE=JSON.parse(rc); renderClDetail(); document.getElementById('import-result-ric').innerHTML=`<div class="ok-msg">✓ Ricariche ripristinate: <b>${RICARICHE.meta.periodo}</b> · ${RICARICHE.meta.nRicariche} ricariche</div>`; } }catch(e){}
 </script>
 </body>
 </html>
