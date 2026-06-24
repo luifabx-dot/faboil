@@ -573,7 +573,9 @@ function cardSmartScorporoDay(d){ if(!CARDSMART||!CARDSMART.byDayBase||!CARDSMAR
 function buoniEuroDay(d){ return BUONI.filter(b=>b.day===d).reduce((s,b)=>s+(b.totale||0),0); }
 function icadEuroDay(d){ return (ICAD&&ICAD.byDay[d])||0; }
 function dkvEuroDay(d){ return (DKV&&DKV.byDay[d])||0; }
-function commRows(){ return STATE.days.map(d=>{ const v=venditeDay(d), cs=cardSmartEuroDay(d), sc=cardSmartScorporoDay(d), ic=icadEuroDay(d), dk=dkvEuroDay(d), bu=buoniEuroDay(d), fatt=cs+ic+dk+bu; return { d, v, cs, sc, ic, dk, bu, fatt, corr:v-fatt }; }); }
+function fattScorpDay(F,d){ return (F&&F.byDayScorp&&F.byDayScorp[d])||0; } // scorporo iCad/DKV (iCad=0, nessuna colonna sconto)
+function scorpDay(d){ return cardSmartScorporoDay(d)+fattScorpDay(ICAD,d)+fattScorpDay(DKV,d); } // scorporo totale (Card Smart + iCad + DKV)
+function commRows(){ return STATE.days.map(d=>{ const v=venditeDay(d), cs=cardSmartEuroDay(d), sc=scorpDay(d), ic=icadEuroDay(d), dk=dkvEuroDay(d), bu=buoniEuroDay(d), fatt=cs+ic+dk+bu; return { d, v, cs, sc, ic, dk, bu, fatt, corr:v-fatt }; }); }
 function renderCommercialista(){
   if(!STATE) return; const rows=commRows();
   const tot=rows.reduce((a,r)=>({v:a.v+r.v,cs:a.cs+r.cs,sc:a.sc+r.sc,ic:a.ic+r.ic,dk:a.dk+r.dk,bu:a.bu+r.bu,fatt:a.fatt+r.fatt,corr:a.corr+r.corr}),{v:0,cs:0,sc:0,ic:0,dk:0,bu:0,fatt:0,corr:0});
@@ -841,12 +843,12 @@ function parseFatt(rows, dataNames, impNames){
   if(!rows.length) throw new Error('File vuoto.');
   const head=rows[0].map(c=>String(c==null?'':c).trim().toLowerCase());
   const find=(...n)=>{ for(const x of n){ const k=head.findIndex(h=>h===x||h.includes(x)); if(k>=0) return k; } return -1; };
-  const iData=find(...dataNames), iImp=find(...impNames);
+  const iData=find(...dataNames), iImp=find(...impNames), iNet=find('netto'); // iNet: DKV ha colonna Netto (=Importo+sconto/magg); iCad no
   if(iData<0||iImp<0) throw new Error('Colonne mancanti (data / importo).');
-  const byDay={}; let n=0; const dset=new Set();
-  for(let i=1;i<rows.length;i++){ const r=rows[i]; if(!r) continue; const d=cellDay(r[iData]); if(!d) continue; byDay[d]=(byDay[d]||0)+csNum(r[iImp]); n++; dset.add(d); }
+  const byDay={}, byDayScorp={}; let n=0; const dset=new Set();
+  for(let i=1;i<rows.length;i++){ const r=rows[i]; if(!r) continue; const d=cellDay(r[iData]); if(!d) continue; const base=csNum(r[iImp]); byDay[d]=(byDay[d]||0)+base; if(iNet>=0){ byDayScorp[d]=(byDayScorp[d]||0)+(csNum(r[iNet])-base); } n++; dset.add(d); } // scorporo = Netto-Importo (+magg/-sconto)
   const days=[...dset].sort();
-  return { byDay, meta:{ n, tot:Object.values(byDay).reduce((a,b)=>a+b,0), periodo: days.length?`${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—' } };
+  return { byDay, byDayScorp, meta:{ n, tot:Object.values(byDay).reduce((a,b)=>a+b,0), scorp:Object.values(byDayScorp).reduce((a,b)=>a+b,0), periodo: days.length?`${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—' } };
 }
 function handleFattFile(file, kind){
   const id=kind==='ICAD'?'import-result-icad':'import-result-dkv';
