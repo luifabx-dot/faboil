@@ -40,7 +40,12 @@ Ultimo aggiornamento: 2026-06-24.
 ## Formule chiave
 - **Registro netto** = grezzo StoreSmart − trasferimenti interni, poi engine buoni (`recompute()`).
   Regola d'oro: contatore mai indietro / scarico netto ≥ 0. Conservazione del prodotto.
-- **Vendite/giorno** = Σ_prod (litri grezzi pompa × `priceOfDay(prod,day)` [prezzo pompa LORDO]).
+- **Due prezzi distinti (importante):**
+  - **Vendite (corrispettivo)** = `STATE.venditeEur[day][prod]` = Σ (quantità × prezzo della **singola**
+    transazione StoreSmart) → vendite **ESATTE** (gestisce i cambi prezzo in giornata).
+    Fallback per backup vecchi senza `venditeEur`: litri × prezzo di fine giornata.
+  - **Addebiti cartacei (buoni)** = prezzo di **fine giornata** (`prezzoDay` = ultima erogazione del
+    giorno per prodotto). NON usare il prezzo esatto qui: i buoni si prezzano al riferimento di chiusura.
 - **Corrispettivo/giorno** = vendite − (Card Smart + iCad + DKV + buoni).
 - **Credito prepagato** = saldo@data + ricariche − (Card Smart Importo + buoni), dalla `saldoData` in poi.
 

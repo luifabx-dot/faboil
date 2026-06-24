@@ -415,7 +415,8 @@ function parseStoreSmart(rows){
   const iPag=find('tipo pagamento','pagamento'), iData=find('data rifornimento','data'), iPompa=find('pompa'), iProd=find('prodotto'), iQta=find('quantità','quantita'), iPrezzo=find('prezzo');
   if([iData,iPompa,iProd,iQta].some(x=>x<0)) throw new Error('Colonne mancanti (servono Data, Pompa, Prodotto, Quantità).');
   const daily={}; PUMPS.forEach(p=>daily[p]={});
-  const prezzoDay={}, prezzoTs={}; // prezzo dell'ultima erogazione del giorno per prodotto
+  const prezzoDay={}, prezzoTs={}; // prezzo dell'ultima erogazione del giorno per prodotto (per gli ADDEBITI CARTACEI)
+  const venditeEur={};             // venditeEur[day][prod] = Σ qta×prezzo per transazione (vendite ESATTE, per il corrispettivo)
   let kept=0,skTot=0,skAdb=0,skUnknown=0; const daySet=new Set(); const prodCount={GASOLIO:0,VERDE:0,GPL:0};
   for(let i=hr+1;i<rows.length;i++){
     const r=rows[i]; if(!r) continue;
@@ -427,10 +428,12 @@ function parseStoreSmart(rows){
     if(!PUMPS.includes(pompa)){ skUnknown++; continue; }
     const q=itNum(r[iQta]); daily[pompa][day]=(daily[pompa][day]||0)+q; daySet.add(day); kept++;
     const pc=prodOf(pompa); if(pc) prodCount[pc]+=q;
-    if(pc && iPrezzo>=0){ const ts=(typeof r[iData]==='number')?r[iData]:(Date.parse(String(r[iData]))||0); prezzoDay[day]=prezzoDay[day]||{}; prezzoTs[day]=prezzoTs[day]||{}; if(!(pc in prezzoTs[day])||ts>=prezzoTs[day][pc]){ prezzoTs[day][pc]=ts; prezzoDay[day][pc]=itNum(r[iPrezzo]); } }
+    if(pc && iPrezzo>=0){ const prezzo=itNum(r[iPrezzo]);
+      venditeEur[day]=venditeEur[day]||{}; venditeEur[day][pc]=(venditeEur[day][pc]||0)+q*prezzo; // vendite esatte: prezzo della singola riga
+      const ts=(typeof r[iData]==='number')?r[iData]:(Date.parse(String(r[iData]))||0); prezzoDay[day]=prezzoDay[day]||{}; prezzoTs[day]=prezzoTs[day]||{}; if(!(pc in prezzoTs[day])||ts>=prezzoTs[day][pc]){ prezzoTs[day][pc]=ts; prezzoDay[day][pc]=prezzo; } }
   }
   const days=[...daySet].sort();
-  return { days, daily, prezzoDay, meta:{kept,skTot,skAdb,skUnknown,prodCount, period: days.length? days[0].slice(0,7):'', periodo: days.length? `${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—'} };
+  return { days, daily, prezzoDay, venditeEur, meta:{kept,skTot,skAdb,skUnknown,prodCount, period: days.length? days[0].slice(0,7):'', periodo: days.length? `${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—'} };
 }
 
 // ---- parsing Card Smart (fatturato per cliente/tessera, NON per pistola) ----
@@ -564,7 +567,9 @@ function onAsCellClick(e){
 }
 
 // ---- foglio commercialista (corrispettivo = vendite - fatturato) ----
-function venditeDay(d){ let s=0; ['GASOLIO','VERDE','GPL'].forEach(P=>{ const lit=PUMPS.filter(p=>prodOf(p)===P).reduce((a,p)=>a+grezzo(p,d),0); s+=lit*priceOfDay(P,d); }); return s; }
+// Vendite ESATTE: Σ qta×prezzo per transazione (da venditeEur). Fallback per backup vecchi: litri×prezzo di fine giornata.
+function venditeDay(d){ if(STATE && STATE.venditeEur && STATE.venditeEur[d]){ const m=STATE.venditeEur[d]; return (m.GASOLIO||0)+(m.VERDE||0)+(m.GPL||0); }
+  let s=0; ['GASOLIO','VERDE','GPL'].forEach(P=>{ const lit=PUMPS.filter(p=>prodOf(p)===P).reduce((a,p)=>a+grezzo(p,d),0); s+=lit*priceOfDay(P,d); }); return s; }
 // Card Smart per corrispettivo: il Prezzo Unitario è già LORDO (= prezzo pompa StoreSmart),
 // verificato sui dati (giugno: 1.948/1.887/0.769 identici a StoreSmart). Nessun ×1.22.
 // base = Σ(Qta×Prezzo) lordo SENZA sconto/magg → corrispettivo. Sconto/magg SCORPORATI e mostrati a parte.
