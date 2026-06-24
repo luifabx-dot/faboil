@@ -100,6 +100,7 @@ colonna "Sc./Magg.".
 | Responsive telefono (CSS, opz. A) | ✅ tab scrollabili, tabelle con scroll orizz. e colonna DATA congelata, tocchi grandi |
 | Ricerca clienti fluida su telefono | ✅ debounce 140ms + event delegation (1 listener invece di ~700/keystroke) |
 | **POS / contanti (file CTRL CASSE)** | ❌ da fare |
+| **Travasi subordinati a "contanti ≥ 0"** | ❌ da fare (con i contanti): un travaso non deve mai rendere negativo il corrispettivo contanti del giorno — 2° tetto oltre alla regola d'oro fisica |
 | Ordine prepagati/postpagati su corrispettivo contanti | ❌ parcheggiato |
 
 ## Questioni risolte (revisione 2026-06-24)
