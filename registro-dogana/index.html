@@ -695,17 +695,19 @@ function generateBuoni(){
   const todo=regen?clienti:clienti.filter(c=>!already.has(c.id));
   const skipped=clienti.length-todo.length;
   if(!todo.length){ alert(`Tutti i ${clienti.length} clienti scelti hanno già buoni generati per questo mese. Spunta "Rigenera (sostituisci)" per rifarli.`); return; }
-  const newB=[]; let nCli=0;
-  todo.forEach(c=>{ const target=c.consumoMese||0; if(target<=0) return; const act=c.tessere.filter(t=>!t.sospesa && (t.capienza||0)>0); if(!act.length) return;
+  const newB=[]; let nCli=0, nIncompleto=0;
+  todo.forEach(c=>{ if(clienteAutoIncompleto(c)){ nIncompleto++; return; } // anomalia: parametri mancanti -> non genera
+    const target=c.consumoMese||0; const act=c.tessere.filter(t=>!t.sospesa && (t.capienza||0)>0);
     const share=target/act.length; let got=false;
     act.forEach(t=>{ const nb=genForTessera(c,t,share); if(nb.length){ newB.push(...nb); got=true; } });
     if(got) nCli++;
   });
-  if(!newB.length){ alert(`Niente da generare${skipped?` (${skipped} clienti già fatti, saltati)`:''}. Controlla "Litri max/mese" e tessere attive con capienza e giorni.`); return; }
+  const extra=(skipped?` Saltati ${skipped} già generati.`:'')+(nIncompleto?` ⚠ ${nIncompleto} clienti saltati per parametri mancanti (percentuale, litri/mese, capienza o giorni): vedi ⚠ nella sezione Clienti.`:'');
+  if(!newB.length){ alert(`Niente da generare.${extra}`); return; }
   BUONI.push(...newB); CURBUONO=newB[newB.length-1].id;
   saveStore(); recompute(); renderBuoni(); renderRegistro();
   const litri=newB.reduce((s,b)=>s+b.litri,0);
-  alert(`Generati ${newB.length} buoni per ${nCli} clienti, ${fmtInt(litri)} L${skipped?`. Saltati ${skipped} clienti già generati (usa "Rigenera" per rifarli)`:''}.`);
+  alert(`Generati ${newB.length} buoni per ${nCli} clienti, ${fmtInt(litri)} L.${extra}`);
 }
 function renderGenScope(){
   document.getElementById('g-one-wrap').style.display=GEN_SCOPE==='ONE'?'':'none';
@@ -857,6 +859,7 @@ function clienteCredito(c){
 }
 function clienteAutoIncompleto(c){ // ritorna lista delle mancanze (per clienti con genAuto) oppure null
   if(!c.genAuto) return null; const miss=[];
+  if(!(c.perc>0)) miss.push('Percentuale');
   if(!(c.consumoMese>0)) miss.push('Litri max/mese');
   const act=c.tessere.filter(t=>!t.sospesa);
   if(!act.length) miss.push('nessuna tessera attiva');
