@@ -217,7 +217,7 @@ table.reg .resid.z{color:var(--red);opacity:.7}
     <div class="card" id="buono-form">
       <div class="card-title">Nuovo buono</div>
       <div class="formline">
-        <div class="f"><label>Cliente</label><select class="fld" id="b-cliente"><option value="">— nessuno —</option></select></div>
+        <div class="f"><label>Cliente</label><input class="fld" id="b-cliente" list="b-cliente-list" placeholder="Digita nome / P.IVA…" style="min-width:250px" autocomplete="off"><datalist id="b-cliente-list"></datalist></div>
         <div class="f"><label>Tessera</label><select class="fld" id="b-tessera"><option value="">—</option></select></div>
         <div class="f"><label>Prodotto</label><select class="fld" id="b-prod"><option value="GASOLIO">Gasolio</option><option value="VERDE">Verde</option><option value="GPL">GPL</option></select></div>
         <div class="f"><label>Data buono</label><select class="fld" id="b-day"></select></div>
@@ -535,13 +535,14 @@ function renderBuoniGrid(){
     h+='</tr>'; });
   h+='</tbody></table></div>'; cont.innerHTML=h;
 }
+let BCLI_LABELS={};
 function fillBuonoClienti(){
-  const sel=document.getElementById('b-cliente'); if(!sel) return; const cur=sel.value;
-  sel.innerHTML='<option value="">— nessuno —</option>'+CLIENTI.map(c=>`<option value="${escapeAttr(c.id)}">${escapeHtml((c.ragione||c.id)+' ('+c.id+')')}</option>`).join('');
-  if(cur) sel.value=cur;
+  const dl=document.getElementById('b-cliente-list'); if(!dl) return; BCLI_LABELS={};
+  dl.innerHTML=CLIENTI.map(c=>{ const lab=`${c.ragione||c.id} · ${c.tipo==='PRE'?'PRE':'POST'}${c.piva?' · '+c.piva:''} · #${c.id}`; BCLI_LABELS[lab]=c.id; return `<option value="${escapeAttr(lab)}"></option>`; }).join('');
 }
+function getBuonoClienteId(){ const v=document.getElementById('b-cliente').value.trim(); if(!v) return ''; if(BCLI_LABELS[v]) return BCLI_LABELS[v]; const m=v.match(/#(\S+)\s*$/); if(m && CLIENTI.some(c=>c.id===m[1])) return m[1]; return ''; }
 function fillBuonoTessere(){
-  const sel=document.getElementById('b-tessera'); const c=CLIENTI.find(x=>x.id===document.getElementById('b-cliente').value);
+  const sel=document.getElementById('b-tessera'); const c=CLIENTI.find(x=>x.id===getBuonoClienteId());
   if(!c){ sel.innerHTML='<option value="">—</option>'; return; }
   sel.innerHTML='<option value="">—</option>'+c.tessere.map(t=>`<option value="${escapeAttr(t.id)}">${escapeHtml(t.id+(t.targa?' · '+t.targa:'')+(t.descrizione?' · '+t.descrizione:''))}</option>`).join('');
 }
@@ -549,11 +550,11 @@ function buonoEffPrezzo(){ return (parseFloat(document.getElementById('b-prezzo'
 function syncFromLitri(){ const eff=buonoEffPrezzo(); const l=parseFloat(document.getElementById('b-litri').value); if(eff>0 && !isNaN(l)) document.getElementById('b-totale').value=(Math.round(l*eff*100)/100); }
 function syncFromTotale(){ const eff=buonoEffPrezzo(); const tot=parseFloat(document.getElementById('b-totale').value); if(eff>0 && !isNaN(tot)) document.getElementById('b-litri').value=(Math.round(tot/eff*100)/100); }
 function onTesseraPick(){
-  const c=CLIENTI.find(x=>x.id===document.getElementById('b-cliente').value); const t=c&&c.tessere.find(x=>x.id===document.getElementById('b-tessera').value);
+  const c=CLIENTI.find(x=>x.id===getBuonoClienteId()); const t=c&&c.tessere.find(x=>x.id===document.getElementById('b-tessera').value);
   if(t){ if(t.prodotto) document.getElementById('b-prod').value=t.prodotto; if(t.prezzo) document.getElementById('b-prezzo').value=t.prezzo; if(t.sconto) document.getElementById('b-sconto').value=t.sconto; syncFromLitri(); }
 }
 function addBuono(){
-  const cliId=document.getElementById('b-cliente').value, tess=document.getElementById('b-tessera').value;
+  const cliId=getBuonoClienteId(), tess=document.getElementById('b-tessera').value;
   const prod=document.getElementById('b-prod').value, day=document.getElementById('b-day').value;
   const litri=parseFloat(document.getElementById('b-litri').value);
   if(!day || isNaN(litri) || litri<=0){ alert('Inserisci almeno data e litri (> 0).'); return; }
@@ -799,7 +800,7 @@ function goTab(name){ document.querySelectorAll('.tab').forEach(t=>t.classList.t
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ if(!t.disabled) goTab(t.dataset.tab); }));
 document.getElementById('export-btn').addEventListener('click',exportRegistro);
 document.getElementById('b-add').addEventListener('click',addBuono);
-document.getElementById('b-cliente').addEventListener('change',()=>{ fillBuonoTessere(); });
+['change','input'].forEach(ev=>document.getElementById('b-cliente').addEventListener(ev,()=>{ fillBuonoTessere(); }));
 document.getElementById('b-tessera').addEventListener('change',onTesseraPick);
 document.getElementById('b-litri').addEventListener('input',syncFromLitri);
 document.getElementById('b-totale').addEventListener('input',syncFromTotale);
