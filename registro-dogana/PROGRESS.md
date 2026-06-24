@@ -89,6 +89,7 @@ colonna "Sc./Magg.".
 | Sconti/maggiorazioni scorporati (CS, iCad, DKV) | ✅ |
 | Backup/Restore JSON | ✅ |
 | Responsive telefono (CSS, opz. A) | ✅ tab scrollabili, tabelle con scroll orizz. e colonna DATA congelata, tocchi grandi |
+| Ricerca clienti fluida su telefono | ✅ debounce 140ms + event delegation (1 listener invece di ~700/keystroke) |
 | **POS / contanti (file CTRL CASSE)** | ❌ da fare |
 | Ordine prepagati/postpagati su corrispettivo contanti | ❌ parcheggiato |
 

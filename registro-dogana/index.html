@@ -1104,7 +1104,7 @@ function renderCpFilters(){ const el=document.getElementById('cp-filters'); cons
 function renderCpList(){ const box=document.getElementById('cp-list'); let list=filterClienti(CPQ,CPFILT); if(PICK_FILTER) list=list.filter(PICK_FILTER);
   if(!list.length){ box.innerHTML='<p class="muted" style="padding:.8rem">Nessun risultato.</p>'; return; }
   box.innerHTML=list.map(c=>`<div class="cl-item ${c.id===BUONO_CLI?'on':''}" data-id="${escapeAttr(c.id)}"><div class="nm">${escapeHtml(c.ragione||c.id)}<div class="sub">ID ${escapeHtml(c.id)} · ${c.tessere.length} tess.${c.piva?' · '+escapeHtml(c.piva):''}</div></div><span class="badge-tipo ${c.tipo==='PRE'?'pre':'post'}">${c.tipo==='PRE'?'PRE':'POST'}</span></div>`).join('');
-  box.querySelectorAll('.cl-item').forEach(el=>el.addEventListener('click',()=>{ if(PICK_CB) PICK_CB(el.dataset.id); })); }
+}
 function selectBuonoCli(id){ BUONO_CLI=id||''; const c=CLIENTI.find(x=>x.id===id); document.getElementById('b-cliente-btn').textContent=c?`${c.ragione||c.id} · ${c.tipo==='PRE'?'PRE':'POST'}`:'— scegli cliente —'; fillBuonoTessere(); closeCliPicker(); }
 function selectGenCli(id){ GEN_CLI=id||''; const c=CLIENTI.find(x=>x.id===id); document.getElementById('g-cliente-btn').textContent=c?`${c.ragione||c.id} · ${c.tipo==='PRE'?'PRE':'POST'}`:'— scegli cliente —'; closeCliPicker(); }
 function addGenGroup(id){ if(id && !GEN_GROUP.includes(id)) GEN_GROUP.push(id); renderGenGroup(); closeCliPicker(); }
@@ -1121,7 +1121,6 @@ function renderClList(){
   const list=filteredClienti();
   if(!list.length){ box.innerHTML='<p class="muted" style="padding:.8rem">Nessun risultato.</p>'; return; }
   box.innerHTML=list.map(c=>{ const miss=clienteAutoIncompleto(c); const ico=c.genAuto?(miss?`<span title="auto incompleto: manca ${escapeAttr(miss.join(', '))}" style="color:var(--red)">⚠</span>`:'<span title="generazione automatica">⚙</span>'):''; return `<div class="cl-item ${c.id===CURCLI?'on':''}" data-id="${escapeAttr(c.id)}"><div class="nm">${escapeHtml(c.ragione||c.id)}<div class="sub">ID ${escapeHtml(c.id)} · ${c.tessere.length} tess.</div></div>${ico}<span class="badge-tipo ${c.tipo==='PRE'?'pre':'post'}">${c.tipo==='PRE'?'PRE':'POST'}</span></div>`; }).join('');
-  box.querySelectorAll('.cl-item').forEach(el=>el.addEventListener('click',()=>{ CURCLI=el.dataset.id; saveClienti(); renderClList(); renderClDetail(); }));
 }
 function renderClDetail(){
   const cont=document.getElementById('cl-detail'); const c=curCli(); if(!CLIENTI.length){ cont.innerHTML=''; return; }
@@ -1207,6 +1206,7 @@ function importBackup(file){
 }
 function escapeHtml(s){ return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 function escapeAttr(s){ return String(s).replace(/"/g,'&quot;'); }
+function debounce(fn,ms){ let h; return function(){ clearTimeout(h); h=setTimeout(fn,ms); }; } // ricerca fluida su telefono con tante schede
 function goTab(name){ document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===name)); document.querySelectorAll('.page').forEach(p=>p.classList.remove('on')); document.getElementById('page-'+name).classList.add('on');
   try{ if(name==='commercialista') renderCommercialista(); else if(name==='ricariche') renderRicariche(); else if(name==='registro') renderRegistro(); }catch(e){} }
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ if(!t.disabled) goTab(t.dataset.tab); }));
@@ -1224,7 +1224,8 @@ document.querySelectorAll('#g-scope button').forEach(b=>b.addEventListener('clic
 document.getElementById('g-add').addEventListener('click',generateBuoni);
 document.getElementById('cp-close').addEventListener('click',closeCliPicker);
 document.getElementById('cp-clear').addEventListener('click',()=>{ if(PICK_CB) PICK_CB(''); });
-document.getElementById('cp-search').addEventListener('input',e=>{ CPQ=e.target.value; renderCpList(); });
+document.getElementById('cp-search').addEventListener('input',debounce(()=>{ CPQ=document.getElementById('cp-search').value; renderCpList(); },140));
+document.getElementById('cp-list').addEventListener('click',e=>{ const it=e.target.closest('.cl-item'); if(!it) return; if(PICK_CB) PICK_CB(it.dataset.id); }); // delegation: 1 listener
 document.getElementById('cli-picker').addEventListener('click',e=>{ if(e.target.id==='cli-picker') closeCliPicker(); });
 document.getElementById('b-tessera').addEventListener('change',onTesseraPick);
 document.getElementById('b-litri').addEventListener('input',syncFromLitri);
@@ -1263,7 +1264,8 @@ fileCl.addEventListener('change',e=>{ if(e.target.files[0]) handleClFile(e.targe
 ['dragleave','drop'].forEach(ev=>dropCl.addEventListener(ev,e=>{e.preventDefault();dropCl.classList.remove('drag');}));
 dropCl.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handleClFile(f); });
 
-document.getElementById('cl-search').addEventListener('input',e=>{ CLQ=e.target.value; renderClList(); });
+document.getElementById('cl-search').addEventListener('input',debounce(()=>{ CLQ=document.getElementById('cl-search').value; renderClList(); },140));
+document.getElementById('cl-list').addEventListener('click',e=>{ const it=e.target.closest('.cl-item'); if(!it) return; CURCLI=it.dataset.id; saveClienti(); renderClList(); renderClDetail(); }); // delegation: 1 listener
 
 document.getElementById('bk-export').addEventListener('click',exportBackup);
 document.getElementById('bk-import-btn').addEventListener('click',()=>document.getElementById('bk-import').click());
