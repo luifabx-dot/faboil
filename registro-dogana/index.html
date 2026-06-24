@@ -153,6 +153,9 @@ table.reg .resid.z{color:var(--red);opacity:.7}
     <div class="sh"><h1>Trasferimenti interni</h1><p>litri rimessi indietro per pistola/giorno (prodotto entrato senza DAS)</p></div>
     <div class="row-actions"><span class="muted">Regola d'oro: su ogni cella la somma dei travasi non può superare lo scarico grezzo del giorno.</span></div>
     <div class="tbar" id="rett-bar"></div>
+    <div class="row-actions"><div class="toggle" id="rett-prod-toggle">
+      <button data-p="GASOLIO" class="on">Gasolio</button><button data-p="VERDE">Verde</button><button data-p="GPL">GPL</button>
+    </div><span class="muted">— scegli il prodotto da modificare; le colonne mostrate sono solo le sue pistole.</span></div>
     <div class="legend">
       <span><i class="dot" style="background:var(--gas)"></i> Gasolio</span><span><i class="dot" style="background:var(--ver)"></i> Verde</span><span><i class="dot" style="background:var(--gpl)"></i> GPL</span>
       <span class="muted">— stai modificando il travaso selezionato. Tooltip cella = grezzo · usato da altri · max.</span>
@@ -211,6 +214,7 @@ let STATE=null;
 let CARDSMART=null;  // { byDayProd:{day:{prod:litri}}, meta }
 let TRANSFERS=[], CURRENT=null, SEQ=1;
 let BUONI=[], CURBUONO=null, BSEQ=1;
+let TPROD='GASOLIO'; // prodotto visualizzato nella pagina Trasferimenti
 let NETTO={};        // pump->day->scarico netto (>=0 garantito)
 let BRESULT={};      // buonoId -> {placed, short, alloc:{pump:{day:signed}}}
 let REGMODE='netto';
@@ -236,6 +240,8 @@ function cellOf(t,p,day){ return (t.cells[p]&&t.cells[p][day])||0; }
 function trasfTotalAt(p,day){ let s=0; TRANSFERS.forEach(t=>s+=cellOf(t,p,day)); return s; }
 function otherTotalAt(p,day){ let s=0; TRANSFERS.forEach(t=>{ if(t.id!==CURRENT) s+=cellOf(t,p,day); }); return s; }
 function transferTotal(t){ let s=0; for(const p in t.cells) for(const d in t.cells[p]) s+=t.cells[p][d]; return s; }
+function transferTotalProd(t,prod){ let s=0; for(const p in t.cells){ if(prodOf(p)===prod) for(const d in t.cells[p]) s+=t.cells[p][d]; } return s; }
+function transferLabel(t){ const parts=[]; ['GASOLIO','VERDE','GPL'].forEach(pr=>{ const v=transferTotalProd(t,pr); if(v>0) parts.push(`${prodShort(pr)} ${fmtInt(v)}`); }); return parts.length?parts.join(' · '):'0'; }
 function gmt(p,day){ return Math.max(0, grezzo(p,day) - trasfTotalAt(p,day)); } // grezzo meno trasferimenti
 
 // ---- parsing StoreSmart ----
@@ -377,8 +383,10 @@ function renderImportResult(fname){
 }
 
 // ---- tabella helper ----
-function colgroup(){ let c='<colgroup><col class="dc">'; PUMPS.forEach(()=>c+='<col>'); return c+'</colgroup>'; }
-function headRow(){ let h='<thead><tr><th class="datecol">DATA</th>'; PUMPS.forEach(p=>h+=`<th class="${prodClass(p)}">${p}</th>`); return h+'</tr></thead>'; }
+function colgroup(pumps=PUMPS){ let c='<colgroup><col class="dc">'; pumps.forEach(()=>c+='<col>'); return c+'</colgroup>'; }
+function headRow(pumps=PUMPS){ let h='<thead><tr><th class="datecol">DATA</th>'; pumps.forEach(p=>h+=`<th class="${prodClass(p)}">${p}</th>`); return h+'</tr></thead>'; }
+function prodName(pr){ return pr==='GASOLIO'?'Gasolio':pr==='VERDE'?'Verde':'GPL'; }
+function prodShort(pr){ return pr==='GASOLIO'?'Gas':pr==='VERDE'?'Ver':'GPL'; }
 
 // ---- registro ----
 function renderRegistro(){
@@ -397,21 +405,22 @@ function baselineLabel(){ if(!STATE.days.length) return '—'; const[y,m,d]=STAT
 function renderRettifiche(){ if(!STATE) return; renderTransferBar(); renderRettGrid(); }
 function renderTransferBar(){
   const bar=document.getElementById('rett-bar'); let chips='<div class="chips">';
-  TRANSFERS.forEach(t=>chips+=`<button class="chip ${t.id===CURRENT?'on':''}" data-id="${t.id}">${escapeHtml(t.nome)}<span class="tot">${fmtInt(transferTotal(t))} L</span></button>`);
+  TRANSFERS.forEach(t=>chips+=`<button class="chip ${t.id===CURRENT?'on':''}" data-id="${t.id}">${escapeHtml(t.nome)}<span class="tot">${transferLabel(t)}</span></button>`);
   chips+=`<button class="chip chip-add" id="t-add">+ Nuovo trasferimento</button></div>`;
   const t=curTransfer();
-  bar.innerHTML=chips+(t?`<div class="tedit"><label>Nome travaso</label><input class="name" id="t-name" value="${escapeAttr(t.nome)}" placeholder="es. Travaso Casaluce gasolio"><span class="tbadge">Totale: ${fmtInt(transferTotal(t))} L</span><button class="btn sm danger" id="t-del">Elimina travaso</button></div>`:`<p class="muted">Nessun trasferimento. Creane uno per iniziare.</p>`);
+  bar.innerHTML=chips+(t?`<div class="tedit"><label>Nome travaso</label><input class="name" id="t-name" value="${escapeAttr(t.nome)}" placeholder="es. Travaso Casaluce gasolio"><span class="tbadge" id="t-badge">${prodName(TPROD)}: ${fmtInt(transferTotalProd(t,TPROD))} L</span><button class="btn sm danger" id="t-del">Elimina travaso</button></div>`:`<p class="muted">Nessun trasferimento. Creane uno per iniziare.</p>`);
   bar.querySelectorAll('.chip[data-id]').forEach(c=>c.addEventListener('click',()=>{ CURRENT=parseInt(c.dataset.id,10); renderRettifiche(); }));
   document.getElementById('t-add').addEventListener('click',addTransfer);
   if(t){ document.getElementById('t-name').addEventListener('input',e=>{ t.nome=e.target.value; saveStore(); renderChipsOnly(); }); document.getElementById('t-del').addEventListener('click',()=>delTransfer(t.id)); }
 }
-function renderChipsOnly(){ TRANSFERS.forEach(t=>{ const c=document.querySelector(`#rett-bar .chip[data-id="${t.id}"]`); if(c) c.innerHTML=`${escapeHtml(t.nome)}<span class="tot">${fmtInt(transferTotal(t))} L</span>`; }); }
+function renderChipsOnly(){ TRANSFERS.forEach(t=>{ const c=document.querySelector(`#rett-bar .chip[data-id="${t.id}"]`); if(c) c.innerHTML=`${escapeHtml(t.nome)}<span class="tot">${transferLabel(t)}</span>`; }); }
 function renderRettGrid(){
   const cont=document.getElementById('rett-container'); const t=curTransfer();
   if(!t){ cont.innerHTML='<div class="empty-state"><span class="ic">🚚</span>Crea un trasferimento interno per inserire le rettifiche.</div>'; return; }
-  let h='<div class="tablewrap"><table class="reg">'+colgroup()+headRow()+'<tbody>';
+  const pumps=PUMPS.filter(p=>prodOf(p)===TPROD);
+  let h='<div class="tablewrap"><table class="reg">'+colgroup(pumps)+headRow(pumps)+'<tbody>';
   STATE.days.forEach(day=>{ h+=`<tr><td class="datecol ${dateClass(day)}">${fmtDay(day)}</td>`;
-    PUMPS.forEach(p=>{ const g=Math.round(grezzo(p,day)); const other=otherTotalAt(p,day); const v=cellOf(t,p,day); const max=Math.max(0,g-other); const full=max===0&&g>0; const resid=Math.max(0,max-v);
+    pumps.forEach(p=>{ const g=Math.round(grezzo(p,day)); const other=otherTotalAt(p,day); const v=cellOf(t,p,day); const max=Math.max(0,g-other); const full=max===0&&g>0; const resid=Math.max(0,max-v);
       h+=`<td class="${prodClass(p)} ${full?'full':''}"><input type="number" min="0" max="${max}" step="1" value="${v||''}" data-p="${p}" data-d="${day}" title="grezzo ${fmtInt(g)} · altri travasi ${fmtInt(other)} · max ${fmtInt(max)}" class="${v>0?'has':''}"><span class="resid ${resid===0?'z':''}" data-r="${p}|${day}">↓${fmtInt(resid)}</span></td>`; });
     h+='</tr>'; });
   h+='</tbody></table></div>'; cont.innerHTML=h;
@@ -425,11 +434,11 @@ function onRettInput(e){
   if(!t.cells[p]) t.cells[p]={}; if(val>0) t.cells[p][day]=val; else delete t.cells[p][day];
   inp.classList.toggle('has',val>0);
   const resid=Math.max(0,max-val); const rs=inp.parentElement.querySelector('.resid'); if(rs){ rs.textContent='↓'+fmtInt(resid); rs.classList.toggle('z',resid===0); }
-  saveStore(); renderChipsOnly(); const b=document.querySelector('#rett-bar .tbadge'); if(b) b.textContent=`Totale: ${fmtInt(transferTotal(t))} L`;
+  saveStore(); renderChipsOnly(); const b=document.getElementById('t-badge'); if(b) b.textContent=`${prodName(TPROD)}: ${fmtInt(transferTotalProd(t,TPROD))} L`;
   recompute(); renderRegistro();
 }
 function addTransfer(){ const t={id:SEQ++, nome:'Trasferimento '+(TRANSFERS.length+1), cells:{}}; TRANSFERS.push(t); CURRENT=t.id; saveStore(); renderRettifiche(); }
-function delTransfer(id){ const t=TRANSFERS.find(x=>x.id===id); if(t&&transferTotal(t)>0 && !confirm(`Eliminare "${t.nome}" (${fmtInt(transferTotal(t))} L)?`)) return; TRANSFERS=TRANSFERS.filter(x=>x.id!==id); CURRENT=TRANSFERS.length?TRANSFERS[0].id:null; saveStore(); recompute(); renderRettifiche(); renderRegistro(); }
+function delTransfer(id){ const t=TRANSFERS.find(x=>x.id===id); if(t&&transferTotal(t)>0 && !confirm(`Eliminare "${t.nome}" (${transferLabel(t)})?`)) return; TRANSFERS=TRANSFERS.filter(x=>x.id!==id); CURRENT=TRANSFERS.length?TRANSFERS[0].id:null; saveStore(); recompute(); renderRettifiche(); renderRegistro(); }
 
 // ---- BUONI ----
 function fillBuonoDays(){ const sel=document.getElementById('b-day'); sel.innerHTML=STATE.days.map(d=>`<option value="${d}">${fmtDay(d)}</option>`).join(''); }
@@ -488,6 +497,7 @@ function goTab(name){ document.querySelectorAll('.tab').forEach(t=>t.classList.t
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ if(!t.disabled) goTab(t.dataset.tab); }));
 document.getElementById('export-btn').addEventListener('click',exportRegistro);
 document.getElementById('b-add').addEventListener('click',addBuono);
+document.querySelectorAll('#rett-prod-toggle button').forEach(b=>b.addEventListener('click',()=>{ TPROD=b.dataset.p; document.querySelectorAll('#rett-prod-toggle button').forEach(x=>x.classList.toggle('on',x===b)); const t=curTransfer(); const bd=document.getElementById('t-badge'); if(t&&bd) bd.textContent=`${prodName(TPROD)}: ${fmtInt(transferTotalProd(t,TPROD))} L`; renderRettGrid(); }));
 document.querySelectorAll('#reg-toggle button').forEach(b=>b.addEventListener('click',()=>{ REGMODE=b.dataset.mode; document.querySelectorAll('#reg-toggle button').forEach(x=>x.classList.toggle('on',x===b)); renderRegistro(); }));
 
 const drop=document.getElementById('drop'), fileInput=document.getElementById('file');
