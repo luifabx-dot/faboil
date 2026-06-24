@@ -127,6 +127,7 @@ table.reg .resid.z{color:var(--red);opacity:.7}
 .cl-row{display:flex;gap:.9rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:.6rem}
 .f-lbl{font-size:.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:.22rem;display:block}
 .tess-card{border:1.5px solid var(--border);border-radius:var(--radius);padding:.8rem .9rem;margin-bottom:.7rem;background:var(--surface2)}
+.tess-card.susp{opacity:.55;background:repeating-linear-gradient(45deg,var(--surface2),var(--surface2) 10px,#f0e4e4 10px,#f0e4e4 20px)}
 .tess-head{display:flex;align-items:flex-end;gap:.8rem;margin-bottom:.6rem;flex-wrap:wrap;padding-bottom:.5rem;border-bottom:1px solid var(--border)}
 .wdays{display:flex;gap:.25rem}
 .wd{width:30px;height:30px;border-radius:7px;border:1.5px solid var(--border2);background:var(--surface);font-family:var(--sans);font-weight:700;font-size:.74rem;cursor:pointer;color:var(--muted)}
@@ -233,14 +234,17 @@ table.reg .resid.z{color:var(--red);opacity:.7}
       <p class="muted" style="margin-top:.6rem">Priorità prelievo: domeniche/festivi → sabati → giorni normali (da inizio mese). Pistola con più margine per prima; la regola d'oro non viene mai infranta.</p>
     </div>
     <div class="card" id="gen-form">
-      <div class="card-title">Genera buoni automaticamente (da tessera)</div>
+      <div class="card-title">Genera buoni automaticamente</div>
       <div class="formline">
-        <div class="f"><label>Cliente</label><button type="button" class="fld" id="g-cliente-btn" style="min-width:240px;text-align:left;cursor:pointer">— scegli cliente —</button></div>
-        <div class="f"><label>Tessera</label><select class="fld" id="g-tessera"><option value="">—</option></select></div>
-        <div class="f"><label>Litri totali mese</label><input class="fld" id="g-target" type="number" min="0" step="1" style="width:120px" placeholder="totale"></div>
+        <div class="f"><label>Ambito</label><div class="toggle" id="g-scope"><button data-s="ALL" class="on">Tutti</button><button data-s="ONE">Singolo</button><button data-s="GROUP">Gruppo</button></div></div>
+        <div class="f" id="g-one-wrap" style="display:none"><label>Cliente</label><button type="button" class="fld" id="g-cliente-btn" style="min-width:240px;text-align:left;cursor:pointer">— scegli cliente —</button></div>
         <button class="btn" id="g-add">Genera</button>
       </div>
-      <p class="muted" style="margin-top:.6rem">Distribuisce i litri sui <b>giorni ammessi</b> della tessera (giorni della settimana, festivi esclusi se impostato) come rifornimenti vicini alla <b>capienza</b>, ognuno variato (es. 110–120 su 120). Imposta capienza e giorni nella sezione Clienti.</p>
+      <div id="g-group-wrap" style="display:none;margin-top:.6rem">
+        <button class="btn sm ghost" id="g-group-add">+ Aggiungi cliente al gruppo</button>
+        <div class="chips" id="g-group-chips" style="margin-top:.5rem"></div>
+      </div>
+      <p class="muted" style="margin-top:.6rem">Per ogni cliente genera fino al suo <b>Litri max/mese</b>, distribuito sulle sue <b>tessere attive</b> (capienza + giorni ammessi, festivi esclusi se impostato) come rifornimenti vicini al pieno e variati. Le tessere <b>sospese</b> sono saltate.</p>
     </div>
     <div class="tbar" id="buoni-bar"></div>
     <div class="legend">
@@ -580,31 +584,47 @@ function onTesseraPick(){
   const c=CLIENTI.find(x=>x.id===getBuonoClienteId()); const t=c&&c.tessere.find(x=>x.id===document.getElementById('b-tessera').value);
   if(t){ if(t.prodotto) document.getElementById('b-prod').value=t.prodotto; if(t.sconto) document.getElementById('b-sconto').value=t.sconto; updateBuonoPrezzo(); }
 }
-// ---- (6) generazione automatica buoni da tessera ----
+// ---- (6) generazione automatica buoni ----
+let GEN_SCOPE='ALL', GEN_GROUP=[];
 function giorniIdx(dayKey){ const[y,m,d]=dayKey.split('-').map(Number); const wd=new Date(Date.UTC(y,m-1,d)).getUTCDay(); return (wd+6)%7; } // 0=Lun..6=Dom
-function fillGenTessere(){ const sel=document.getElementById('g-tessera'); const c=CLIENTI.find(x=>x.id===GEN_CLI);
-  if(!c){ sel.innerHTML='<option value="">—</option>'; return; }
-  sel.innerHTML='<option value="">—</option>'+c.tessere.map(t=>`<option value="${escapeAttr(t.id)}">${escapeHtml(t.id+(t.targa?' · '+t.targa:'')+(t.descrizione?' · '+t.descrizione:'')+(t.capienza?' · '+t.capienza+'L':''))}</option>`).join('');
-  const c2=CLIENTI.find(x=>x.id===GEN_CLI); if(c2&&c2.consumoMese) document.getElementById('g-target').value=c2.consumoMese;
-}
 function genAllowedDays(t){ return STATE.days.filter(d=>{ if(!t.giorni[giorniIdx(d)]) return false; if(t.escludiFestivi && isRed(d)) return false; return true; }); }
+function genForTessera(c,t,target){ // ritorna array di buoni
+  const cap=t.capienza||0; if(cap<=0||target<=0) return [];
+  const days=genAllowedDays(t); if(!days.length) return [];
+  const lo=cap*0.9, avg=(cap+lo)/2; const n=Math.min(days.length, Math.max(1, Math.round(target/avg)));
+  const out=[];
+  for(let k=0;k<n;k++){ const day=days[Math.floor(k*days.length/n)]; const r=Math.round((lo+Math.random()*(cap-lo))*100)/100;
+    const prezzo=priceOfDay(t.prodotto,day)||t.prezzo||0, sconto=t.sconto||0;
+    out.push({ id:BSEQ++, clienteId:c.id, clienteNome:c.ragione, tessera:t.id, prodotto:t.prodotto, day, litri:r, prezzo, sconto, totale:Math.round(r*(prezzo-sconto)*100)/100, gen:true }); }
+  return out;
+}
+function genClientiTarget(){
+  if(GEN_SCOPE==='ONE'){ const c=CLIENTI.find(x=>x.id===GEN_CLI); return c?[c]:[]; }
+  if(GEN_SCOPE==='GROUP'){ return GEN_GROUP.map(id=>CLIENTI.find(c=>c.id===id)).filter(Boolean); }
+  return CLIENTI; // ALL
+}
 function generateBuoni(){
   if(!STATE){ alert('Importa prima lo StoreSmart.'); return; }
-  const c=CLIENTI.find(x=>x.id===GEN_CLI); if(!c){ alert('Scegli un cliente.'); return; }
-  const t=c.tessere.find(x=>x.id===document.getElementById('g-tessera').value); if(!t){ alert('Scegli una tessera.'); return; }
-  const cap=t.capienza||0; if(cap<=0){ alert('Imposta la capienza serbatoio della tessera (sezione Clienti).'); return; }
-  const target=parseFloat(document.getElementById('g-target').value); if(isNaN(target)||target<=0){ alert('Inserisci i litri totali da generare.'); return; }
-  const days=genAllowedDays(t); if(!days.length){ alert('Nessun giorno ammesso nel mese per questa tessera (controlla giorni settimana / festivi).'); return; }
-  const lo=cap*0.9, avg=(cap+lo)/2; const n=Math.min(days.length, Math.max(1, Math.round(target/avg)));
-  const newB=[]; let sum=0;
-  for(let k=0;k<n;k++){ const day=days[Math.floor(k*days.length/n)]; let r=Math.round((lo+Math.random()*(cap-lo))*100)/100; sum+=r;
-    const prezzo=priceOfDay(t.prodotto,day)||t.prezzo||0, sconto=t.sconto||0;
-    newB.push({ id:BSEQ++, clienteId:c.id, clienteNome:c.ragione, tessera:t.id, prodotto:t.prodotto, day, litri:r, prezzo, sconto, totale:Math.round(r*(prezzo-sconto)*100)/100 }); }
-  if(!newB.length){ alert('Niente da generare.'); return; }
+  const clienti=genClientiTarget(); if(!clienti.length){ alert('Seleziona almeno un cliente.'); return; }
+  const newB=[]; let nCli=0;
+  clienti.forEach(c=>{ const target=c.consumoMese||0; if(target<=0) return; const act=c.tessere.filter(t=>!t.sospesa && (t.capienza||0)>0); if(!act.length) return;
+    const share=target/act.length; let got=false;
+    act.forEach(t=>{ const nb=genForTessera(c,t,share); if(nb.length){ newB.push(...nb); got=true; } });
+    if(got) nCli++;
+  });
+  if(!newB.length){ alert('Niente da generare. Controlla che i clienti scelti abbiano "Litri max/mese" e tessere attive con capienza e giorni.'); return; }
   BUONI.push(...newB); CURBUONO=newB[newB.length-1].id;
   saveStore(); recompute(); renderBuoni(); renderRegistro();
-  alert(`Generati ${newB.length} buoni per ${fmtInt(sum)} L su ${n} giorni (di ${days.length} ammessi).`);
+  const litri=newB.reduce((s,b)=>s+b.litri,0);
+  alert(`Generati ${newB.length} buoni per ${nCli} clienti, ${fmtInt(litri)} L totali.`);
 }
+function renderGenScope(){
+  document.getElementById('g-one-wrap').style.display=GEN_SCOPE==='ONE'?'':'none';
+  document.getElementById('g-group-wrap').style.display=GEN_SCOPE==='GROUP'?'':'none';
+  if(GEN_SCOPE==='GROUP') renderGenGroup();
+}
+function renderGenGroup(){ const el=document.getElementById('g-group-chips'); el.innerHTML=GEN_GROUP.map(id=>{ const c=CLIENTI.find(x=>x.id===id); return `<button class="chip on" data-rid="${escapeAttr(id)}">${escapeHtml(c?c.ragione:id)} ✕</button>`; }).join('')||'<span class="muted">Nessun cliente nel gruppo.</span>';
+  el.querySelectorAll('[data-rid]').forEach(b=>b.addEventListener('click',()=>{ GEN_GROUP=GEN_GROUP.filter(x=>x!==b.dataset.rid); renderGenGroup(); })); }
 function addBuono(){
   const cliId=getBuonoClienteId(), tess=document.getElementById('b-tessera').value;
   const prod=document.getElementById('b-prod').value, day=document.getElementById('b-day').value;
@@ -659,7 +679,7 @@ function parseEstesoL(wb){
       const row=rows[r]; if(!row) continue; const id=row[iId]; if(id==null||id==='') continue; const key=String(id);
       if(!byId[key]){ byId[key]={ id:key, categoria:cat, tipo, ragione:str(row[iRag]), indirizzo:str(row[iInd]), citta:str(row[iCitta]), prov:str(row[iProv]), piva:str(row[iPiva]), cf:str(row[iCf]), tel:str(row[iTel]), cell:str(row[iCell]), email:str(row[iMail]), pec:str(row[iPec]), note:str(row[iNote]), modPag:str(row[iModPag]), fidoCliente:csNum(row[iFidoC]), perc:0, saldo:0, saldoData:'', consumoMese:0, tessere:[] }; counts[cat]++; }
       const codT=row[iCodT]; if(codT==null||codT==='') continue; const tk=String(codT);
-      if(!byId[key].tessere.some(t=>t.id===tk)) byId[key].tessere.push({ id:tk, targa:str(row[iTarga]), descrizione:'', fidoTessera:csNum(row[iFidoT]), plafond:csNum(row[iPlaf]), prodotto:'GASOLIO', capienza:0, giorni:[1,1,1,1,1,0,0], escludiFestivi:true, prezzo:0, sconto:0 });
+      if(!byId[key].tessere.some(t=>t.id===tk)) byId[key].tessere.push({ id:tk, targa:str(row[iTarga]), descrizione:'', fidoTessera:csNum(row[iFidoT]), plafond:csNum(row[iPlaf]), prodotto:'GASOLIO', capienza:0, giorni:[1,1,1,1,1,0,0], escludiFestivi:true, sospesa:false, prezzo:0, sconto:0 });
     }
   });
   const clienti=Object.values(byId);
@@ -670,7 +690,7 @@ function mergeClienti(parsed){ // preserva i parametri inseriti a mano (consumo,
   parsed.clienti.forEach(nc=>{ const oc=prev[nc.id]; if(!oc) return;
     nc.tipo=oc.tipo; nc.perc=oc.perc; nc.saldo=oc.saldo; nc.saldoData=oc.saldoData; nc.consumoMese=oc.consumoMese;
     const ot={}; oc.tessere.forEach(t=>ot[t.id]=t);
-    nc.tessere.forEach(nt=>{ const o=ot[nt.id]; if(!o) return; nt.descrizione=o.descrizione; nt.prodotto=o.prodotto; nt.capienza=o.capienza; nt.giorni=o.giorni; nt.escludiFestivi=o.escludiFestivi; nt.prezzo=o.prezzo; nt.sconto=o.sconto; if(!nt.targa) nt.targa=o.targa; });
+    nc.tessere.forEach(nt=>{ const o=ot[nt.id]; if(!o) return; nt.descrizione=o.descrizione; nt.prodotto=o.prodotto; nt.capienza=o.capienza; nt.giorni=o.giorni; nt.escludiFestivi=o.escludiFestivi; nt.sospesa=o.sospesa; nt.prezzo=o.prezzo; nt.sconto=o.sconto; if(!nt.targa) nt.targa=o.targa; });
   });
   CLIENTI=parsed.clienti; CURCLI=CLIENTI.length?CLIENTI[0].id:null; saveClienti();
 }
@@ -783,7 +803,8 @@ function renderCpList(){ const box=document.getElementById('cp-list'); const lis
   box.innerHTML=list.map(c=>`<div class="cl-item ${c.id===BUONO_CLI?'on':''}" data-id="${escapeAttr(c.id)}"><div class="nm">${escapeHtml(c.ragione||c.id)}<div class="sub">ID ${escapeHtml(c.id)} · ${c.tessere.length} tess.${c.piva?' · '+escapeHtml(c.piva):''}</div></div><span class="badge-tipo ${c.tipo==='PRE'?'pre':'post'}">${c.tipo==='PRE'?'PRE':'POST'}</span></div>`).join('');
   box.querySelectorAll('.cl-item').forEach(el=>el.addEventListener('click',()=>{ if(PICK_CB) PICK_CB(el.dataset.id); })); }
 function selectBuonoCli(id){ BUONO_CLI=id||''; const c=CLIENTI.find(x=>x.id===id); document.getElementById('b-cliente-btn').textContent=c?`${c.ragione||c.id} · ${c.tipo==='PRE'?'PRE':'POST'}`:'— scegli cliente —'; fillBuonoTessere(); closeCliPicker(); }
-function selectGenCli(id){ GEN_CLI=id||''; const c=CLIENTI.find(x=>x.id===id); document.getElementById('g-cliente-btn').textContent=c?`${c.ragione||c.id} · ${c.tipo==='PRE'?'PRE':'POST'}`:'— scegli cliente —'; fillGenTessere(); closeCliPicker(); }
+function selectGenCli(id){ GEN_CLI=id||''; const c=CLIENTI.find(x=>x.id===id); document.getElementById('g-cliente-btn').textContent=c?`${c.ragione||c.id} · ${c.tipo==='PRE'?'PRE':'POST'}`:'— scegli cliente —'; closeCliPicker(); }
+function addGenGroup(id){ if(id && !GEN_GROUP.includes(id)) GEN_GROUP.push(id); renderGenGroup(); closeCliPicker(); }
 function renderClFilters(){
   const el=document.getElementById('cl-filters'); if(!el) return;
   if(!CLIENTI.length){ el.innerHTML=''; return; }
@@ -814,7 +835,7 @@ function renderClDetail(){
   if(c.tipo==='PRE') h+=`
       <div><span class="f-lbl">Saldo credito (€)</span><input class="fld sm" id="c-saldo" type="number" step="0.01" value="${c.saldo||''}"></div>
       <div><span class="f-lbl">alla data</span><input class="fld" id="c-saldodata" type="date" value="${escapeAttr(c.saldoData||'')}"></div>
-      <div><span class="f-lbl">Consumo / mese</span><input class="fld sm" id="c-consumo" type="number" min="0" step="1" value="${c.consumoMese||''}"></div>`;
+      <div><span class="f-lbl">Litri max / mese</span><input class="fld sm" id="c-consumo" type="number" min="0" step="1" value="${c.consumoMese||''}" title="tetto mensile per la generazione automatica"></div>`;
   h+=`</div>`;
   if(c.tipo==='PRE') h+=`<div class="cl-row" id="credito-box" style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:.6rem .85rem;font-family:var(--mono);font-size:.84rem;align-items:flex-end;margin-bottom:.6rem">${creditoInner(c)}</div>`;
   h+=`<div class="card-title" style="margin-top:.4rem">Tessere / veicoli (${c.tessere.length})</div>`;
@@ -824,9 +845,10 @@ function renderClDetail(){
 }
 function tessHtml(t){
   let wd=''; for(let i=0;i<7;i++) wd+=`<button class="wd ${t.giorni[i]?'on':''} ${i>=5?'red':''}" data-wd="${i}" data-t="${escapeAttr(t.id)}" title="${WDFULL[i]}">${WD[i]}</button>`;
-  return `<div class="tess-card">
+  return `<div class="tess-card${t.sospesa?' susp':''}">
     <div class="tess-head">
       <div><span class="f-lbl">Codice tessera</span><div style="font-family:var(--mono);font-weight:700;padding:.2rem 0">${escapeHtml(t.id)}${t.plafond?'<span class="muted"> · plafond '+fmtInt(t.plafond)+'</span>':''}</div></div>
+      <div><span class="f-lbl">Stato</span><label class="chk" style="${t.sospesa?'color:var(--red)':''}"><input type="checkbox" data-tf="sospesa" data-t="${escapeAttr(t.id)}" ${t.sospesa?'checked':''}> sospesa</label></div>
       <div><span class="f-lbl">Targa</span><input class="fld sm" data-tf="targa" data-t="${escapeAttr(t.id)}" value="${escapeAttr(t.targa)}" placeholder="targa"></div>
       <div style="flex:1;min-width:200px"><span class="f-lbl">Descrizione</span><input class="fld" data-tf="descrizione" data-t="${escapeAttr(t.id)}" value="${escapeAttr(t.descrizione)}" placeholder="es. Trattore / generatore" style="width:100%"></div>
     </div>
@@ -845,7 +867,7 @@ function bindClDetail(c){
   const sal=document.getElementById('c-saldo'); if(sal) sal.addEventListener('input',e=>{ c.saldo=parseFloat(e.target.value)||0; saveClienti(); refreshCredito(c); });
   const sald=document.getElementById('c-saldodata'); if(sald) sald.addEventListener('input',e=>{ c.saldoData=e.target.value; saveClienti(); refreshCredito(c); });
   const cons=document.getElementById('c-consumo'); if(cons) cons.addEventListener('input',e=>{ c.consumoMese=parseFloat(e.target.value)||0; saveClienti(); });
-  document.querySelectorAll('#cl-detail [data-tf]').forEach(el=>{ const ev=el.type==='checkbox'?'change':'input'; el.addEventListener(ev,()=>{ const t=c.tessere.find(x=>x.id===el.dataset.t); if(!t) return; const f=el.dataset.tf; t[f]= el.type==='checkbox'?el.checked:(el.type==='number'?(parseFloat(el.value)||0):el.value); saveClienti(); }); });
+  document.querySelectorAll('#cl-detail [data-tf]').forEach(el=>{ const ev=el.type==='checkbox'?'change':'input'; el.addEventListener(ev,()=>{ const t=c.tessere.find(x=>x.id===el.dataset.t); if(!t) return; const f=el.dataset.tf; t[f]= el.type==='checkbox'?el.checked:(el.type==='number'?(parseFloat(el.value)||0):el.value); saveClienti(); if(f==='sospesa') renderClDetail(); }); });
   document.querySelectorAll('#cl-detail .wd').forEach(b=>b.addEventListener('click',()=>{ const t=c.tessere.find(x=>x.id===b.dataset.t); const i=parseInt(b.dataset.wd,10); t.giorni[i]=t.giorni[i]?0:1; saveClienti(); b.classList.toggle('on',!!t.giorni[i]); }));
 }
 function saveClienti(){ try{ localStorage.setItem('faboil_clienti', JSON.stringify({curcli:CURCLI,clienti:CLIENTI})); }catch(e){} }
@@ -869,6 +891,8 @@ document.getElementById('export-btn').addEventListener('click',exportRegistro);
 document.getElementById('b-add').addEventListener('click',addBuono);
 document.getElementById('b-cliente-btn').addEventListener('click',()=>openCliPicker(selectBuonoCli));
 document.getElementById('g-cliente-btn').addEventListener('click',()=>openCliPicker(selectGenCli));
+document.getElementById('g-group-add').addEventListener('click',()=>openCliPicker(addGenGroup));
+document.querySelectorAll('#g-scope button').forEach(b=>b.addEventListener('click',()=>{ GEN_SCOPE=b.dataset.s; document.querySelectorAll('#g-scope button').forEach(x=>x.classList.toggle('on',x===b)); renderGenScope(); }));
 document.getElementById('g-add').addEventListener('click',generateBuoni);
 document.getElementById('cp-close').addEventListener('click',closeCliPicker);
 document.getElementById('cp-clear').addEventListener('click',()=>{ if(PICK_CB) PICK_CB(''); });
