@@ -232,6 +232,16 @@ table.reg .resid.z{color:var(--red);opacity:.7}
       </div>
       <p class="muted" style="margin-top:.6rem">Priorità prelievo: domeniche/festivi → sabati → giorni normali (da inizio mese). Pistola con più margine per prima; la regola d'oro non viene mai infranta.</p>
     </div>
+    <div class="card" id="gen-form">
+      <div class="card-title">Genera buoni automaticamente (da tessera)</div>
+      <div class="formline">
+        <div class="f"><label>Cliente</label><button type="button" class="fld" id="g-cliente-btn" style="min-width:240px;text-align:left;cursor:pointer">— scegli cliente —</button></div>
+        <div class="f"><label>Tessera</label><select class="fld" id="g-tessera"><option value="">—</option></select></div>
+        <div class="f"><label>Litri totali mese</label><input class="fld" id="g-target" type="number" min="0" step="1" style="width:120px" placeholder="totale"></div>
+        <button class="btn" id="g-add">Genera</button>
+      </div>
+      <p class="muted" style="margin-top:.6rem">Distribuisce i litri sui <b>giorni ammessi</b> della tessera (giorni della settimana, festivi esclusi se impostato) come rifornimenti vicini alla <b>capienza</b>, ognuno variato (es. 110–120 su 120). Imposta capienza e giorni nella sezione Clienti.</p>
+    </div>
     <div class="tbar" id="buoni-bar"></div>
     <div class="legend">
       <span><i class="dot" style="background:var(--green-bg)"></i> + aumento (giorno buono)</span>
@@ -570,6 +580,31 @@ function onTesseraPick(){
   const c=CLIENTI.find(x=>x.id===getBuonoClienteId()); const t=c&&c.tessere.find(x=>x.id===document.getElementById('b-tessera').value);
   if(t){ if(t.prodotto) document.getElementById('b-prod').value=t.prodotto; if(t.sconto) document.getElementById('b-sconto').value=t.sconto; updateBuonoPrezzo(); }
 }
+// ---- (6) generazione automatica buoni da tessera ----
+function giorniIdx(dayKey){ const[y,m,d]=dayKey.split('-').map(Number); const wd=new Date(Date.UTC(y,m-1,d)).getUTCDay(); return (wd+6)%7; } // 0=Lun..6=Dom
+function fillGenTessere(){ const sel=document.getElementById('g-tessera'); const c=CLIENTI.find(x=>x.id===GEN_CLI);
+  if(!c){ sel.innerHTML='<option value="">—</option>'; return; }
+  sel.innerHTML='<option value="">—</option>'+c.tessere.map(t=>`<option value="${escapeAttr(t.id)}">${escapeHtml(t.id+(t.targa?' · '+t.targa:'')+(t.descrizione?' · '+t.descrizione:'')+(t.capienza?' · '+t.capienza+'L':''))}</option>`).join('');
+  const c2=CLIENTI.find(x=>x.id===GEN_CLI); if(c2&&c2.consumoMese) document.getElementById('g-target').value=c2.consumoMese;
+}
+function genAllowedDays(t){ return STATE.days.filter(d=>{ if(!t.giorni[giorniIdx(d)]) return false; if(t.escludiFestivi && isRed(d)) return false; return true; }); }
+function generateBuoni(){
+  if(!STATE){ alert('Importa prima lo StoreSmart.'); return; }
+  const c=CLIENTI.find(x=>x.id===GEN_CLI); if(!c){ alert('Scegli un cliente.'); return; }
+  const t=c.tessere.find(x=>x.id===document.getElementById('g-tessera').value); if(!t){ alert('Scegli una tessera.'); return; }
+  const cap=t.capienza||0; if(cap<=0){ alert('Imposta la capienza serbatoio della tessera (sezione Clienti).'); return; }
+  const target=parseFloat(document.getElementById('g-target').value); if(isNaN(target)||target<=0){ alert('Inserisci i litri totali da generare.'); return; }
+  const days=genAllowedDays(t); if(!days.length){ alert('Nessun giorno ammesso nel mese per questa tessera (controlla giorni settimana / festivi).'); return; }
+  const lo=cap*0.9, avg=(cap+lo)/2; const n=Math.min(days.length, Math.max(1, Math.round(target/avg)));
+  const newB=[]; let sum=0;
+  for(let k=0;k<n;k++){ const day=days[Math.floor(k*days.length/n)]; let r=Math.round((lo+Math.random()*(cap-lo))*100)/100; sum+=r;
+    const prezzo=priceOfDay(t.prodotto,day)||t.prezzo||0, sconto=t.sconto||0;
+    newB.push({ id:BSEQ++, clienteId:c.id, clienteNome:c.ragione, tessera:t.id, prodotto:t.prodotto, day, litri:r, prezzo, sconto, totale:Math.round(r*(prezzo-sconto)*100)/100 }); }
+  if(!newB.length){ alert('Niente da generare.'); return; }
+  BUONI.push(...newB); CURBUONO=newB[newB.length-1].id;
+  saveStore(); recompute(); renderBuoni(); renderRegistro();
+  alert(`Generati ${newB.length} buoni per ${fmtInt(sum)} L su ${n} giorni (di ${days.length} ammessi).`);
+}
 function addBuono(){
   const cliId=getBuonoClienteId(), tess=document.getElementById('b-tessera').value;
   const prod=document.getElementById('b-prod').value, day=document.getElementById('b-day').value;
@@ -736,8 +771,8 @@ function filterClienti(q,filt){
 }
 function filteredClienti(){ return filterClienti(CLQ,CLFILT); }
 // ---- selettore cliente per i buoni (stesso stile della sezione Clienti) ----
-let CPQ='', CPFILT='ALL', BUONO_CLI='';
-function openCliPicker(){ if(!CLIENTI.length){ alert('Importa prima i Clienti (estesoL) dalla sezione Importazioni.'); return; } document.getElementById('cli-picker').style.display='flex'; renderCp(); const s=document.getElementById('cp-search'); s.value=CPQ; s.focus(); }
+let CPQ='', CPFILT='ALL', BUONO_CLI='', GEN_CLI='', PICK_CB=null;
+function openCliPicker(cb){ if(!CLIENTI.length){ alert('Importa prima i Clienti (estesoL) dalla sezione Importazioni.'); return; } PICK_CB=cb||selectBuonoCli; document.getElementById('cli-picker').style.display='flex'; renderCp(); const s=document.getElementById('cp-search'); s.value=CPQ; s.focus(); }
 function closeCliPicker(){ document.getElementById('cli-picker').style.display='none'; }
 function renderCp(){ renderCpFilters(); renderCpList(); }
 function renderCpFilters(){ const el=document.getElementById('cp-filters'); const nAll=CLIENTI.length, nPre=CLIENTI.filter(c=>c.tipo==='PRE').length;
@@ -746,8 +781,9 @@ function renderCpFilters(){ const el=document.getElementById('cp-filters'); cons
 function renderCpList(){ const box=document.getElementById('cp-list'); const list=filterClienti(CPQ,CPFILT);
   if(!list.length){ box.innerHTML='<p class="muted" style="padding:.8rem">Nessun risultato.</p>'; return; }
   box.innerHTML=list.map(c=>`<div class="cl-item ${c.id===BUONO_CLI?'on':''}" data-id="${escapeAttr(c.id)}"><div class="nm">${escapeHtml(c.ragione||c.id)}<div class="sub">ID ${escapeHtml(c.id)} · ${c.tessere.length} tess.${c.piva?' · '+escapeHtml(c.piva):''}</div></div><span class="badge-tipo ${c.tipo==='PRE'?'pre':'post'}">${c.tipo==='PRE'?'PRE':'POST'}</span></div>`).join('');
-  box.querySelectorAll('.cl-item').forEach(el=>el.addEventListener('click',()=>selectBuonoCli(el.dataset.id))); }
+  box.querySelectorAll('.cl-item').forEach(el=>el.addEventListener('click',()=>{ if(PICK_CB) PICK_CB(el.dataset.id); })); }
 function selectBuonoCli(id){ BUONO_CLI=id||''; const c=CLIENTI.find(x=>x.id===id); document.getElementById('b-cliente-btn').textContent=c?`${c.ragione||c.id} · ${c.tipo==='PRE'?'PRE':'POST'}`:'— scegli cliente —'; fillBuonoTessere(); closeCliPicker(); }
+function selectGenCli(id){ GEN_CLI=id||''; const c=CLIENTI.find(x=>x.id===id); document.getElementById('g-cliente-btn').textContent=c?`${c.ragione||c.id} · ${c.tipo==='PRE'?'PRE':'POST'}`:'— scegli cliente —'; fillGenTessere(); closeCliPicker(); }
 function renderClFilters(){
   const el=document.getElementById('cl-filters'); if(!el) return;
   if(!CLIENTI.length){ el.innerHTML=''; return; }
@@ -831,9 +867,11 @@ function goTab(name){ document.querySelectorAll('.tab').forEach(t=>t.classList.t
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ if(!t.disabled) goTab(t.dataset.tab); }));
 document.getElementById('export-btn').addEventListener('click',exportRegistro);
 document.getElementById('b-add').addEventListener('click',addBuono);
-document.getElementById('b-cliente-btn').addEventListener('click',openCliPicker);
+document.getElementById('b-cliente-btn').addEventListener('click',()=>openCliPicker(selectBuonoCli));
+document.getElementById('g-cliente-btn').addEventListener('click',()=>openCliPicker(selectGenCli));
+document.getElementById('g-add').addEventListener('click',generateBuoni);
 document.getElementById('cp-close').addEventListener('click',closeCliPicker);
-document.getElementById('cp-clear').addEventListener('click',()=>selectBuonoCli(''));
+document.getElementById('cp-clear').addEventListener('click',()=>{ if(PICK_CB) PICK_CB(''); });
 document.getElementById('cp-search').addEventListener('input',e=>{ CPQ=e.target.value; renderCpList(); });
 document.getElementById('cli-picker').addEventListener('click',e=>{ if(e.target.id==='cli-picker') closeCliPicker(); });
 document.getElementById('b-tessera').addEventListener('change',onTesseraPick);
