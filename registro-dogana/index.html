@@ -286,7 +286,7 @@ table.reg tbody tr.brow:hover td{background:var(--surface2)}
         <div class="f"><label>Totale €</label><input class="fld" id="b-totale" type="number" min="0" step="0.01" style="width:110px" placeholder="totale"></div>
         <button class="btn" id="b-add">Aggiungi buono</button>
       </div>
-      <p class="muted" style="margin-top:.6rem">Priorità prelievo: domeniche/festivi → sabati → giorni normali (da inizio mese). Pistola con più margine per prima; la regola d'oro non viene mai infranta.</p>
+      <p class="muted" style="margin-top:.6rem">Priorità prelievo: domeniche/festivi → sabati → giorni normali; dentro la fascia in modo proporzionale, lasciando sempre almeno 100 L su ogni giorno. La regola d'oro non viene mai infranta.</p>
     </div>
     <div class="card" id="gen-form">
       <div class="card-title">Genera buoni automaticamente</div>
@@ -409,6 +409,7 @@ let NETTO={};        // pump->day->scarico netto (>=0 garantito)
 let BRESULT={};      // buonoId -> {placed, short, alloc:{pump:{day:signed}}}
 let REGMODE='netto';
 const EPS=1e-6;
+const FLOOR_LT=100; // pavimento: su ogni giorno-sorgente resta sempre almeno 100 L di prodotto
 
 function itNum(v){ if(v==null||v==='') return 0; if(typeof v==='number') return v; return parseFloat(String(v).replace(/\./g,'').replace(',','.'))||parseFloat(String(v).replace(',','.'))||0; }
 function serialToDate(s){ return new Date(Math.round((s-25569)*86400*1000)); }
@@ -542,8 +543,18 @@ function simulaNetto(buoni, transfers){
       for(const d in b.dayAlloc){ if(d===X||!(d in work[pumps[0]])) continue; removals[d]=Math.max(0, Math.min(b.dayAlloc[d], dayAvail(d))); }
     } else {
       let remaining=b.litri;
-      const src=STATE.days.filter(d=>d!==X).sort((a,c)=>dayCat(a)-dayCat(c)||(a<c?-1:1)); // rossi->sabati->normali, da inizio mese
-      for(const d of src){ if(remaining<=EPS) break; const av=dayAvail(d); if(av<=EPS) continue; const take=Math.min(remaining,av); removals[d]=take; remaining-=take; }
+      const others=STATE.days.filter(d=>d!==X);
+      // prelievo per FASCE (0 rossi → 1 sabati → 2 normali); dentro la fascia, PROPORZIONALE
+      // all'estraibile (disponibile − pavimento), così nessun giorno va a 0.
+      for(let tier=0; tier<=2 && remaining>EPS; tier++){
+        const tierDays=others.filter(d=>dayCat(d)===tier);
+        const ext={}; let totExt=0;
+        tierDays.forEach(d=>{ const e=Math.max(0, dayAvail(d)-FLOOR_LT); ext[d]=e; totExt+=e; });
+        if(totExt<=EPS) continue;
+        const amount=Math.min(remaining, totExt);
+        tierDays.forEach(d=>{ if(ext[d]>EPS){ removals[d]=(removals[d]||0)+amount*ext[d]/totExt; } });
+        remaining-=amount;
+      }
     }
     // 2) applica i prelievi: dentro al giorno, distribuzione automatica sulle pompe (proporzionale al disponibile)
     const alloc={}; let placed=0;

@@ -40,6 +40,10 @@ Ultimo aggiornamento: 2026-06-24.
 ## Formule chiave
 - **Registro netto** = grezzo StoreSmart − trasferimenti interni, poi engine buoni (`recompute()`).
   Regola d'oro: contatore mai indietro / scarico netto ≥ 0. Conservazione del prodotto.
+- **Prelievo buoni per FASCE + proporzionale + pavimento:** ogni buono preleva le vendite dalle
+  domeniche/festivi → sabati → giorni normali; dentro la fascia in modo **proporzionale**
+  all'estraibile, lasciando sempre **almeno 100 L** (`FLOOR_LT`) su ogni giorno-sorgente. Così i
+  giorni rossi calano insieme e nessuno va a 0 (prima si svuotavano in ordine di data).
 - **Regola d'oro come vincolo INVALICABILE (guardiano unico `simulaNetto`):** ogni aggiunta/modifica
   manuale di buono e ogni aggiunta/aumento di travaso viene prima simulata; se renderebbe un netto < 0
   o lascerebbe un buono **short** (non piazzabile per intero), l'operazione è **rifiutata** con messaggio.
