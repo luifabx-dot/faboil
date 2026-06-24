@@ -1,0 +1,103 @@
+# Faboil — Registro Dogana · Memoria progressi
+
+> App **teorica/didattica** ("per mia scienza, nulla sarà applicato in realtà") per la
+> gestione di una stazione carburanti — Faboil / EUROSPEED Lusciano (**PV-2993**).
+> File unico `registro-dogana/index.html`, aperto nel browser su PC Windows.
+> Parsing Excel in-browser via **SheetJS** (CDN `xlsx@0.18.5`). Persistenza in
+> `localStorage`. Nessun backend.
+
+Ultimo aggiornamento: 2026-06-24.
+
+---
+
+## Regole di lavoro (sempre valide)
+- **Ragioniamo piano e insieme.** Non portare mai fuori strada. Aspettare sempre
+  l'input dell'utente. **Suggerire, non decidere** — decide l'utente.
+- "recap" → riepiloga e parcheggia (non costruire). "scrivi"/"vai"/"continua" → costruisci.
+- Valori del registro = **interi senza decimali**; erogazioni automatiche = **2 decimali, mai tonde**.
+- La pagina Registro deve vedersi **senza scroll orizzontale**.
+
+## Scopi principali
+1. **Registro doganale**: scarico fisico carburante per pistola/giorno (da StoreSmart).
+2. **Foglio commercialista**: corrispettivo = **vendite − fatturato**.
+
+---
+
+## Architettura dati (variabili globali in index.html)
+- `STATE` — StoreSmart parsato: `{ days[], daily{pump:{day:litri}}, prezzoDay{day:{prod:prezzo}}, meta }`.
+- `CARDSMART` — `{ byDayProd, byTessera{tess:{day:importo}}, byDayBase{day}, byDayImp{day}, meta }`.
+- `ICAD`, `DKV` — `{ byDay{day:importo}, byDayScorp{day}, meta }` (da `parseFatt`).
+- `CLIENTI[]` — anagrafica (da estesoL), ogni cliente `{ id, tipo PRE/POST, perc, saldo, saldoData,
+  consumoMese, genAuto, tessere[{ id, targa, descrizione, prodotto, capienza, giorni[7], escludiFestivi,
+  sospesa, prezzo, sconto, plafond, ... }] }`.
+- `BUONI[]` — `{ id, clienteId, tessera, prodotto, day, litri, prezzo, sconto, totale, gen }`.
+- `TRANSFERS[]` — trasferimenti interni `{ id, nome, cells{pump:{day:litri}} }`.
+- `RICMAN` — ricariche prepagati manuali `{ seq, list[{id,clienteId,data,importo,num}] }`.
+- `NETTO{pump:{day}}` — scarico netto calcolato da `recompute()` (≥0 garantito).
+- Chiavi localStorage: `faboil_ss`, `faboil_cs`, `faboil_icad`, `faboil_dkv`,
+  `faboil_clienti`, `faboil_ricariche_man`, `faboil_reg_<YYYY-MM>` (transfers+buoni del mese).
+
+## Formule chiave
+- **Registro netto** = grezzo StoreSmart − trasferimenti interni, poi engine buoni (`recompute()`).
+  Regola d'oro: contatore mai indietro / scarico netto ≥ 0. Conservazione del prodotto.
+- **Vendite/giorno** = Σ_prod (litri grezzi pompa × `priceOfDay(prod,day)` [prezzo pompa LORDO]).
+- **Corrispettivo/giorno** = vendite − (Card Smart + iCad + DKV + buoni).
+- **Credito prepagato** = saldo@data + ricariche − (Card Smart Importo + buoni), dalla `saldoData` in poi.
+
+### IVA / lordo-netto — VERIFICATO sui dati di giugno 2026
+- StoreSmart prezzo pompa = **LORDO** (IVA inclusa): GASOLIO 1.948, VERDE 1.887, GPL 0.769.
+- **Card Smart** "Prezzo Unitario" giugno = **identico** al prezzo pompa → **LORDO**.
+  (Su dati 2025 vecchi era ~1.566 = sembrava netto: Card Smart può aver cambiato modalità.)
+- **iCad** "Importo Transazione" = "Importo Fattura" = Imponibile + Iva → **LORDO**.
+- **DKV** "Importo" = q×prezzo → **LORDO** (nessuna colonna IVA separata).
+- **NIENTE moltiplicatore ×1.22.** Il corrispettivo è in LORDO ovunque.
+
+### Sconti / maggiorazioni — SCORPORATI dal corrispettivo
+Gli sconti/maggiorazioni delle fatture sono **esclusi** dal corrispettivo e mostrati nella
+colonna "Sc./Magg.".
+- **Card Smart**: corrispettivo = `byDayBase` = Σ(Qta×Prezzo) [base senza sconto].
+  Scorporo = `byDayImp − byDayBase` (Importo − base). Giugno: base €80.849, scorporo +€854 (magg.).
+- **DKV**: corrispettivo = colonna `Importo` (già base senza sconto). Scorporo = Σ(`Netto`−`Importo`).
+  Giugno: base €22.908, scorporo −€399,51 (sconto).
+- **iCad**: nessuna colonna sconto → scorporo 0. Giugno corrispettivo già lordo corretto.
+- Convenzione segno scorporo: **+ maggiorazione, − sconto**.
+
+## Stato funzionalità
+| Sezione | Stato |
+|---|---|
+| Import StoreSmart → Registro | ✅ verificato at-the-liter (G3_2 diff 0) |
+| Trasferimenti interni (regola d'oro) | ✅ |
+| Buoni cartacei (engine day-first + water-filling) | ✅ |
+| Generazione automatica buoni (tetto credito, % razionamento) | ✅ |
+| Anagrafica clienti (import estesoL, PRE/POST, genAuto) | ✅ |
+| Assegnazioni (griglia tessera×giorno, modifica/elimina) | ✅ |
+| Ricariche prepagati manuali + ricevuta PDF | ✅ |
+| Commercialista: Card Smart / iCad / DKV / buoni | ✅ |
+| Sconti/maggiorazioni scorporati (CS, iCad, DKV) | ✅ |
+| Backup/Restore JSON | ✅ |
+| **POS / contanti (file CTRL CASSE)** | ❌ da fare |
+| Ordine prepagati/postpagati su corrispettivo contanti | ❌ parcheggiato |
+
+## Questioni aperte (DA DECIDERE con l'utente)
+1. **Doppio conteggio Card Smart + buoni**: un cliente con tessera Card Smart che è anche
+   generato come buono finisce in fatturato due volte (e nel credito sottratto due volte).
+   Regola da definire: i buoni devono escludere le tessere già in `CARDSMART.byTessera`?
+2. **Sconto buoni non scorporato**: i buoni usano `totale = litri×(prezzo−sconto)` [scontato],
+   mentre CS/DKV/iCad usano la base senza sconto. Incoerente con "sconti scorporati".
+   Opzione: buoni in fatturato a `litri×prezzo` e `litri×sconto` nella colonna scorporo.
+3. **Saldo prepagato senza data**: se c'è `saldo` ma non `saldoData`, rischio doppio conteggio
+   dei movimenti. Da gestire/avvisare.
+
+## Robustezza (fix difensivi, nessun impatto sui dati attuali)
+- `csNum` tronca importi con migliaia puntate (`"1.030,65"` → 1.03) — dormiente perché gli
+  importi arrivano come numeri. Da irrobustire (rimuovere i `.` se presenti sia `.` che `,`).
+- `itNum` interpreta `"1.948"` stringa come 1948 — dormiente (i prezzi arrivano come numeri).
+- `recompute`: aggiungere clamp `Math.max(0, work[p][d])` dopo i prelievi (residui float).
+- `find(...includes...)` nei parser: preferire match esatto prima del match per sottostringa.
+- Codice morto: `renderBuoniGrid`, `fillBuonoClienti`/`b-cliente-list`, `BCLI_LABELS`.
+
+## File di riferimento (upload di sessione)
+- StoreSmart erogazioni giugno 2026 (registro di partenza, contatori 0 al 31/5).
+- Card Smart `RifornimentiPerPeriodo.xlsx` (col: Prezzo Unitario, Sconto, Quantita, Importo).
+- iCad `ElencoTransazioniFatture.xlsx`, DKV `Erogazioni.xlsx`.
+- Clienti `estesoL.xlsx` (fogli: Fine mese/Prepagati/Scontati/Punti).
