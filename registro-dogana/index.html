@@ -269,12 +269,12 @@ table.reg tbody tr.brow:hover td{background:var(--surface2)}
     <div class="sh"><h1>Assegnazioni buoni</h1><p>come sono piazzate le erogazioni, per giorno — clic su una cella per modificare/eliminare</p></div>
     <div class="row-actions">
       <button type="button" class="btn ghost" id="as-cliente-btn">— scegli cliente —</button>
+      <select id="as-prod" class="fld"><option value="ALL">Tutti i prodotti</option><option value="GASOLIO">Gasolio</option><option value="VERDE">Verde</option><option value="GPL">GPL</option></select>
+      <select id="as-day" class="fld"><option value="ALL">Tutti i giorni</option></select>
       <span class="muted" id="as-info"></span>
     </div>
     <div class="legend">
-      <span><i class="dot" style="background:var(--green-bg)"></i> + giorno del buono</span>
-      <span><i class="dot" style="background:var(--red-bg)"></i> − giorni ceduti (modificabili)</span>
-      <span class="muted">— ogni cella mostra il margine disponibile (regola d'oro). Date rosse=festivi, blu=sabati.</span>
+      <span class="muted">— griglia <b>tessera × giorno</b>: litri assegnati. Clic su una cella per modificare, <b>0</b> per eliminare. Date rosse=festivi, blu=sabati. Cella rossa = capienza insufficiente.</span>
     </div>
     <div id="as-container"></div>
   </div>
@@ -477,44 +477,41 @@ function buonoDayAlloc(b){ const r=BRESULT[b.id]; const out={}; if(!r) return ou
 function prodNettoDay(prod,d){ return PUMPS.filter(p=>prodOf(p)===prod).reduce((s,p)=>s+(NETTO[p][d]||0),0); }
 
 // ---- (Assegnazioni) ----
-let ASS_CLI='';
-function selectAssCli(id){ ASS_CLI=id||''; const c=CLIENTI.find(x=>x.id===id); document.getElementById('as-cliente-btn').textContent=c?`${c.ragione||c.id} · ${c.tipo==='PRE'?'PRE':'POST'}`:'— scegli cliente —'; renderAssegnazioni(); closeCliPicker(); }
+let ASS_CLI='', AS_PROD='ALL', AS_DAY='ALL';
+function selectAssCli(id){ ASS_CLI=id||''; const c=CLIENTI.find(x=>x.id===id); document.getElementById('as-cliente-btn').textContent=c?`${c.ragione||c.id} · ${c.tipo==='PRE'?'PRE':'POST'}`:'— scegli cliente —'; fillAssDayFilter(); renderAssegnazioni(); closeCliPicker(); }
+function fillAssDayFilter(){ const sel=document.getElementById('as-day'); if(!sel||!STATE) return; const cur=sel.value; sel.innerHTML='<option value="ALL">Tutti i giorni</option>'+STATE.days.map(d=>`<option value="${d}">${fmtDay(d)}</option>`).join(''); sel.value=cur||'ALL'; }
 function renderAssegnazioni(){
   const cont=document.getElementById('as-container'); if(!STATE){ cont.innerHTML='<div class="empty-state">Importa lo StoreSmart.</div>'; return; }
   const c=CLIENTI.find(x=>x.id===ASS_CLI);
-  if(!c){ cont.innerHTML='<div class="empty-state"><span class="ic">📋</span>Scegli un cliente per vedere le sue assegnazioni.</div>'; document.getElementById('as-info').textContent=''; return; }
-  const buoni=BUONI.filter(b=>b.clienteId===c.id);
-  document.getElementById('as-info').textContent=`${buoni.length} buoni`;
-  if(!buoni.length){ cont.innerHTML='<div class="empty-state"><span class="ic">🧾</span>Nessun buono per questo cliente.</div>'; return; }
-  let h='<div class="tablewrap x"><table class="reg as-table"><colgroup><col class="ascol"><col class="dc">'+STATE.days.map(()=>'<col>').join('')+'</colgroup>';
-  h+='<thead><tr><th class="datecol ascol" style="text-align:left">BUONO</th><th class="dc"></th>'+STATE.days.map(d=>`<th class="${dateClass(d)}">${d.slice(8)}</th>`).join('')+'</tr></thead><tbody>';
-  buoni.forEach(b=>{ const da=buonoDayAlloc(b); const r=BRESULT[b.id]||{placed:0,short:0};
-    const lab=`${b.prodotto.slice(0,3)} ${fmtDay(b.day)} · ${fmtInt(b.litri)}L${b.tessera?' · '+escapeHtml(b.tessera):''}`;
-    const badge=b.manual?'<span class="badge-tipo pre" style="margin-left:.3rem">MAN</span>':'';
-    const sh=r.short>EPS?` <span style="color:var(--red)">⚠ -${fmtInt(r.short)}</span>`:'';
-    h+=`<tr><td class="datecol ascol" style="text-align:left;font-size:.66rem">${lab}${badge}${sh}</td>`;
-    h+=`<td class="dc" style="white-space:nowrap">${b.manual?`<button class="btn sm ghost" data-auto="${b.id}" style="padding:.15rem .4rem;font-size:.62rem">auto</button>`:''}<button class="btn sm danger" data-delb="${b.id}" style="padding:.15rem .4rem;font-size:.62rem">✕</button></td>`;
-    STATE.days.forEach(d=>{ const v=da[d]||0;
-      if(d===b.day){ h+=`<td class="plus">+${fmtInt(v)}</td>`; }
-      else { const rem=v<0?Math.round(-v):0; const avail=Math.round(prodNettoDay(b.prodotto,d)+rem);
-        h+=`<td class="${rem>0?'minus':''}"><input type="number" min="0" max="${avail}" step="1" value="${rem||''}" data-ab="${b.id}" data-ad="${d}" title="disponibile ${fmtInt(avail)} L" style="color:${rem>0?'var(--red)':'inherit'}"></td>`; }
-    });
-    h+='</tr>';
-  });
+  if(!c){ cont.innerHTML='<div class="empty-state"><span class="ic">📋</span>Scegli un cliente per vedere le sue erogazioni assegnate.</div>'; document.getElementById('as-info').textContent=''; return; }
+  let buoni=BUONI.filter(b=>b.clienteId===c.id);
+  if(AS_PROD!=='ALL') buoni=buoni.filter(b=>b.prodotto===AS_PROD);
+  document.getElementById('as-info').textContent=`${buoni.length} erogazioni · ${fmtInt(buoni.reduce((s,b)=>s+b.litri,0))} L`;
+  if(!buoni.length){ cont.innerHTML='<div class="empty-state"><span class="ic">🧾</span>Nessuna erogazione per questo cliente (con i filtri scelti).</div>'; return; }
+  const tessere=[...new Set(buoni.map(b=>b.tessera||'—'))];
+  const cell={}; const shortc={}; tessere.forEach(t=>{cell[t]={};shortc[t]={};});
+  buoni.forEach(b=>{ const t=b.tessera||'—', r=BRESULT[b.id]||{}; cell[t][b.day]=(cell[t][b.day]||0)+b.litri; if(r.short>EPS) shortc[t][b.day]=true; });
+  const days = AS_DAY==='ALL'? STATE.days : STATE.days.filter(d=>d===AS_DAY);
+  let h='<div class="tablewrap x"><table class="reg as-table"><colgroup><col class="ascol">'+days.map(()=>'<col>').join('')+'</colgroup>';
+  h+='<thead><tr><th class="datecol ascol" style="text-align:left">TESSERA</th>'+days.map(d=>`<th class="${dateClass(d)}">${fmtDay(d).slice(0,5)}</th>`).join('')+'</tr></thead><tbody>';
+  tessere.forEach(t=>{ const tn=c.tessere.find(x=>x.id===t); const lab=t+(tn&&tn.targa?' · '+tn.targa:'')+(tn&&tn.descrizione?' · '+tn.descrizione:'');
+    h+=`<tr><td class="datecol ascol" style="text-align:left;font-size:.64rem">${escapeHtml(lab)}</td>`;
+    days.forEach(d=>{ const lit=Math.round(cell[t][d]||0); const bad=shortc[t][d];
+      h+=`<td title="${bad?'capienza insufficiente':''}"><input type="number" min="0" step="1" value="${lit||''}" data-at="${escapeAttr(t)}" data-ad="${d}" class="${lit>0?'has':''} ${bad?'bad':''}"></td>`; });
+    h+='</tr>'; });
   h+='</tbody></table></div>';
   cont.innerHTML=h;
-  cont.querySelectorAll('input[data-ab]').forEach(inp=>inp.addEventListener('change',onAssInput));
-  cont.querySelectorAll('[data-auto]').forEach(b=>b.addEventListener('click',()=>{ const bo=BUONI.find(x=>x.id===parseInt(b.dataset.auto,10)); if(bo){ bo.manual=false; delete bo.dayAlloc; saveStore(); recompute(); renderAssegnazioni(); renderRegistro(); } }));
-  cont.querySelectorAll('[data-delb]').forEach(b=>b.addEventListener('click',()=>{ delBuono(parseInt(b.dataset.delb,10)); renderAssegnazioni(); }));
+  cont.querySelectorAll('input[data-at]').forEach(inp=>inp.addEventListener('change',onAsCellEdit));
 }
-function onAssInput(e){
-  const inp=e.target, b=BUONI.find(x=>x.id===parseInt(inp.dataset.ab,10)), d=inp.dataset.ad; if(!b) return;
-  const cur=(()=>{ const da=buonoDayAlloc(b); return da[d]<0?-da[d]:0; })();
-  const avail=prodNettoDay(b.prodotto,d)+cur;
-  let val=parseInt(inp.value,10); if(isNaN(val)||val<0) val=0; if(val>avail) val=Math.round(avail);
-  if(!b.manual){ b.manual=true; b.dayAlloc=Object.assign({}, (BRESULT[b.id]&&BRESULT[b.id].removals)||{}); }
-  if(val>0) b.dayAlloc[d]=val; else delete b.dayAlloc[d];
-  saveStore(); recompute(); renderAssegnazioni(); renderRegistro();
+function onAsCellEdit(e){
+  const inp=e.target, t=inp.dataset.at, d=inp.dataset.ad; const c=CLIENTI.find(x=>x.id===ASS_CLI); if(!c) return;
+  let val=parseInt(inp.value,10); if(isNaN(val)||val<0) val=0;
+  const existing=BUONI.filter(b=>b.clienteId===c.id && (b.tessera||'—')===t && b.day===d && (AS_PROD==='ALL'||b.prodotto===AS_PROD));
+  if(val<=0){ const del=new Set(existing); BUONI=BUONI.filter(b=>!del.has(b)); }
+  else if(existing.length){ const keep=existing[0]; keep.litri=val; const prezzo=priceOfDay(keep.prodotto,d)||keep.prezzo||0; keep.totale=Math.round(val*(prezzo-(keep.sconto||0))*100)/100; const drop=new Set(existing.slice(1)); BUONI=BUONI.filter(b=>!drop.has(b)); }
+  else { const tess=c.tessere.find(x=>x.id===t); const prod=(AS_PROD!=='ALL')?AS_PROD:(tess?tess.prodotto:'GASOLIO'); const prezzo=priceOfDay(prod,d)||(tess&&tess.prezzo)||0; const sconto=(tess&&tess.sconto)||0;
+    BUONI.push({ id:BSEQ++, clienteId:c.id, clienteNome:c.ragione, tessera:t==='—'?'':t, prodotto:prod, day:d, litri:val, prezzo, sconto, totale:Math.round(val*(prezzo-sconto)*100)/100, gen:false }); }
+  saveStore(); recompute(); renderAssegnazioni(); renderRegistro(); renderBuoni();
 }
 
 // ---- letture progressive ----
@@ -978,6 +975,8 @@ document.getElementById('b-delall').addEventListener('click',delAllBuoni);
 document.getElementById('b-cliente-btn').addEventListener('click',()=>openCliPicker(selectBuonoCli));
 document.getElementById('g-cliente-btn').addEventListener('click',()=>openCliPicker(selectGenCli));
 document.getElementById('as-cliente-btn').addEventListener('click',()=>openCliPicker(selectAssCli));
+document.getElementById('as-prod').addEventListener('change',e=>{ AS_PROD=e.target.value; renderAssegnazioni(); });
+document.getElementById('as-day').addEventListener('change',e=>{ AS_DAY=e.target.value; renderAssegnazioni(); });
 document.getElementById('g-group-add').addEventListener('click',()=>openCliPicker(addGenGroup));
 document.querySelectorAll('#g-scope button').forEach(b=>b.addEventListener('click',()=>{ GEN_SCOPE=b.dataset.s; document.querySelectorAll('#g-scope button').forEach(x=>x.classList.toggle('on',x===b)); renderGenScope(); }));
 document.getElementById('g-add').addEventListener('click',generateBuoni);
