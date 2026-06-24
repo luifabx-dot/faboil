@@ -343,6 +343,7 @@ function serialToDate(s){ return new Date(Math.round((s-25569)*86400*1000)); }
 function cellDay(v){ if(v==null||v==='') return null; if(typeof v==='number'){ return serialToDate(v).toISOString().slice(0,10); } const s=String(v).trim(); let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return `${m[1]}-${m[2]}-${m[3]}`; m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/); if(m) return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`; return null; }
 function fmtDay(key){ const[y,m,d]=key.split('-'); return `${d}/${m}/${y}`; }
 function fmtInt(n){ return Math.round(n).toLocaleString('it-IT'); }
+function fmt2(n){ return (Math.round(n*100)/100).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function grezzo(p,day){ return STATE.daily[p][day]||0; }
 
 // ---- calendario: rossi (domeniche+festivi nazionali), sabati ----
@@ -490,15 +491,15 @@ function renderAssegnazioni(){
   document.getElementById('as-info').textContent=`${buoni.length} erogazioni · ${fmtInt(buoni.reduce((s,b)=>s+b.litri,0))} L`;
   if(!buoni.length){ cont.innerHTML='<div class="empty-state"><span class="ic">🧾</span>Nessuna erogazione per questo cliente (con i filtri scelti).</div>'; return; }
   const tessere=[...new Set(buoni.map(b=>b.tessera||'—'))];
-  const cell={}; const shortc={}; tessere.forEach(t=>{cell[t]={};shortc[t]={};});
-  buoni.forEach(b=>{ const t=b.tessera||'—', r=BRESULT[b.id]||{}; cell[t][b.day]=(cell[t][b.day]||0)+b.litri; if(r.short>EPS) shortc[t][b.day]=true; });
+  const cell={}, eur={}, shortc={}; tessere.forEach(t=>{cell[t]={};eur[t]={};shortc[t]={};});
+  buoni.forEach(b=>{ const t=b.tessera||'—', r=BRESULT[b.id]||{}; cell[t][b.day]=(cell[t][b.day]||0)+b.litri; eur[t][b.day]=(eur[t][b.day]||0)+(b.totale||0); if(r.short>EPS) shortc[t][b.day]=true; });
   const days = AS_DAY==='ALL'? STATE.days : STATE.days.filter(d=>d===AS_DAY);
   let h='<div class="tablewrap x"><table class="reg as-table"><colgroup><col class="ascol">'+days.map(()=>'<col>').join('')+'</colgroup>';
   h+='<thead><tr><th class="datecol ascol" style="text-align:left">TESSERA</th>'+days.map(d=>`<th class="${dateClass(d)}">${fmtDay(d).slice(0,5)}</th>`).join('')+'</tr></thead><tbody>';
   tessere.forEach(t=>{ const tn=c.tessere.find(x=>x.id===t); const lab=t+(tn&&tn.targa?' · '+tn.targa:'')+(tn&&tn.descrizione?' · '+tn.descrizione:'');
     h+=`<tr><td class="datecol ascol" style="text-align:left;font-size:.64rem">${escapeHtml(lab)}</td>`;
-    days.forEach(d=>{ const lit=Math.round(cell[t][d]||0); const bad=shortc[t][d];
-      h+=`<td title="${bad?'capienza insufficiente':''}"><input type="number" min="0" step="1" value="${lit||''}" data-at="${escapeAttr(t)}" data-ad="${d}" class="${lit>0?'has':''} ${bad?'bad':''}"></td>`; });
+    days.forEach(d=>{ const lit=Math.round((cell[t][d]||0)*100)/100; const bad=shortc[t][d];
+      h+=`<td title="${bad?'capienza insufficiente':''}"><input type="number" min="0" step="0.01" value="${lit||''}" data-at="${escapeAttr(t)}" data-ad="${d}" class="${lit>0?'has':''} ${bad?'bad':''}"><span class="resid">${lit>0?fmtEur(eur[t][d]||0):''}</span></td>`; });
     h+='</tr>'; });
   h+='</tbody></table></div>';
   cont.innerHTML=h;
@@ -506,7 +507,7 @@ function renderAssegnazioni(){
 }
 function onAsCellEdit(e){
   const inp=e.target, t=inp.dataset.at, d=inp.dataset.ad; const c=CLIENTI.find(x=>x.id===ASS_CLI); if(!c) return;
-  let val=parseInt(inp.value,10); if(isNaN(val)||val<0) val=0;
+  let val=parseFloat(inp.value); if(isNaN(val)||val<0) val=0; val=Math.round(val*100)/100;
   const existing=BUONI.filter(b=>b.clienteId===c.id && (b.tessera||'—')===t && b.day===d && (AS_PROD==='ALL'||b.prodotto===AS_PROD));
   if(val<=0){ const del=new Set(existing); BUONI=BUONI.filter(b=>!del.has(b)); }
   else if(existing.length){ const keep=existing[0]; keep.litri=val; const prezzo=priceOfDay(keep.prodotto,d)||keep.prezzo||0; keep.totale=Math.round(val*(prezzo-(keep.sconto||0))*100)/100; const drop=new Set(existing.slice(1)); BUONI=BUONI.filter(b=>!drop.has(b)); }
@@ -627,7 +628,7 @@ function renderBuoniList(){
   if(!BUONI.length){ cont.innerHTML='<p class="muted">Nessun buono. Inseriscine uno o usa la generazione.</p>'; cnt.textContent=''; return; }
   const list=filteredBuoni(); cnt.textContent=`${list.length} di ${BUONI.length} buoni · ${fmtInt(list.reduce((s,b)=>s+b.litri,0))} L`;
   let h='<div class="tablewrap" style="max-height:42vh"><table class="reg"><thead><tr><th style="text-align:left">Cliente</th><th>Tessera</th><th>Prod</th><th>Data</th><th>Litri</th><th>Totale</th><th></th></tr></thead><tbody>';
-  list.forEach(b=>{ const r=BRESULT[b.id]||{}; h+=`<tr class="brow" data-id="${b.id}"><td style="text-align:left">${escapeHtml(b.clienteNome||'—')}${b.manual?' <span class="badge-tipo pre">MAN</span>':''}${b.gen?'':' <span class="badge-tipo post">man.</span>'}</td><td>${escapeHtml(b.tessera||'')}</td><td>${b.prodotto.slice(0,3)}</td><td>${fmtDay(b.day)}</td><td>${fmtInt(b.litri)}</td><td>${fmtEur(b.totale||0)}</td><td style="white-space:nowrap">${r.short>EPS?'⚠':''} <button data-del="${b.id}" class="btn sm danger" style="padding:.05rem .35rem">✕</button></td></tr>`; });
+  list.forEach(b=>{ const r=BRESULT[b.id]||{}; h+=`<tr class="brow" data-id="${b.id}"><td style="text-align:left">${escapeHtml(b.clienteNome||'—')}${b.manual?' <span class="badge-tipo pre">MAN</span>':''}${b.gen?'':' <span class="badge-tipo post">man.</span>'}</td><td>${escapeHtml(b.tessera||'')}</td><td>${b.prodotto.slice(0,3)}</td><td>${fmtDay(b.day)}</td><td>${fmt2(b.litri)}</td><td>${fmtEur(b.totale||0)}</td><td style="white-space:nowrap">${r.short>EPS?'⚠':''} <button data-del="${b.id}" class="btn sm danger" style="padding:.05rem .35rem">✕</button></td></tr>`; });
   h+='</tbody></table></div>'; cont.innerHTML=h;
   cont.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); delBuono(parseInt(b.dataset.del,10)); }));
 }
@@ -673,7 +674,7 @@ function genForTessera(c,t,target){ // ritorna array di buoni
   const days=genAllowedDays(t); if(!days.length) return [];
   const lo=cap*0.9, avg=(cap+lo)/2; const n=Math.min(days.length, Math.max(1, Math.round(target/avg)));
   const out=[];
-  for(let k=0;k<n;k++){ const day=days[Math.floor(k*days.length/n)]; const r=Math.round((lo+Math.random()*(cap-lo))*100)/100;
+  for(let k=0;k<n;k++){ const day=days[Math.floor(k*days.length/n)]; let r=Math.round((lo+Math.random()*(cap-lo))*100)/100; if(Number.isInteger(r)) r+=(Math.floor(Math.random()*98)+1)/100; // mai tondo: sempre 2 decimali
     const prezzo=priceOfDay(t.prodotto,day)||t.prezzo||0, sconto=t.sconto||0;
     out.push({ id:BSEQ++, clienteId:c.id, clienteNome:c.ragione, tessera:t.id, prodotto:t.prodotto, day, litri:r, prezzo, sconto, totale:Math.round(r*(prezzo-sconto)*100)/100, gen:true }); }
   return out;
