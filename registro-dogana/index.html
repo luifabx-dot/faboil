@@ -494,11 +494,17 @@ function renderCSResult(fname){
 }
 
 // ---- calcolo NETTO: trasferimenti poi buoni (regola d'oro garantita) ----
-function recompute(){
-  const work={}; PUMPS.forEach(p=>{ work[p]={}; STATE.days.forEach(d=>work[p][d]=gmt(p,d)); });
-  BRESULT={};
-  for(const b of BUONI){
-    const X=b.day; const pumps=PUMPS.filter(p=>prodOf(p)===b.prodotto);
+// simulaNetto: motore puro su (buoni, transfers) candidati. Segnala violazioni regola d'oro.
+function simulaNetto(buoni, transfers){
+  const work={}; let transferViol=false;
+  PUMPS.forEach(p=>{ work[p]={}; STATE.days.forEach(d=>{
+    let tr=0; transfers.forEach(t=>{ tr+=(t.cells[p]&&t.cells[p][d])||0; });
+    const base=grezzo(p,d)-tr; if(base<-EPS) transferViol=true; // travaso > grezzo: contatore andrebbe sotto 0
+    work[p][d]=Math.max(0,base);
+  }); });
+  const bres={};
+  for(const b of buoni){
+    const X=b.day; const pumps=PUMPS.filter(p=>prodOf(p)===b.prodotto); if(!pumps.length) continue;
     const dayAvail=d=> pumps.reduce((s,p)=>s+(work[p][d]||0),0); // disponibile del prodotto in un giorno (somma pompe)
     // 1) decidi i prelievi per giorno (sorgenti, escluso X)
     const removals={};
@@ -519,10 +525,13 @@ function recompute(){
     if(placed>EPS){ const totX=pumps.reduce((s,p)=>s+(work[p][X]||0),0);
       pumps.forEach(p=>{ const w=totX>EPS?(work[p][X]||0)/totX:1/pumps.length; const add=placed*w; work[p][X]=(work[p][X]||0)+add; alloc[p]=alloc[p]||{}; alloc[p][X]=(alloc[p][X]||0)+add; });
     }
-    BRESULT[b.id]={ placed, short:Math.max(0,b.litri-placed), alloc, removals };
+    bres[b.id]={ placed, short:Math.max(0,b.litri-placed), alloc, removals };
   }
-  NETTO=work;
+  let buonoShort=false; const shortByProd={GASOLIO:0,VERDE:0,GPL:0};
+  for(const b of buoni){ const r=bres[b.id]; if(r && r.short>EPS){ buonoShort=true; shortByProd[b.prodotto]=(shortByProd[b.prodotto]||0)+r.short; } }
+  return { work, bres, transferViol, buonoShort, shortByProd, feasible: !transferViol && !buonoShort };
 }
+function recompute(){ const r=simulaNetto(BUONI, TRANSFERS); NETTO=r.work; BRESULT=r.bres; }
 // alloc per giorno (somma pompe) di un buono, dal risultato calcolato
 function buonoDayAlloc(b){ const r=BRESULT[b.id]; const out={}; if(!r) return out; for(const p in r.alloc) for(const d in r.alloc[p]) out[d]=(out[d]||0)+r.alloc[p][d]; return out; }
 function prodNettoDay(prod,d){ return PUMPS.filter(p=>prodOf(p)===prod).reduce((s,p)=>s+(NETTO[p][d]||0),0); }
@@ -561,10 +570,16 @@ function onAsCellClick(e){
   if(ans===null) return;
   let val=parseFloat(String(ans).replace(',','.')); if(isNaN(val)||val<0) val=0; val=Math.round(val*100)/100;
   const existing=BUONI.filter(b=>b.clienteId===c.id && (b.tessera||'—')===t && b.day===d && (AS_PROD==='ALL'||b.prodotto===AS_PROD));
-  if(val<=0){ const del=new Set(existing); BUONI=BUONI.filter(b=>!del.has(b)); }
-  else if(existing.length){ const keep=existing[0]; keep.litri=val; const prezzo=priceOfDay(keep.prodotto,d)||keep.prezzo||0; keep.totale=Math.round(val*(prezzo-(keep.sconto||0))*100)/100; const drop=new Set(existing.slice(1)); BUONI=BUONI.filter(b=>!drop.has(b)); }
-  else { const tess=c.tessere.find(x=>x.id===t); const prod=(AS_PROD!=='ALL')?AS_PROD:(tess?tess.prodotto:'GASOLIO'); const prezzo=priceOfDay(prod,d)||(tess&&tess.prezzo)||0; const sconto=(tess&&tess.sconto)||0;
-    BUONI.push({ id:BSEQ++, clienteId:c.id, clienteNome:c.ragione, tessera:t==='—'?'':t, prodotto:prod, day:d, litri:val, prezzo, sconto, totale:Math.round(val*(prezzo-sconto)*100)/100, gen:false }); }
+  // costruisco lo stato candidato (senza toccare BUONI), poi verifico la regola d'oro
+  let cand, isNew=false, prodChk=null;
+  if(val<=0){ const del=new Set(existing); cand=BUONI.filter(b=>!del.has(b)); }
+  else if(existing.length){ const keep=existing[0]; const prezzo=priceOfDay(keep.prodotto,d)||keep.prezzo||0; const drop=new Set(existing.slice(1)); prodChk=keep.prodotto;
+    cand=BUONI.filter(b=>!drop.has(b)).map(b=> b===keep ? {...b, litri:val, totale:Math.round(val*(prezzo-(keep.sconto||0))*100)/100} : b); }
+  else { const tess=c.tessere.find(x=>x.id===t); const prod=(AS_PROD!=='ALL')?AS_PROD:(tess?tess.prodotto:'GASOLIO'); const prezzo=priceOfDay(prod,d)||(tess&&tess.prezzo)||0; const sconto=(tess&&tess.sconto)||0; prodChk=prod;
+    cand=BUONI.concat([{ id:BSEQ, clienteId:c.id, clienteNome:c.ragione, tessera:t==='—'?'':t, prodotto:prod, day:d, litri:val, prezzo, sconto, totale:Math.round(val*(prezzo-sconto)*100)/100, gen:false }]); isNew=true; }
+  // GUARDIA REGOLA D'ORO (solo quando si aggiunge/aumenta; eliminare è sempre permesso)
+  if(val>0){ const sim=simulaNetto(cand, TRANSFERS); if(!sim.feasible){ const miss=sim.shortByProd[prodChk]||Object.values(sim.shortByProd).reduce((a,x)=>a+x,0); alert(`⛔ Impossibile: romperebbe la regola d'oro.\nMancano ${fmtInt(miss)} L di ${prodName(prodChk)} nei giorni disponibili.\nRiduci il valore.`); return; } }
+  BUONI=cand; if(isNew) BSEQ++;
   saveStore(); recompute(); renderAssegnazioni(); renderRegistro(); renderBuoni(); refreshScheda();
 }
 
@@ -693,7 +708,14 @@ function onRettInput(e){
   const inp=e.target, p=inp.dataset.p, day=inp.dataset.d, g=Math.round(grezzo(p,day)), max=Math.max(0,g-otherTotalAt(p,day));
   let val=parseInt(inp.value,10); if(isNaN(val)||val<0) val=0;
   if(val>max){ val=max; inp.value=max||''; inp.classList.add('bad'); setTimeout(()=>inp.classList.remove('bad'),600); }
+  const prev=(t.cells[p]&&t.cells[p][day])||0;
   if(!t.cells[p]) t.cells[p]={}; if(val>0) t.cells[p][day]=val; else delete t.cells[p][day];
+  // GUARDIA REGOLA D'ORO: il travaso non deve mandare short un buono già inserito
+  if(val>prev){ const sim=simulaNetto(BUONI, TRANSFERS); if(sim.buonoShort){
+    if(prev>0) t.cells[p][day]=prev; else delete t.cells[p][day]; inp.value=prev||'';
+    inp.classList.add('bad'); setTimeout(()=>inp.classList.remove('bad'),900);
+    alert(`⛔ Questo travaso toglie prodotto necessario a un buono già inserito: romperebbe la regola d'oro.\nRiduci il travaso o sistema prima i buoni.`);
+    return; } }
   inp.classList.toggle('has',val>0);
   const resid=Math.max(0,max-val); const rs=inp.parentElement.querySelector('.resid'); if(rs){ rs.textContent='↓'+fmtInt(resid); rs.classList.toggle('z',resid===0); }
   saveStore(); renderChipsOnly(); const b=document.getElementById('t-badge'); if(b) b.textContent=`${prodName(TPROD)}: ${fmtInt(transferTotalProd(t,TPROD))} L`;
@@ -831,9 +853,12 @@ function addBuono(){
   const litri=parseFloat(document.getElementById('b-litri').value);
   if(!day || isNaN(litri) || litri<=0){ alert('Inserisci almeno data e litri (> 0).'); return; }
   const cli=CLIENTI.find(x=>x.id===cliId);
-  const b={ id:BSEQ++, clienteId:cliId||'', clienteNome: cli?cli.ragione:'', tessera:tess||'', prodotto:prod, day, litri,
+  const b={ id:BSEQ, clienteId:cliId||'', clienteNome: cli?cli.ragione:'', tessera:tess||'', prodotto:prod, day, litri,
     prezzo:parseFloat(document.getElementById('b-prezzo').value)||0, sconto:parseFloat(document.getElementById('b-sconto').value)||0, totale:parseFloat(document.getElementById('b-totale').value)||0 };
-  BUONI.push(b); CURBUONO=b.id;
+  // GUARDIA REGOLA D'ORO: il buono deve poter essere piazzato per intero
+  const sim=simulaNetto(BUONI.concat([b]), TRANSFERS);
+  if(!sim.feasible){ const miss=sim.shortByProd[prod]||0; alert(`⛔ Impossibile: il buono romperebbe la regola d'oro.\nMancano ${fmtInt(miss)} L di ${prodName(prod)} nei giorni disponibili per spostare le vendite.\nRiduci i litri o scegli un altro giorno.`); return; }
+  BSEQ++; BUONI.push(b); CURBUONO=b.id;
   ['b-litri','b-totale'].forEach(id=>document.getElementById(id).value='');
   saveStore(); recompute(); renderBuoni(); renderRegistro(); refreshScheda();
 }

@@ -40,6 +40,13 @@ Ultimo aggiornamento: 2026-06-24.
 ## Formule chiave
 - **Registro netto** = grezzo StoreSmart − trasferimenti interni, poi engine buoni (`recompute()`).
   Regola d'oro: contatore mai indietro / scarico netto ≥ 0. Conservazione del prodotto.
+- **Regola d'oro come vincolo INVALICABILE (guardiano unico `simulaNetto`):** ogni aggiunta/modifica
+  manuale di buono e ogni aggiunta/aumento di travaso viene prima simulata; se renderebbe un netto < 0
+  o lascerebbe un buono **short** (non piazzabile per intero), l'operazione è **rifiutata** con messaggio.
+  Punti protetti: `addBuono`, `onAsCellClick` (modifica da Assegnazioni), `onRettInput` (travasi —
+  bloccato anche se manda short un buono già inserito). Eliminare/ridurre è sempre permesso.
+  La **generazione automatica** (opz. A) resta col razionamento per percentuale (water-filling), che
+  già non viola mai la regola.
 - **Due prezzi distinti (importante):**
   - **Vendite (corrispettivo)** = `STATE.venditeEur[day][prod]` = Σ della colonna **Importo €** di
     StoreSmart (già arrotondato per transazione) → vendite **ESATTE**, combaciano al centesimo col
