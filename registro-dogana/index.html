@@ -132,6 +132,9 @@ table.reg .resid.z{color:var(--red);opacity:.7}
 table.as-table{table-layout:auto;min-width:100%}
 table.as-table .ascol,table.as-table th.ascol{width:160px;min-width:160px}
 table.as-table td input{min-width:34px}
+table.as-table td.ascell{cursor:pointer}
+table.as-table td.ascell:hover{background:var(--accent-bg);outline:1.5px solid var(--accent)}
+table.as-table td.ascell .addc{color:var(--muted2);opacity:.45}
 table.reg tbody tr.brow td{text-align:center}
 table.reg tbody tr.brow.on td{background:var(--accent-bg)!important}
 table.reg tbody tr.brow:hover td{background:var(--surface2)}
@@ -516,15 +519,18 @@ function renderAssegnazioni(){
   tessere.forEach(t=>{ const tn=c.tessere.find(x=>x.id===t); const lab=t+(tn&&tn.targa?' · '+tn.targa:'')+(tn&&tn.descrizione?' · '+tn.descrizione:'');
     h+=`<tr><td class="datecol ascol" style="text-align:left;font-size:.64rem">${escapeHtml(lab)}</td>`;
     days.forEach(d=>{ const lit=Math.round((cell[t][d]||0)*100)/100; const bad=shortc[t][d];
-      h+=`<td title="${bad?'capienza insufficiente':''}"><input type="number" min="0" step="0.01" value="${lit||''}" data-at="${escapeAttr(t)}" data-ad="${d}" class="${lit>0?'has':''} ${bad?'bad':''}"><span class="resid">${lit>0?fmtEur(eur[t][d]||0):''}</span></td>`; });
+      h+=`<td class="ascell ${lit>0?'has':''} ${bad?'bad':''}" data-at="${escapeAttr(t)}" data-ad="${d}" title="${bad?'capienza insufficiente — ':''}clic per modificare/eliminare">${lit>0?fmt2(lit):'<span class="addc">+</span>'}${lit>0?`<span class="resid">${fmtEur(eur[t][d]||0)}</span>`:''}</td>`; });
     h+='</tr>'; });
   h+='</tbody></table></div>';
   cont.innerHTML=h;
-  cont.querySelectorAll('input[data-at]').forEach(inp=>inp.addEventListener('change',onAsCellEdit));
+  cont.querySelectorAll('td.ascell').forEach(td=>td.addEventListener('click',onAsCellClick));
 }
-function onAsCellEdit(e){
-  const inp=e.target, t=inp.dataset.at, d=inp.dataset.ad; const c=CLIENTI.find(x=>x.id===ASS_CLI); if(!c) return;
-  let val=parseFloat(inp.value); if(isNaN(val)||val<0) val=0; val=Math.round(val*100)/100;
+function onAsCellClick(e){
+  const td=e.currentTarget, t=td.dataset.at, d=td.dataset.ad; const c=CLIENTI.find(x=>x.id===ASS_CLI); if(!c) return;
+  const cur=BUONI.filter(b=>b.clienteId===c.id && (b.tessera||'—')===t && b.day===d && (AS_PROD==='ALL'||b.prodotto===AS_PROD)).reduce((s,b)=>s+b.litri,0);
+  const ans=prompt(`Litri assegnati — tessera ${t}, ${fmtDay(d)}\n(0 o vuoto = elimina l'erogazione)`, cur?String(Math.round(cur*100)/100):'');
+  if(ans===null) return;
+  let val=parseFloat(String(ans).replace(',','.')); if(isNaN(val)||val<0) val=0; val=Math.round(val*100)/100;
   const existing=BUONI.filter(b=>b.clienteId===c.id && (b.tessera||'—')===t && b.day===d && (AS_PROD==='ALL'||b.prodotto===AS_PROD));
   if(val<=0){ const del=new Set(existing); BUONI=BUONI.filter(b=>!del.has(b)); }
   else if(existing.length){ const keep=existing[0]; keep.litri=val; const prezzo=priceOfDay(keep.prodotto,d)||keep.prezzo||0; keep.totale=Math.round(val*(prezzo-(keep.sconto||0))*100)/100; const drop=new Set(existing.slice(1)); BUONI=BUONI.filter(b=>!drop.has(b)); }
