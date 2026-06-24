@@ -120,6 +120,9 @@ table.reg .resid.z{color:var(--red);opacity:.7}
 .cl-item .nm{flex:1;min-width:0;font-weight:700;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cl-item .sub{font-size:.63rem;color:var(--muted);font-family:var(--mono);font-weight:400}
 @media(max-width:840px){.cl-layout{flex-direction:column}.cl-side{width:100%;position:static}}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(17,24,39,.45);z-index:50;align-items:flex-start;justify-content:center;padding:5vh 1rem}
+.modal{background:var(--surface);border:1.5px solid var(--border2);border-radius:14px;box-shadow:0 12px 48px rgba(0,0,0,.25);width:100%;max-width:480px;padding:1rem;display:flex;flex-direction:column;gap:.6rem}
+.modal-head{display:flex;align-items:center;justify-content:space-between;font-size:1rem}
 .cl-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:1rem 1.1rem;margin-bottom:1rem;box-shadow:var(--shadow)}
 .cl-row{display:flex;gap:.9rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:.6rem}
 .f-lbl{font-size:.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:.22rem;display:block}
@@ -217,7 +220,7 @@ table.reg .resid.z{color:var(--red);opacity:.7}
     <div class="card" id="buono-form">
       <div class="card-title">Nuovo buono</div>
       <div class="formline">
-        <div class="f"><label>Cliente</label><input class="fld" id="b-cliente" list="b-cliente-list" placeholder="Digita nome / P.IVA…" style="min-width:250px" autocomplete="off"><datalist id="b-cliente-list"></datalist></div>
+        <div class="f"><label>Cliente</label><button type="button" class="fld" id="b-cliente-btn" style="min-width:260px;text-align:left;cursor:pointer">— scegli cliente —</button></div>
         <div class="f"><label>Tessera</label><select class="fld" id="b-tessera"><option value="">—</option></select></div>
         <div class="f"><label>Prodotto</label><select class="fld" id="b-prod"><option value="GASOLIO">Gasolio</option><option value="VERDE">Verde</option><option value="GPL">GPL</option></select></div>
         <div class="f"><label>Data buono</label><select class="fld" id="b-day"></select></div>
@@ -248,6 +251,16 @@ table.reg .resid.z{color:var(--red);opacity:.7}
         <div class="cl-listbox" id="cl-list"></div>
       </div>
       <div class="cl-main" id="cl-detail"></div>
+    </div>
+  </div>
+
+  <!-- MODALE SCELTA CLIENTE (buoni) -->
+  <div class="modal-overlay" id="cli-picker">
+    <div class="modal">
+      <div class="modal-head"><b>Scegli cliente</b><div style="display:flex;gap:.5rem"><button class="btn sm ghost" id="cp-clear">Nessuno</button><button class="btn sm ghost" id="cp-close">✕</button></div></div>
+      <input id="cp-search" class="fld" placeholder="Cerca: nome, ID, tessera, targa, P.IVA…" style="width:100%">
+      <div class="cl-filters" id="cp-filters"></div>
+      <div class="cl-listbox" id="cp-list" style="max-height:55vh"></div>
     </div>
   </div>
 
@@ -542,7 +555,7 @@ function fillBuonoClienti(){
   const dl=document.getElementById('b-cliente-list'); if(!dl) return; BCLI_LABELS={};
   dl.innerHTML=CLIENTI.map(c=>{ const lab=`${c.ragione||c.id} · ${c.tipo==='PRE'?'PRE':'POST'}${c.piva?' · '+c.piva:''} · #${c.id}`; BCLI_LABELS[lab]=c.id; return `<option value="${escapeAttr(lab)}"></option>`; }).join('');
 }
-function getBuonoClienteId(){ const v=document.getElementById('b-cliente').value.trim(); if(!v) return ''; if(BCLI_LABELS[v]) return BCLI_LABELS[v]; const m=v.match(/#(\S+)\s*$/); if(m && CLIENTI.some(c=>c.id===m[1])) return m[1]; return ''; }
+function getBuonoClienteId(){ return BUONO_CLI||''; }
 function fillBuonoTessere(){
   const sel=document.getElementById('b-tessera'); const c=CLIENTI.find(x=>x.id===getBuonoClienteId());
   if(!c){ sel.innerHTML='<option value="">—</option>'; return; }
@@ -709,11 +722,11 @@ function creditoInner(c){ const k=clienteCredito(c); const nr=ricaricheForClient
 function refreshCredito(c){ const el=document.getElementById('credito-box'); if(el) el.innerHTML=creditoInner(c); }
 
 function renderClienti(){ renderClFilters(); renderClList(); renderClDetail(); }
-function filteredClienti(){
-  const q=CLQ.trim().toLowerCase();
+function filterClienti(q,filt){
+  q=(q||'').trim().toLowerCase();
   return CLIENTI.filter(c=>{
-    if(CLFILT==='PRE'&&c.tipo!=='PRE') return false;
-    if(CLFILT==='POST'&&c.tipo==='PRE') return false;
+    if(filt==='PRE'&&c.tipo!=='PRE') return false;
+    if(filt==='POST'&&c.tipo==='PRE') return false;
     if(!q) return true;
     if((c.ragione||'').toLowerCase().includes(q)) return true;
     if(String(c.id).includes(q)) return true;
@@ -721,6 +734,20 @@ function filteredClienti(){
     return c.tessere.some(t=>String(t.id).includes(q)||(t.targa||'').toLowerCase().includes(q)||(t.descrizione||'').toLowerCase().includes(q));
   });
 }
+function filteredClienti(){ return filterClienti(CLQ,CLFILT); }
+// ---- selettore cliente per i buoni (stesso stile della sezione Clienti) ----
+let CPQ='', CPFILT='ALL', BUONO_CLI='';
+function openCliPicker(){ if(!CLIENTI.length){ alert('Importa prima i Clienti (estesoL) dalla sezione Importazioni.'); return; } document.getElementById('cli-picker').style.display='flex'; renderCp(); const s=document.getElementById('cp-search'); s.value=CPQ; s.focus(); }
+function closeCliPicker(){ document.getElementById('cli-picker').style.display='none'; }
+function renderCp(){ renderCpFilters(); renderCpList(); }
+function renderCpFilters(){ const el=document.getElementById('cp-filters'); const nAll=CLIENTI.length, nPre=CLIENTI.filter(c=>c.tipo==='PRE').length;
+  el.innerHTML=`<button data-f="ALL" class="${CPFILT==='ALL'?'on':''}">Tutti ${nAll}</button><button data-f="POST" class="${CPFILT==='POST'?'on':''}">Post ${nAll-nPre}</button><button data-f="PRE" class="${CPFILT==='PRE'?'on':''}">Pre ${nPre}</button>`;
+  el.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ CPFILT=b.dataset.f; renderCp(); })); }
+function renderCpList(){ const box=document.getElementById('cp-list'); const list=filterClienti(CPQ,CPFILT);
+  if(!list.length){ box.innerHTML='<p class="muted" style="padding:.8rem">Nessun risultato.</p>'; return; }
+  box.innerHTML=list.map(c=>`<div class="cl-item ${c.id===BUONO_CLI?'on':''}" data-id="${escapeAttr(c.id)}"><div class="nm">${escapeHtml(c.ragione||c.id)}<div class="sub">ID ${escapeHtml(c.id)} · ${c.tessere.length} tess.${c.piva?' · '+escapeHtml(c.piva):''}</div></div><span class="badge-tipo ${c.tipo==='PRE'?'pre':'post'}">${c.tipo==='PRE'?'PRE':'POST'}</span></div>`).join('');
+  box.querySelectorAll('.cl-item').forEach(el=>el.addEventListener('click',()=>selectBuonoCli(el.dataset.id))); }
+function selectBuonoCli(id){ BUONO_CLI=id||''; const c=CLIENTI.find(x=>x.id===id); document.getElementById('b-cliente-btn').textContent=c?`${c.ragione||c.id} · ${c.tipo==='PRE'?'PRE':'POST'}`:'— scegli cliente —'; fillBuonoTessere(); closeCliPicker(); }
 function renderClFilters(){
   const el=document.getElementById('cl-filters'); if(!el) return;
   if(!CLIENTI.length){ el.innerHTML=''; return; }
@@ -804,7 +831,11 @@ function goTab(name){ document.querySelectorAll('.tab').forEach(t=>t.classList.t
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ if(!t.disabled) goTab(t.dataset.tab); }));
 document.getElementById('export-btn').addEventListener('click',exportRegistro);
 document.getElementById('b-add').addEventListener('click',addBuono);
-['change','input'].forEach(ev=>document.getElementById('b-cliente').addEventListener(ev,()=>{ fillBuonoTessere(); }));
+document.getElementById('b-cliente-btn').addEventListener('click',openCliPicker);
+document.getElementById('cp-close').addEventListener('click',closeCliPicker);
+document.getElementById('cp-clear').addEventListener('click',()=>selectBuonoCli(''));
+document.getElementById('cp-search').addEventListener('input',e=>{ CPQ=e.target.value; renderCpList(); });
+document.getElementById('cli-picker').addEventListener('click',e=>{ if(e.target.id==='cli-picker') closeCliPicker(); });
 document.getElementById('b-tessera').addEventListener('change',onTesseraPick);
 document.getElementById('b-litri').addEventListener('input',syncFromLitri);
 document.getElementById('b-totale').addEventListener('input',syncFromTotale);
