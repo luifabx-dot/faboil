@@ -184,6 +184,16 @@ table.reg .resid.z{color:var(--red);opacity:.7}
       <input type="file" id="file-cl" accept=".xlsx,.xls" hidden>
       <div id="import-result-cl"></div>
     </div>
+    <div class="card">
+      <div class="card-title">Ricariche prepagati (SituazioneRicariche)</div>
+      <div class="drop" id="drop-ric">
+        <span class="ic">💳</span>
+        <h3>Trascina qui il file Ricariche</h3>
+        <p>oppure <b>clicca per sceglierlo</b> — solo le ricariche effettuate (Residuo ignorato)</p>
+      </div>
+      <input type="file" id="file-ric" accept=".xlsx,.xls" hidden>
+      <div id="import-result-ric"></div>
+    </div>
   </div>
 
   <!-- TRASFERIMENTI -->
@@ -333,9 +343,9 @@ function parseCardSmart(rows){
   if(hr<0) throw new Error("Intestazione non trovata: manca 'Prodotto'. È un file Card Smart (RifornimentiPerPeriodo)?");
   const head=rows[hr].map(c=>String(c==null?'':c).trim().toLowerCase());
   const find=(...names)=>{ for(const n of names){ const k=head.findIndex(h=>h===n||h.includes(n)); if(k>=0) return k; } return -1; };
-  const iErog=find('data erogazione','erogazione'), iReg=find('data registrazione','registrazione'), iProd=find('prodotto'), iQta=find('quantita','quantità'), iImp=find('importo');
+  const iErog=find('data erogazione','erogazione'), iReg=find('data registrazione','registrazione'), iProd=find('prodotto'), iQta=find('quantita','quantità'), iImp=find('importo'), iTess=find('codice tessera','tessera');
   if([iProd,iQta].some(x=>x<0)) throw new Error('Colonne mancanti (servono Prodotto e Quantità).');
-  const byDayProd={}; const litri={GASOLIO:0,VERDE:0,GPL:0}; const imp={GASOLIO:0,VERDE:0,GPL:0};
+  const byDayProd={}; const byTessera={}; const litri={GASOLIO:0,VERDE:0,GPL:0}; const imp={GASOLIO:0,VERDE:0,GPL:0};
   let kept=0,skTot=0,skExtra=0; const daySet=new Set();
   for(let i=hr+1;i<rows.length;i++){
     const r=rows[i]; if(!r) continue;
@@ -343,12 +353,13 @@ function parseCardSmart(rows){
     const prodRaw=r[iProd]; if(prodRaw==null||prodRaw==='') continue;
     const prod=normCSProd(prodRaw); if(!prod){ skExtra++; continue; } // ADBLUE / Metano esclusi
     const day=cellDay(iErog>=0?r[iErog]:r[iReg]); if(!day) continue;
-    const q=csNum(r[iQta]);
+    const q=csNum(r[iQta]); const importo=iImp>=0?csNum(r[iImp]):0;
     byDayProd[day]=byDayProd[day]||{}; byDayProd[day][prod]=(byDayProd[day][prod]||0)+q;
-    litri[prod]+=q; if(iImp>=0) imp[prod]+=csNum(r[iImp]); kept++; daySet.add(day);
+    litri[prod]+=q; imp[prod]+=importo; kept++; daySet.add(day);
+    const tess=iTess>=0?String(r[iTess]||'').trim():''; if(tess){ byTessera[tess]=byTessera[tess]||{}; byTessera[tess][day]=(byTessera[tess][day]||0)+importo; }
   }
   const days=[...daySet].sort();
-  return { byDayProd, meta:{kept,skTot,skExtra,litri,imp, periodo: days.length?`${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—'} };
+  return { byDayProd, byTessera, meta:{kept,skTot,skExtra,litri,imp, periodo: days.length?`${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—'} };
 }
 function handleCSFile(file){
   const res=document.getElementById('import-result-cs'); res.innerHTML='<p class="muted" style="margin-top:1rem">Lettura in corso…</p>';
@@ -629,6 +640,69 @@ function handleClFile(file){
 }
 
 let CLQ='', CLFILT='ALL';
+// ---- RICARICHE prepagati ----
+let RICARICHE=null; // { byName:{ normNome:{ nome, ricariche:[{data,importo}] } }, meta }
+function normName(s){ return String(s||'').toUpperCase().replace(/\s+/g,' ').trim(); }
+function parseRicariche(rows){
+  let hr=-1; for(let i=0;i<Math.min(rows.length,20);i++){ if(rows[i] && rows[i].some(c=>String(c).trim().toLowerCase().includes('data ricarica'))){ hr=i; break; } }
+  if(hr<0) throw new Error("Intestazione non trovata ('Data Ricarica'). È il file SituazioneRicariche?");
+  const head=rows[hr].map(c=>String(c==null?'':c).trim().toLowerCase());
+  const iData=head.findIndex(h=>h.includes('data ricarica')); const iImp=head.findIndex(h=>h.includes('importo'));
+  const byName={}; let cur=null, nRic=0; const dset=new Set();
+  for(let i=hr+1;i<rows.length;i++){
+    const r=rows[i]; if(!r) continue;
+    const cell=r[iData]; const imp=r[iImp];
+    if(r.some(c=>String(c).toLowerCase().includes('totali')||String(c).trim().toLowerCase()==='totale')){ cur=null; continue; }
+    if(r.some(c=>String(c).trim().toUpperCase()==='CLIENTE')) continue;
+    const day=cellDay(cell);
+    if(day && imp!=null && imp!=='') { if(cur){ cur.ricariche.push({data:day, importo:csNum(imp)}); nRic++; dset.add(day); } continue; }
+    // riga nome cliente (testo non-data in colonna Data Ricarica)
+    if(cell!=null && cell!=='' && !day){ const nome=String(cell).trim(); const k=normName(nome); cur=byName[k]||(byName[k]={nome, ricariche:[]}); }
+  }
+  const days=[...dset].sort();
+  return { byName, meta:{ nClienti:Object.keys(byName).length, nRicariche:nRic, periodo: days.length?`${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—' } };
+}
+function ricaricheForCliente(c){ if(!RICARICHE) return []; const m=RICARICHE.byName[normName(c.ragione)]; return m?m.ricariche:[]; }
+function handleRicFile(file){
+  const res=document.getElementById('import-result-ric'); res.innerHTML='<p class="muted" style="margin-top:1rem">Lettura in corso…</p>';
+  const reader=new FileReader();
+  reader.onload=e=>{ try{ const wb=XLSX.read(e.target.result,{type:'array'}); const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:null});
+    RICARICHE=parseRicariche(rows); saveRic(); renderRicResult(file.name); renderClDetail();
+  }catch(err){ res.innerHTML=`<div class="warn">⚠ ${err.message}</div>`; } };
+  reader.readAsArrayBuffer(file);
+}
+function renderRicResult(fname){ const m=RICARICHE.meta;
+  // quanti agganciati all'anagrafica
+  let matched=0; if(CLIENTI.length){ const names=new Set(CLIENTI.map(c=>normName(c.ragione))); matched=Object.keys(RICARICHE.byName).filter(k=>names.has(k)).length; }
+  document.getElementById('import-result-ric').innerHTML=`<div class="ok-msg">✓ Importato: <b>${fname}</b></div>
+    <div class="grid" style="margin-top:.9rem">
+      <div class="stat"><div class="k">Clienti con ricariche</div><div class="v">${m.nClienti}</div></div>
+      <div class="stat"><div class="k">Ricariche</div><div class="v">${m.nRicariche}</div></div>
+      <div class="stat"><div class="k">Periodo</div><div class="v" style="font-size:.9rem">${m.periodo}</div></div>
+    </div>
+    <p class="muted" style="margin-top:.7rem">${CLIENTI.length?`${matched} agganciati all'anagrafica per ragione sociale.`:'Importa anche i Clienti (estesoL) per agganciarle.'} Residuo e Tot. movimenti ignorati.</p>`;
+}
+function saveRic(){ try{ localStorage.setItem('faboil_ric', JSON.stringify(RICARICHE)); }catch(e){} }
+
+// ---- credito prepagato: saldo@data + ricariche − (Card Smart + buoni) ----
+function clienteCredito(c){
+  const from=c.saldoData||'0000-00-00';
+  let ric=0; ricaricheForCliente(c).forEach(r=>{ if(r.data>=from) ric+=r.importo; });
+  let cs=0; if(CARDSMART&&CARDSMART.byTessera) c.tessere.forEach(t=>{ const m=CARDSMART.byTessera[t.id]; if(m) for(const d in m){ if(d>=from) cs+=m[d]; } });
+  let bu=0; BUONI.forEach(b=>{ if(b.clienteId===c.id && b.day>=from) bu+=(b.totale||0); });
+  const saldo=c.saldo||0;
+  return { saldo, ric, cs, bu, credito: saldo+ric-cs-bu };
+}
+function fmtEur(n){ return '€ '+(Math.round(n*100)/100).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function creditoInner(c){ const k=clienteCredito(c); const nr=ricaricheForCliente(c).length;
+  return `<div><span class="f-lbl">Saldo @ data</span>${fmtEur(k.saldo)}</div>
+    <div style="color:var(--green)"><span class="f-lbl">+ Ricariche${nr?' ('+nr+')':''}</span>${fmtEur(k.ric)}</div>
+    <div style="color:var(--red)"><span class="f-lbl">− Card Smart</span>${fmtEur(k.cs)}</div>
+    <div style="color:var(--red)"><span class="f-lbl">− Buoni</span>${fmtEur(k.bu)}</div>
+    <div style="margin-left:auto;text-align:right"><span class="f-lbl">Credito attuale</span><span style="font-weight:800;font-size:1.05rem;color:${k.credito<0?'var(--red)':'var(--accent)'}">${fmtEur(k.credito)}</span></div>`;
+}
+function refreshCredito(c){ const el=document.getElementById('credito-box'); if(el) el.innerHTML=creditoInner(c); }
+
 function renderClienti(){ renderClFilters(); renderClList(); renderClDetail(); }
 function filteredClienti(){
   const q=CLQ.trim().toLowerCase();
@@ -673,7 +747,9 @@ function renderClDetail(){
       <div><span class="f-lbl">Saldo credito (€)</span><input class="fld sm" id="c-saldo" type="number" step="0.01" value="${c.saldo||''}"></div>
       <div><span class="f-lbl">alla data</span><input class="fld" id="c-saldodata" type="date" value="${escapeAttr(c.saldoData||'')}"></div>
       <div><span class="f-lbl">Consumo / mese</span><input class="fld sm" id="c-consumo" type="number" min="0" step="1" value="${c.consumoMese||''}"></div>`;
-  h+=`</div><div class="card-title" style="margin-top:.4rem">Tessere / veicoli (${c.tessere.length})</div>`;
+  h+=`</div>`;
+  if(c.tipo==='PRE') h+=`<div class="cl-row" id="credito-box" style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:.6rem .85rem;font-family:var(--mono);font-size:.84rem;align-items:flex-end;margin-bottom:.6rem">${creditoInner(c)}</div>`;
+  h+=`<div class="card-title" style="margin-top:.4rem">Tessere / veicoli (${c.tessere.length})</div>`;
   c.tessere.forEach(t=>h+=tessHtml(t));
   h+=`</div>`;
   cont.innerHTML=h; bindClDetail(c);
@@ -698,8 +774,8 @@ function tessHtml(t){
 function bindClDetail(c){
   const perc=document.getElementById('c-perc'); if(perc) perc.addEventListener('input',e=>{ c.perc=parseFloat(e.target.value)||0; saveClienti(); });
   document.querySelectorAll('#c-tipo button').forEach(b=>b.addEventListener('click',()=>{ c.tipo=b.dataset.v; saveClienti(); renderClFilters(); renderClList(); renderClDetail(); }));
-  const sal=document.getElementById('c-saldo'); if(sal) sal.addEventListener('input',e=>{ c.saldo=parseFloat(e.target.value)||0; saveClienti(); });
-  const sald=document.getElementById('c-saldodata'); if(sald) sald.addEventListener('input',e=>{ c.saldoData=e.target.value; saveClienti(); });
+  const sal=document.getElementById('c-saldo'); if(sal) sal.addEventListener('input',e=>{ c.saldo=parseFloat(e.target.value)||0; saveClienti(); refreshCredito(c); });
+  const sald=document.getElementById('c-saldodata'); if(sald) sald.addEventListener('input',e=>{ c.saldoData=e.target.value; saveClienti(); refreshCredito(c); });
   const cons=document.getElementById('c-consumo'); if(cons) cons.addEventListener('input',e=>{ c.consumoMese=parseFloat(e.target.value)||0; saveClienti(); });
   document.querySelectorAll('#cl-detail [data-tf]').forEach(el=>{ const ev=el.type==='checkbox'?'change':'input'; el.addEventListener(ev,()=>{ const t=c.tessere.find(x=>x.id===el.dataset.t); if(!t) return; const f=el.dataset.tf; t[f]= el.type==='checkbox'?el.checked:(el.type==='number'?(parseFloat(el.value)||0):el.value); saveClienti(); }); });
   document.querySelectorAll('#cl-detail .wd').forEach(b=>b.addEventListener('click',()=>{ const t=c.tessere.find(x=>x.id===b.dataset.t); const i=parseInt(b.dataset.wd,10); t.giorni[i]=t.giorni[i]?0:1; saveClienti(); b.classList.toggle('on',!!t.giorni[i]); }));
@@ -754,9 +830,17 @@ dropCl.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handl
 
 document.getElementById('cl-search').addEventListener('input',e=>{ CLQ=e.target.value; renderClList(); });
 
+const dropRic=document.getElementById('drop-ric'), fileRic=document.getElementById('file-ric');
+dropRic.addEventListener('click',()=>fileRic.click());
+fileRic.addEventListener('change',e=>{ if(e.target.files[0]) handleRicFile(e.target.files[0]); });
+['dragover','dragenter'].forEach(ev=>dropRic.addEventListener(ev,e=>{e.preventDefault();dropRic.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=>dropRic.addEventListener(ev,e=>{e.preventDefault();dropRic.classList.remove('drag');}));
+dropRic.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handleRicFile(f); });
+
 // anagrafica clienti: indipendente dal file importato
 loadClienti(); renderClienti(); fillBuonoClienti();
 restoreImports();
+try{ const rc=localStorage.getItem('faboil_ric'); if(rc){ RICARICHE=JSON.parse(rc); renderClDetail(); document.getElementById('import-result-ric').innerHTML=`<div class="ok-msg">✓ Ricariche ripristinate: <b>${RICARICHE.meta.periodo}</b> · ${RICARICHE.meta.nRicariche} ricariche</div>`; } }catch(e){}
 </script>
 </body>
 </html>
