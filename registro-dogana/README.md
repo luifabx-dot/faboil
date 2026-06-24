@@ -7,7 +7,8 @@ stazione di servizio Faboil di Lusciano (CE).
 
 | File | Descrizione |
 |------|-------------|
-| `build_reg.py` | Script Python (openpyxl) che genera il file Excel del registro. |
+| `registro.html` | **Pagina web** (nessuna installazione): scegli mese/anno e scarica l'Excel dal browser. |
+| `build_reg.py` | Script Python (openpyxl) che genera lo stesso file Excel da riga di comando. |
 | `Registro_dogana_giugno_2026.xlsx` | Esempio di registro generato (giugno 2026). |
 
 ## Cosa genera
@@ -29,6 +30,18 @@ Formattazione: intestazioni blu, bordi, formato data, larghezze colonne e
 riquadri bloccati (`freeze_panes`).
 
 ## Come si usa
+
+### Modalità web (consigliata, nessuna installazione)
+
+Apri `registro.html` nel browser (doppio click su PC Windows), scegli **mese** e
+**anno** dai menu, eventualmente regola l'**assunzione scarico** (default 1000) e
+premi **«Genera registro Excel»**: il file `Registro_dogana_<mese>_<anno>.xlsx`
+viene scaricato.
+
+> Al **primo utilizzo serve internet** (la pagina carica la libreria ExcelJS e i
+> font da CDN). Il foglio prodotto è identico a quello dello script Python.
+
+### Modalità script Python
 
 ```bash
 pip install openpyxl

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f8f9fb">
+<title>Registro Dogana — Faboil</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f0f3f7;--surface:#fff;--surface2:#f5f7fa;--surface3:#edf0f5;
+  --border:#e2e6ef;--border2:#c9d0de;--text:#111827;--muted:#64748b;--muted2:#94a3b8;
+  --accent:#e07b00;--accent-bg:rgba(224,123,0,.09);--blue:#2563eb;--blue-bg:rgba(37,99,235,.09);
+  --red:#dc2626;--red-bg:rgba(220,38,38,.08);--green:#15803d;--green-bg:rgba(21,128,61,.08);
+  --mono:'IBM Plex Mono',monospace;--sans:'Syne',sans-serif;--radius:10px;
+  --shadow:0 1px 4px rgba(0,0,0,.07),0 4px 16px rgba(0,0,0,.04);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{font-size:16px;-webkit-text-size-adjust:100%}
+body{min-height:100dvh;background:var(--bg);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+.topbar{display:flex;align-items:center;padding:.85rem 1.25rem;background:var(--surface);border-bottom:1.5px solid var(--border);gap:.6rem}
+.logo{font-size:1.15rem;font-weight:800;letter-spacing:-.02em;color:var(--accent)}
+.logo em{color:var(--muted);font-style:normal;font-weight:600;font-size:.72rem;margin-left:.35rem}
+.wrap{max-width:560px;margin:0 auto;padding:1.3rem 1rem 3rem}
+.sh{margin-bottom:1.1rem}
+.sh h1{font-size:1.4rem;font-weight:800;letter-spacing:-.02em}
+.sh p{font-size:.78rem;color:var(--muted);font-family:var(--mono);margin-top:.25rem}
+.card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:1.1rem 1.15rem;margin-bottom:.9rem;box-shadow:var(--shadow)}
+.card-title{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.85rem}
+label{font-size:.7rem;font-weight:700;color:var(--muted);display:block;margin-bottom:.3rem;text-transform:uppercase;letter-spacing:.05em}
+input,select{background:var(--surface2);border:1.5px solid var(--border2);border-radius:7px;color:var(--text);font-family:var(--mono);font-size:.95rem;padding:.55rem .7rem;width:100%;outline:none;transition:border-color .12s;-webkit-appearance:none;appearance:none}
+input:focus,select:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px rgba(224,123,0,.12)}
+input[type=number]{text-align:right}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .7rem center;padding-right:1.8rem}
+.frow{display:flex;gap:.7rem;flex-wrap:wrap;align-items:flex-end}
+.fg1{flex:1;min-width:120px}
+.hint{font-size:.7rem;color:var(--muted2);margin-top:.35rem;line-height:1.4}
+.btn{background:var(--surface2);border:1.5px solid var(--border2);color:var(--text);font-family:var(--sans);font-size:.95rem;font-weight:700;padding:.7rem 1rem;border-radius:8px;cursor:pointer;transition:all .12s;width:100%;display:inline-flex;align-items:center;justify-content:center;gap:.4rem}
+.btn:active{transform:scale(.98)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-primary:hover{background:#c56d00;border-color:#c56d00}
+.btn:disabled{opacity:.55;cursor:default}
+.sbar{font-size:.82rem;font-weight:600;padding:.6rem .9rem;border-radius:8px;margin-top:.9rem;display:none;align-items:flex-start;gap:.45rem;line-height:1.45}
+.sbar.show{display:flex}
+.sbar.ok{background:var(--green-bg);color:var(--green);border:1px solid rgba(21,128,61,.2)}
+.sbar.err{background:var(--red-bg);color:var(--red);border:1px solid rgba(220,38,38,.2)}
+.sbar.info{background:var(--blue-bg);color:var(--blue);border:1px solid rgba(37,99,235,.2)}
+.info-list{font-size:.78rem;color:var(--muted);line-height:1.6;padding-left:1.1rem}
+.info-list li{margin-bottom:.15rem}
+.info-list b{color:var(--text)}
+.foot{text-align:center;font-size:.68rem;color:var(--muted2);font-family:var(--mono);margin-top:1.5rem}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <span class="logo">FABOIL<em>Registro Dogana</em></span>
+</div>
+<div class="wrap">
+  <div class="sh">
+    <h1>Registro carico/scarico</h1>
+    <p>Genera il registro UTF mensile — Lusciano (CE)</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Periodo</div>
+    <div class="frow">
+      <div class="fg1">
+        <label for="mese">Mese</label>
+        <select id="mese"></select>
+      </div>
+      <div class="fg1">
+        <label for="anno">Anno</label>
+        <input id="anno" type="number" min="2020" max="2099" step="1">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Parametri</div>
+    <label for="assunzione">Assunzione scarico — lt / pistola / giorno</label>
+    <input id="assunzione" type="number" min="0" step="1" value="1000">
+    <p class="hint">Valore di partenza precaricato nel registro (cella AC2). Lo si può modificare anche dopo, in Excel: tutte le letture si ricalcolano.</p>
+  </div>
+
+  <div class="card">
+    <button id="gen" class="btn btn-primary">⬇ Genera registro Excel</button>
+    <div id="status" class="sbar"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Cosa contiene il file</div>
+    <ul class="info-list">
+      <li><b>24 pistole</b> (G1_1…GPL6) come colonne.</li>
+      <li>Riga <b>baseline</b> (ultimo giorno del mese precedente): contatori di partenza a 0, <b>in blu</b> da compilare con le letture reali.</li>
+      <li>Una riga per ogni giorno del mese: lettura = giorno prima + assunzione.</li>
+      <li>Colonna <b>SCARICO TOT (lt)</b>: somma letture di oggi − somma di ieri.</li>
+    </ul>
+  </div>
+
+  <div class="foot">Faboil · Generale Lusciano</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script>
+const PISTOLE = ['G1_1','G1_2','G2_1','G2_2','G3_1','G3_2','G4_1','G4_2','G5_1','G5_2','G6_1','G6_2',
+                 'V1_3','V2_3','V3_3','V4_3','V5_3','V6_3','GPL1','GPL2','GPL3','GPL4','GPL5','GPL6'];
+const MESI = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
+              'Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+
+const $ = id => document.getElementById(id);
+
+// popola mese/anno con la data corrente
+(function init(){
+  const oggi = new Date();
+  const selMese = $('mese');
+  MESI.forEach((m,i)=>{
+    const o = document.createElement('option');
+    o.value = i+1; o.textContent = m;
+    if(i === oggi.getMonth()) o.selected = true;
+    selMese.appendChild(o);
+  });
+  $('anno').value = oggi.getFullYear();
+})();
+
+function colLetter(n){ // 1-based -> A, B, ... (come openpyxl get_column_letter)
+  let s = '';
+  while(n > 0){ const r = (n-1) % 26; s = String.fromCharCode(65+r) + s; n = Math.floor((n-1)/26); }
+  return s;
+}
+
+function setStatus(msg, kind){
+  const el = $('status');
+  el.className = 'sbar show ' + kind;
+  el.textContent = msg;
+}
+
+async function genera(){
+  if(typeof ExcelJS === 'undefined'){
+    setStatus('Libreria non caricata: serve una connessione internet al primo utilizzo. Riprova online.', 'err');
+    return;
+  }
+  const mese = parseInt($('mese').value, 10);      // 1-12
+  const anno = parseInt($('anno').value, 10);
+  const assunzione = Number($('assunzione').value) || 0;
+  if(!anno || anno < 2020 || anno > 2099){ setStatus('Anno non valido.', 'err'); return; }
+
+  const btn = $('gen'); btn.disabled = true;
+  setStatus('Generazione in corso…', 'info');
+
+  try{
+    const giorni = new Date(anno, mese, 0).getDate();          // giorni del mese
+    const baseline = new Date(anno, mese-1, 0);                // ultimo giorno mese precedente
+    const meseNome = MESI[mese-1];
+
+    // --- stili (equivalenti a build_reg.py) ---
+    const ARIAL = 'Arial';
+    const hdrFill = {type:'pattern', pattern:'solid', fgColor:{argb:'FF1F4E78'}};
+    const hdrFont = {name:ARIAL, bold:true, color:{argb:'FFFFFFFF'}, size:10};
+    const dateFont = {name:ARIAL, bold:true, size:10};
+    const cellFont = {name:ARIAL, size:10};
+    const inputFont = {name:ARIAL, size:10, color:{argb:'FF0000FF'}};   // baseline = input blu
+    const checkFont = {name:ARIAL, bold:true, size:10, color:{argb:'FF1F4E78'}};
+    const center = {horizontal:'center'};
+    const thin = {style:'thin', color:{argb:'FFBFBFBF'}};
+    const border = {left:thin, right:thin, top:thin, bottom:thin};
+
+    const SCARICO_COL = PISTOLE.length + 2;   // Z (26)
+    const ASS_LABEL_COL = PISTOLE.length + 4; // AB (28)
+    const ASS_VAL_COL = PISTOLE.length + 5;   // AC (29)
+    const assRef = '$' + colLetter(ASS_VAL_COL) + '$2';
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('REGISTRO ' + meseNome.toUpperCase());
+    ws.properties.defaultColWidth = 9;   // pistole a 9 anche se ExcelJS le ometterebbe
+
+    const setCell = (r,c,opts)=>{
+      const cell = ws.getRow(r).getCell(c);
+      if('value' in opts) cell.value = opts.value;
+      if(opts.font) cell.font = opts.font;
+      if(opts.fill) cell.fill = opts.fill;
+      if(opts.align) cell.alignment = opts.align;
+      if(opts.border) cell.border = opts.border;
+      if(opts.numFmt) cell.numFmt = opts.numFmt;
+      return cell;
+    };
+
+    // header riga 1
+    setCell(1, 1, {value:'DATA'});
+    PISTOLE.forEach((p,j)=> setCell(1, 2+j, {value:p}));
+    setCell(1, SCARICO_COL, {value:'SCARICO TOT (lt)'});
+    for(let c=1; c<=SCARICO_COL; c++){
+      setCell(1, c, {font:hdrFont, fill:hdrFill, align:center, border:border});
+    }
+
+    // assunzione
+    setCell(1, ASS_LABEL_COL, {value:'Assunzione scarico/pistola/giorno (lt):', font:{name:ARIAL, bold:true, size:10}});
+    setCell(1, ASS_VAL_COL, {value:'valore', font:{name:ARIAL, size:9, italic:true}});
+    setCell(2, ASS_VAL_COL, {value:assunzione, font:inputFont});
+
+    // baseline (ultimo giorno mese precedente) = giorno 0, contatori a 0
+    setCell(2, 1, {value:baseline, font:dateFont, numFmt:'dd/mm/yyyy', border:border});
+    for(let j=0; j<PISTOLE.length; j++){
+      setCell(2, 2+j, {value:0, font:inputFont, numFmt:'#,##0', align:center, border:border});
+    }
+    setCell(2, SCARICO_COL, {border:border});
+
+    // giorni del mese
+    const first = colLetter(2);
+    const last = colLetter(1 + PISTOLE.length);
+    for(let day=1; day<=giorni; day++){
+      const r = 2 + day;
+      const d = new Date(anno, mese-1, day);
+      setCell(r, 1, {value:d, font:dateFont, numFmt:'dd/mm/yyyy', border:border});
+      for(let j=0; j<PISTOLE.length; j++){
+        const col = 2 + j;
+        const L = colLetter(col);
+        setCell(r, col, {value:{formula:`${L}${r-1}+${assRef}`}, font:cellFont, numFmt:'#,##0', align:center, border:border});
+      }
+      setCell(r, SCARICO_COL, {
+        value:{formula:`SUM(${first}${r}:${last}${r})-SUM(${first}${r-1}:${last}${r-1})`},
+        font:checkFont, numFmt:'#,##0', align:center, border:border
+      });
+    }
+
+    // larghezze colonne
+    ws.getColumn(1).width = 12;
+    for(let j=0; j<PISTOLE.length; j++) ws.getColumn(2+j).width = 9;
+    ws.getColumn(SCARICO_COL).width = 15;
+    ws.getColumn(ASS_LABEL_COL).width = 32;
+    ws.getColumn(ASS_VAL_COL).width = 10;
+
+    // freeze panes 'B3' -> blocca colonna A e righe 1-2
+    ws.views = [{state:'frozen', xSplit:1, ySplit:2}];
+
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Registro_dogana_${meseNome.toLowerCase()}_${anno}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+
+    setStatus(`Registro di ${meseNome} ${anno} generato (${giorni} giorni). Controlla i download.`, 'ok');
+  }catch(e){
+    setStatus('Errore durante la generazione: ' + e.message, 'err');
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+$('gen').addEventListener('click', genera);
+</script>
+</body>
+</html>
