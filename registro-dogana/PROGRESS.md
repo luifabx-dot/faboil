@@ -78,15 +78,18 @@ colonna "Sc./Magg.".
 | **POS / contanti (file CTRL CASSE)** | ❌ da fare |
 | Ordine prepagati/postpagati su corrispettivo contanti | ❌ parcheggiato |
 
-## Questioni aperte (DA DECIDERE con l'utente)
-1. **Doppio conteggio Card Smart + buoni**: un cliente con tessera Card Smart che è anche
-   generato come buono finisce in fatturato due volte (e nel credito sottratto due volte).
-   Regola da definire: i buoni devono escludere le tessere già in `CARDSMART.byTessera`?
-2. **Sconto buoni non scorporato**: i buoni usano `totale = litri×(prezzo−sconto)` [scontato],
-   mentre CS/DKV/iCad usano la base senza sconto. Incoerente con "sconti scorporati".
-   Opzione: buoni in fatturato a `litri×prezzo` e `litri×sconto` nella colonna scorporo.
-3. **Saldo prepagato senza data**: se c'è `saldo` ma non `saldoData`, rischio doppio conteggio
-   dei movimenti. Da gestire/avvisare.
+## Questioni risolte (revisione 2026-06-24)
+1. **Doppio conteggio Card Smart + buoni** → **DECISO: nessuna modifica.** Per convenzione
+   buoni e Card Smart non si sovrappongono mai (cliente o a tessera o a buono cartaceo).
+2. **Sconto buoni non scorporato** → **DECISO + FATTO.** I buoni ora entrano nel fatturato a
+   base piena `litri×prezzo`; lo sconto/magg (`totale−base`) va nella colonna Sc./Magg., fuori
+   dal corrispettivo (come le fatture). Guardia: buono senza prezzo → base=totale, scorporo 0.
+   Il **credito prepagato resta sul totale scontato** (consumo reale del credito). Impatto sui
+   dati attuali: ~€0 (nessun buono ha sconto nel backup di giugno).
+3. **Saldo prepagato senza data** → **DECISO + FATTO (opz. A).** Se un prepagato ha saldo senza
+   `saldoData`: banner ⚠ nel box credito, e per i genAuto è trattato come "auto incompleto" →
+   non generato finché non imposti la data. Non influisce sui corrispettivi (il credito non
+   entra nel corrispettivo).
 
 ## Robustezza (fix difensivi, nessun impatto sui dati attuali)
 - `csNum` tronca importi con migliaia puntate (`"1.030,65"` → 1.03) — dormiente perché gli

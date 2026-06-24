@@ -995,10 +995,12 @@ function clienteCredito(c){
   const saldo=c.saldo||0;
   return { saldo, ric, cs, bu, credito: saldo+ric-cs-bu };
 }
+function saldoSenzaData(c){ return c.tipo==='PRE' && !!(c.saldo) && !c.saldoData; } // saldo impostato ma manca la data → credito ambiguo
 function clienteAutoIncompleto(c){ // ritorna lista delle mancanze (per clienti con genAuto) oppure null
   if(!c.genAuto) return null; const miss=[];
   if(!(c.perc>0)) miss.push('Percentuale');
   if(!(c.consumoMese>0)) miss.push('Litri max/mese');
+  if(saldoSenzaData(c)) miss.push('data del saldo');
   const act=c.tessere.filter(t=>!t.sospesa);
   if(!act.length) miss.push('nessuna tessera attiva');
   else { const cap=act.filter(t=>(t.capienza||0)>0); if(!cap.length) miss.push('capienza tessera'); else if(!cap.some(t=>t.giorni&&t.giorni.some(x=>x))) miss.push('giorni tessera'); }
@@ -1078,6 +1080,7 @@ function renderClDetail(){
       <div><span class="f-lbl">Litri max / mese</span><input class="fld sm" id="c-consumo" type="number" min="0" step="1" value="${c.consumoMese||''}" title="tetto mensile per la generazione automatica"></div>`;
   h+=`</div>`;
   if(c.tipo==='PRE') h+=`<div class="cl-row" id="credito-box" style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:.6rem .85rem;font-family:var(--mono);font-size:.84rem;align-items:flex-end;margin-bottom:.6rem">${creditoInner(c)}</div>`;
+  if(saldoSenzaData(c)) h+=`<div class="warn" style="margin:.2rem 0 .6rem">⚠ Saldo impostato senza <b>data</b>: il credito conta tutti i movimenti del periodo e può risultare sbagliato (movimenti già inclusi nel saldo). Imposta il campo <b>"alla data"</b>.</div>`;
   { const miss=clienteAutoIncompleto(c); if(miss) h+=`<div class="warn" style="margin:.2rem 0 .6rem">⚠ Generazione automatica incompleta — manca: <b>${miss.map(escapeHtml).join(', ')}</b>. Finché non lo completi, questo cliente non viene generato (o solo in parte).</div>`; }
   h+=`<div class="card-title" style="margin-top:.4rem">Tessere / veicoli (${c.tessere.length})</div>`;
   c.tessere.forEach(t=>h+=tessHtml(t));
