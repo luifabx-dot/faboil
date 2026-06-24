@@ -206,6 +206,16 @@ table.reg tbody tr.brow:hover td{background:var(--surface2)}
       <input type="file" id="file-ric" accept=".xlsx,.xls" hidden>
       <div id="import-result-ric"></div>
     </div>
+    <div class="card">
+      <div class="card-title">Backup / Ripristino</div>
+      <div class="formline">
+        <button class="btn" id="bk-export">⬇ Esporta backup</button>
+        <button class="btn ghost" id="bk-import-btn">⬆ Ripristina backup</button>
+        <input type="file" id="bk-import" accept=".json" hidden>
+      </div>
+      <p class="muted" style="margin-top:.6rem">Salva tutto (StoreSmart, Card Smart, ricariche, clienti, trasferimenti, buoni) in un unico file <code>.json</code>. Utile per spostare i dati o per inviarli in analisi.</p>
+      <div id="bk-result"></div>
+    </div>
   </div>
 
   <!-- TRASFERIMENTI -->
@@ -987,6 +997,21 @@ function exportRegistro(){
   XLSX.writeFile(wb,`Registro_dogana_${STATE.meta.period||'export'}_${REGMODE}.xlsx`);
 }
 
+function exportBackup(){
+  const data={}; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k && k.indexOf('faboil_')===0) data[k]=localStorage.getItem(k); }
+  let stamp='backup'; try{ stamp=new Date().toISOString().slice(0,19).replace(/[:T]/g,'-'); }catch(e){}
+  const blob=new Blob([JSON.stringify({app:'faboil-registro',version:1,stamp,data})],{type:'application/json'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`faboil_backup_${stamp}.json`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  document.getElementById('bk-result').innerHTML=`<div class="ok-msg" style="margin-top:.6rem">✓ Backup esportato (${Object.keys(data).length} chiavi).</div>`;
+}
+function importBackup(file){
+  const reader=new FileReader();
+  reader.onload=e=>{ try{ const o=JSON.parse(e.target.result); if(!o||!o.data) throw new Error('File di backup non valido.');
+    Object.keys(o.data).forEach(k=>{ if(k.indexOf('faboil_')===0) localStorage.setItem(k,o.data[k]); });
+    alert('Backup ripristinato. La pagina verrà ricaricata.'); location.reload();
+  }catch(err){ document.getElementById('bk-result').innerHTML=`<div class="warn" style="margin-top:.6rem">⚠ ${err.message}</div>`; } };
+  reader.readAsText(file);
+}
 function escapeHtml(s){ return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 function escapeAttr(s){ return String(s).replace(/"/g,'&quot;'); }
 function goTab(name){ document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===name)); document.querySelectorAll('.page').forEach(p=>p.classList.remove('on')); document.getElementById('page-'+name).classList.add('on'); }
@@ -1039,6 +1064,10 @@ fileCl.addEventListener('change',e=>{ if(e.target.files[0]) handleClFile(e.targe
 dropCl.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handleClFile(f); });
 
 document.getElementById('cl-search').addEventListener('input',e=>{ CLQ=e.target.value; renderClList(); });
+
+document.getElementById('bk-export').addEventListener('click',exportBackup);
+document.getElementById('bk-import-btn').addEventListener('click',()=>document.getElementById('bk-import').click());
+document.getElementById('bk-import').addEventListener('change',e=>{ if(e.target.files[0]) importBackup(e.target.files[0]); });
 
 const dropRic=document.getElementById('drop-ric'), fileRic=document.getElementById('file-ric');
 dropRic.addEventListener('click',()=>fileRic.click());
