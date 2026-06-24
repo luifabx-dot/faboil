@@ -698,32 +698,53 @@ function genClientiTarget(){
   if(GEN_SCOPE==='GROUP'){ return GEN_GROUP.map(id=>CLIENTI.find(c=>c.id===id)).filter(Boolean); }
   return CLIENTI; // ALL
 }
+// water-filling: distribuisce 'available' fra items per peso (%), cap = demand di ciascuno
+function waterfill(items, available){
+  const alloc={}; items.forEach(i=>alloc[i.key]=0);
+  let remaining=available; let pool=items.filter(i=>i.demand>0 && i.weight>0); let guard=0;
+  while(remaining>0.0001 && pool.length && guard++<2000){
+    const totW=pool.reduce((s,i)=>s+i.weight,0); if(totW<=0) break;
+    let dist=0; const capped=[];
+    for(const i of pool){ const want=i.demand-alloc[i.key]; let give=remaining*i.weight/totW; if(give>=want-1e-9){ give=want; capped.push(i.key); } alloc[i.key]+=give; dist+=give; }
+    remaining-=dist;
+    if(!capped.length) break; // nessuno ha raggiunto il tetto: distribuito tutto
+    const cs=new Set(capped); pool=pool.filter(i=>!cs.has(i.key) && alloc[i.key]<i.demand-1e-9);
+  }
+  return alloc;
+}
 function generateBuoni(){
   if(!STATE){ alert('Importa prima lo StoreSmart.'); return; }
   const sel=genClientiTarget(); if(!sel.length){ alert('Seleziona almeno un cliente.'); return; }
   const clienti=sel.filter(c=>c.genAuto);
   if(!clienti.length){ alert('Nessuno dei clienti scelti ha la "Generazione automatica" attiva. Attivala nella scheda cliente.'); return; }
   const regen=document.getElementById('g-regen').checked; const ids=new Set(clienti.map(c=>c.id));
-  if(regen) BUONI=BUONI.filter(b=>!(b.gen && ids.has(b.clienteId))); // sostituisci: via i vecchi automatici
+  if(regen) BUONI=BUONI.filter(b=>!(b.gen && ids.has(b.clienteId)));
   const already=new Set(BUONI.filter(b=>b.gen).map(b=>b.clienteId));
-  const todo=regen?clienti:clienti.filter(c=>!already.has(c.id));
+  let todo=regen?clienti:clienti.filter(c=>!already.has(c.id));
   const skipped=clienti.length-todo.length;
-  if(!todo.length){ alert(`Tutti i ${clienti.length} clienti scelti hanno già buoni generati per questo mese. Spunta "Rigenera (sostituisci)" per rifarli.`); return; }
-  // scarico grezzo per prodotto del mese (tetto fisico: non si puo' fatturare piu' di quanto erogato)
+  let nIncompleto=0; todo=todo.filter(c=>{ if(clienteAutoIncompleto(c)){ nIncompleto++; return false; } return true; });
+  if(!todo.length){ alert(`Niente da generare.${skipped?` Saltati ${skipped} già generati.`:''}${nIncompleto?` ⚠ ${nIncompleto} con parametri mancanti.`:''}`); return; }
+  // disponibile per prodotto (litri realmente erogati nel mese)
   const prodScar={GASOLIO:0,VERDE:0,GPL:0}; PUMPS.forEach(p=>{ const pc=prodOf(p); STATE.days.forEach(d=>prodScar[pc]+=grezzo(p,d)); });
-  const newB=[]; let nCli=0, nIncompleto=0, nAssurdo=0, nCredito=0;
-  todo.forEach(c=>{ if(clienteAutoIncompleto(c)){ nIncompleto++; return; } // anomalia: parametri mancanti -> non genera
-    const target=c.consumoMese||0; const act=c.tessere.filter(t=>!t.sospesa && (t.capienza||0)>0);
-    // tetto: somma scarico dei prodotti delle tessere attive del cliente
-    const prods=[...new Set(act.map(t=>t.prodotto))]; const tetto=prods.reduce((s,pr)=>s+(prodScar[pr]||0),0);
-    if(target>tetto){ nAssurdo++; return; } // input assurdo: piu' del realmente erogato -> non genera
-    // tetto credito (prepagati): i buoni in euro non superano il credito disponibile
-    let budget=null; if(c.tipo==='PRE'){ const cr=clienteCredito(c).credito; if(cr<=0.005){ nCredito++; return; } budget={euro:cr}; }
-    const share=target/act.length; let got=false;
-    act.forEach(t=>{ const nb=genForTessera(c,t,share,budget); if(nb.length){ newB.push(...nb); got=true; } });
+  // info clienti: tessere attive per prodotto e quota desiderata per tessera
+  const info={}; todo.forEach(c=>{ const act=c.tessere.filter(t=>!t.sospesa && (t.capienza||0)>0); const byProd={}; act.forEach(t=>{ (byProd[t.prodotto]=byProd[t.prodotto]||[]).push(t); }); info[c.id]={act,byProd,share:act.length?(c.consumoMese||0)/act.length:0}; });
+  // per prodotto: se la domanda supera il disponibile, raziona per percentuale (water-filling)
+  const allocCP={}; const rationed=[];
+  ['GASOLIO','VERDE','GPL'].forEach(P=>{
+    const items=[]; todo.forEach(c=>{ const tess=(info[c.id].byProd[P]||[]); if(!tess.length) return; const demand=info[c.id].share*tess.length; if(demand<=0) return; items.push({key:c.id,demand,weight:(c.perc||0)}); });
+    if(!items.length) return;
+    const totDemand=items.reduce((s,i)=>s+i.demand,0), avail=prodScar[P]||0;
+    let alloc; if(totDemand<=avail){ alloc={}; items.forEach(i=>alloc[i.key]=i.demand); } else { alloc=waterfill(items,avail); rationed.push(P); }
+    items.forEach(i=>{ (allocCP[i.key]=allocCP[i.key]||{})[P]=alloc[i.key]||0; });
+  });
+  // genera per tessera in base all'allocato, con tetto credito (prepagati)
+  const newB=[]; let nCli=0, nCredito=0;
+  todo.forEach(c=>{ const ap=allocCP[c.id]||{}; let budget=null; if(c.tipo==='PRE'){ const cr=clienteCredito(c).credito; if(cr<=0.005){ nCredito++; return; } budget={euro:cr}; }
+    let got=false;
+    Object.keys(ap).forEach(P=>{ const tess=info[c.id].byProd[P]||[]; const per=tess.length?ap[P]/tess.length:0; if(per<=0) return; tess.forEach(t=>{ const nb=genForTessera(c,t,per,budget); if(nb.length){ newB.push(...nb); got=true; } }); });
     if(got) nCli++;
   });
-  const extra=(skipped?` Saltati ${skipped} già generati.`:'')+(nIncompleto?` ⚠ ${nIncompleto} clienti saltati per parametri mancanti (percentuale, litri/mese, capienza o giorni): vedi ⚠ nella sezione Clienti.`:'')+(nAssurdo?` ⛔ ${nAssurdo} clienti saltati: "Litri max/mese" supera il carburante realmente erogato nel mese (input incongruente).`:'')+(nCredito?` 💳 ${nCredito} prepagati saltati: credito esaurito (nessuna capienza in euro).`:'');
+  const extra=(skipped?` Saltati ${skipped} già generati.`:'')+(nIncompleto?` ⚠ ${nIncompleto} con parametri mancanti.`:'')+(nCredito?` 💳 ${nCredito} prepagati a credito esaurito.`:'')+(rationed.length?` ⚖️ Prodotto scarso (${rationed.join(', ')}): litri distribuiti per percentuale.`:'');
   if(!newB.length){ alert(`Niente da generare.${extra}`); return; }
   BUONI.push(...newB); CURBUONO=newB[newB.length-1].id;
   saveStore(); recompute(); renderBuoni(); renderRegistro();
