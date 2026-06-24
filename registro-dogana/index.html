@@ -570,11 +570,15 @@ function venditeDay(d){ let s=0; ['GASOLIO','VERDE','GPL'].forEach(P=>{ const li
 // base = Σ(Qta×Prezzo) lordo SENZA sconto/magg → corrispettivo. Sconto/magg SCORPORATI e mostrati a parte.
 function cardSmartEuroDay(d){ if(!CARDSMART) return 0; if(CARDSMART.byDayBase) return (CARDSMART.byDayBase[d]||0); if(CARDSMART.byTessera){ let s=0; for(const t in CARDSMART.byTessera){ const v=CARDSMART.byTessera[t][d]; if(v) s+=v; } return s; } return 0; }
 function cardSmartScorporoDay(d){ if(!CARDSMART||!CARDSMART.byDayBase||!CARDSMART.byDayImp) return 0; const base=CARDSMART.byDayBase[d]||0, imp=CARDSMART.byDayImp[d]||0; return imp-base; } // Importo − base = sconto/magg (lordo): + maggiorazione, − sconto
-function buoniEuroDay(d){ return BUONI.filter(b=>b.day===d).reduce((s,b)=>s+(b.totale||0),0); }
+// Buoni nel corrispettivo: base PIENA = litri×prezzo (come le fatture); lo sconto/magg è scorporato.
+// Guardia: buono manuale senza prezzo (prezzo=0) → base = totale, nessuno scorporo fantasma.
+function buonoBase(b){ return (b.prezzo>0) ? b.litri*b.prezzo : (b.totale||0); }
+function buoniEuroDay(d){ return BUONI.filter(b=>b.day===d).reduce((s,b)=>s+buonoBase(b),0); }
+function buoniScorpDay(d){ return BUONI.filter(b=>b.day===d).reduce((s,b)=>s+((b.totale||0)-buonoBase(b)),0); } // totale−base: +magg / −sconto
 function icadEuroDay(d){ return (ICAD&&ICAD.byDay[d])||0; }
 function dkvEuroDay(d){ return (DKV&&DKV.byDay[d])||0; }
 function fattScorpDay(F,d){ return (F&&F.byDayScorp&&F.byDayScorp[d])||0; } // scorporo iCad/DKV (iCad=0, nessuna colonna sconto)
-function scorpDay(d){ return cardSmartScorporoDay(d)+fattScorpDay(ICAD,d)+fattScorpDay(DKV,d); } // scorporo totale (Card Smart + iCad + DKV)
+function scorpDay(d){ return cardSmartScorporoDay(d)+fattScorpDay(ICAD,d)+fattScorpDay(DKV,d)+buoniScorpDay(d); } // scorporo totale (CS + iCad + DKV + buoni)
 function commRows(){ return STATE.days.map(d=>{ const v=venditeDay(d), cs=cardSmartEuroDay(d), sc=scorpDay(d), ic=icadEuroDay(d), dk=dkvEuroDay(d), bu=buoniEuroDay(d), fatt=cs+ic+dk+bu; return { d, v, cs, sc, ic, dk, bu, fatt, corr:v-fatt }; }); }
 function renderCommercialista(){
   if(!STATE) return; const rows=commRows();
