@@ -102,6 +102,8 @@ table.reg input.has{background:var(--accent-bg);font-weight:600;color:var(--acce
 table.reg input.other::placeholder{color:#b08;opacity:.55}
 table.reg td.full{background:rgba(220,38,38,.07)}
 table.reg input.bad{outline:1.5px solid var(--red);background:var(--red-bg)}
+table.reg .resid{display:block;font-size:.55rem;color:var(--muted2);text-align:right;line-height:1.05;padding:.05rem .12rem 0;white-space:nowrap}
+table.reg .resid.z{color:var(--red);opacity:.7}
 .legend{display:flex;gap:1rem;margin:.6rem 0 .5rem;font-size:.72rem;color:var(--muted);flex-wrap:wrap;align-items:center}
 .legend span{display:inline-flex;align-items:center;gap:.35rem}
 .dot{width:11px;height:11px;border-radius:3px;display:inline-block}
@@ -133,6 +135,16 @@ table.reg input.bad{outline:1.5px solid var(--red);background:var(--red-bg)}
       </div>
       <input type="file" id="file" accept=".xlsx,.xls" hidden>
       <div id="import-result"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Card Smart — Rifornimenti fatturati</div>
+      <div class="drop" id="drop-cs">
+        <span class="ic">🧾</span>
+        <h3>Trascina qui il file Card Smart</h3>
+        <p>oppure <b>clicca per sceglierlo</b> — “RifornimentiPerPeriodo” .xlsx</p>
+      </div>
+      <input type="file" id="file-cs" accept=".xlsx,.xls" hidden>
+      <div id="import-result-cs"></div>
     </div>
   </div>
 
@@ -196,6 +208,7 @@ function prodOf(p){ if(!p) return null; if(p.startsWith('GPL')) return 'GPL'; if
 function prodClass(p){ const x=prodOf(p); return x==='GASOLIO'?'gas':x==='VERDE'?'ver':'gpl'; }
 
 let STATE=null;
+let CARDSMART=null;  // { byDayProd:{day:{prod:litri}}, meta }
 let TRANSFERS=[], CURRENT=null, SEQ=1;
 let BUONI=[], CURBUONO=null, BSEQ=1;
 let NETTO={};        // pump->day->scarico netto (>=0 garantito)
@@ -248,6 +261,59 @@ function parseStoreSmart(rows){
   }
   const days=[...daySet].sort();
   return { days, daily, meta:{kept,skTot,skAdb,skUnknown,prodCount, period: days.length? days[0].slice(0,7):'', periodo: days.length? `${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—'} };
+}
+
+// ---- parsing Card Smart (fatturato per cliente/tessera, NON per pistola) ----
+function csNum(v){ if(v==null||v==='') return 0; if(typeof v==='number') return v; return parseFloat(String(v).replace(/\s/g,'').replace(',','.'))||0; }
+function normCSProd(p){ const u=String(p||'').trim().toUpperCase(); if(u==='DIESEL') return 'GASOLIO'; if(u==='BENZINA') return 'VERDE'; if(u==='GPL') return 'GPL'; return null; }
+function parseCardSmart(rows){
+  let hr=-1; for(let i=0;i<Math.min(rows.length,30);i++){ if(rows[i] && rows[i].some(c=>String(c).trim().toLowerCase()==='prodotto')){ hr=i; break; } }
+  if(hr<0) throw new Error("Intestazione non trovata: manca 'Prodotto'. È un file Card Smart (RifornimentiPerPeriodo)?");
+  const head=rows[hr].map(c=>String(c==null?'':c).trim().toLowerCase());
+  const find=(...names)=>{ for(const n of names){ const k=head.findIndex(h=>h===n||h.includes(n)); if(k>=0) return k; } return -1; };
+  const iErog=find('data erogazione','erogazione'), iReg=find('data registrazione','registrazione'), iProd=find('prodotto'), iQta=find('quantita','quantità'), iImp=find('importo');
+  if([iProd,iQta].some(x=>x<0)) throw new Error('Colonne mancanti (servono Prodotto e Quantità).');
+  const byDayProd={}; const litri={GASOLIO:0,VERDE:0,GPL:0}; const imp={GASOLIO:0,VERDE:0,GPL:0};
+  let kept=0,skTot=0,skExtra=0; const daySet=new Set();
+  for(let i=hr+1;i<rows.length;i++){
+    const r=rows[i]; if(!r) continue;
+    if(r.some(c=>String(c).toLowerCase().includes('totale'))){ skTot++; continue; }
+    const prodRaw=r[iProd]; if(prodRaw==null||prodRaw==='') continue;
+    const prod=normCSProd(prodRaw); if(!prod){ skExtra++; continue; } // ADBLUE / Metano esclusi
+    const day=cellDay(iErog>=0?r[iErog]:r[iReg]); if(!day) continue;
+    const q=csNum(r[iQta]);
+    byDayProd[day]=byDayProd[day]||{}; byDayProd[day][prod]=(byDayProd[day][prod]||0)+q;
+    litri[prod]+=q; if(iImp>=0) imp[prod]+=csNum(r[iImp]); kept++; daySet.add(day);
+  }
+  const days=[...daySet].sort();
+  return { byDayProd, meta:{kept,skTot,skExtra,litri,imp, periodo: days.length?`${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—'} };
+}
+function handleCSFile(file){
+  const res=document.getElementById('import-result-cs'); res.innerHTML='<p class="muted" style="margin-top:1rem">Lettura in corso…</p>';
+  const reader=new FileReader();
+  reader.onload=e=>{ try{
+    const wb=XLSX.read(e.target.result,{type:'array'});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:null});
+    CARDSMART=parseCardSmart(rows); renderCSResult(file.name);
+  }catch(err){ res.innerHTML=`<div class="warn">⚠ ${err.message}</div>`; } };
+  reader.readAsArrayBuffer(file);
+}
+function renderCSResult(fname){
+  const m=CARDSMART.meta;
+  // sottoinsieme del mese del registro StoreSmart, se caricato
+  let subset='';
+  if(STATE){ const per=STATE.meta.period; const sl={GASOLIO:0,VERDE:0,GPL:0}; for(const d in CARDSMART.byDayProd){ if(d.slice(0,7)===per){ for(const pr in CARDSMART.byDayProd[d]) sl[pr]+=CARDSMART.byDayProd[d][pr]; } }
+    subset=`<p class="muted" style="margin-top:.6rem">Di cui nel mese del registro (${per}): Gasolio <b>${fmtInt(sl.GASOLIO)}</b> · Verde <b>${fmtInt(sl.VERDE)}</b> · GPL <b>${fmtInt(sl.GPL)}</b> L (per Data Erogazione).</p>`; }
+  document.getElementById('import-result-cs').innerHTML=`
+    <div class="ok-msg">✓ Importato: <b>${fname}</b></div>
+    <div class="grid" style="margin-top:.9rem">
+      <div class="stat"><div class="k">Periodo (erogazione)</div><div class="v" style="font-size:.92rem">${m.periodo}</div></div>
+      <div class="stat"><div class="k">Righe fatturate</div><div class="v">${m.kept.toLocaleString('it-IT')}</div></div>
+      <div class="stat"><div class="k">Gasolio fatt.</div><div class="v">${fmtInt(m.litri.GASOLIO)} <small>L</small></div></div>
+      <div class="stat"><div class="k">Verde fatt.</div><div class="v">${fmtInt(m.litri.VERDE)} <small>L</small></div></div>
+      <div class="stat"><div class="k">GPL fatt.</div><div class="v">${fmtInt(m.litri.GPL)} <small>L</small></div></div>
+    </div>
+    <p class="muted" style="margin-top:.7rem">Scartate ${m.skTot} righe "Totale", ${m.skExtra} righe ADBLUE/Metano (non carburanti dei 3 prodotti).</p>${subset}`;
 }
 
 // ---- calcolo NETTO: trasferimenti poi buoni (regola d'oro garantita) ----
@@ -345,8 +411,8 @@ function renderRettGrid(){
   if(!t){ cont.innerHTML='<div class="empty-state"><span class="ic">🚚</span>Crea un trasferimento interno per inserire le rettifiche.</div>'; return; }
   let h='<div class="tablewrap"><table class="reg">'+colgroup()+headRow()+'<tbody>';
   STATE.days.forEach(day=>{ h+=`<tr><td class="datecol ${dateClass(day)}">${fmtDay(day)}</td>`;
-    PUMPS.forEach(p=>{ const g=Math.round(grezzo(p,day)); const other=otherTotalAt(p,day); const v=cellOf(t,p,day); const max=Math.max(0,g-other); const full=max===0&&g>0;
-      h+=`<td class="${prodClass(p)} ${full?'full':''}"><input type="number" min="0" max="${max}" step="1" value="${v||''}" placeholder="${other>0?other:''}" data-p="${p}" data-d="${day}" title="grezzo ${fmtInt(g)} · altri travasi ${fmtInt(other)} · max ${fmtInt(max)}" class="${v>0?'has':''} ${other>0&&v===0?'other':''}"></td>`; });
+    PUMPS.forEach(p=>{ const g=Math.round(grezzo(p,day)); const other=otherTotalAt(p,day); const v=cellOf(t,p,day); const max=Math.max(0,g-other); const full=max===0&&g>0; const resid=Math.max(0,max-v);
+      h+=`<td class="${prodClass(p)} ${full?'full':''}"><input type="number" min="0" max="${max}" step="1" value="${v||''}" data-p="${p}" data-d="${day}" title="grezzo ${fmtInt(g)} · altri travasi ${fmtInt(other)} · max ${fmtInt(max)}" class="${v>0?'has':''}"><span class="resid ${resid===0?'z':''}" data-r="${p}|${day}">↓${fmtInt(resid)}</span></td>`; });
     h+='</tr>'; });
   h+='</tbody></table></div>'; cont.innerHTML=h;
   cont.querySelectorAll('input').forEach(inp=>inp.addEventListener('input',onRettInput));
@@ -358,6 +424,7 @@ function onRettInput(e){
   if(val>max){ val=max; inp.value=max||''; inp.classList.add('bad'); setTimeout(()=>inp.classList.remove('bad'),600); }
   if(!t.cells[p]) t.cells[p]={}; if(val>0) t.cells[p][day]=val; else delete t.cells[p][day];
   inp.classList.toggle('has',val>0);
+  const resid=Math.max(0,max-val); const rs=inp.parentElement.querySelector('.resid'); if(rs){ rs.textContent='↓'+fmtInt(resid); rs.classList.toggle('z',resid===0); }
   saveStore(); renderChipsOnly(); const b=document.querySelector('#rett-bar .tbadge'); if(b) b.textContent=`Totale: ${fmtInt(transferTotal(t))} L`;
   recompute(); renderRegistro();
 }
@@ -429,6 +496,13 @@ fileInput.addEventListener('change',e=>{ if(e.target.files[0]) handleFile(e.targ
 ['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('drag');}));
 ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('drag');}));
 drop.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handleFile(f); });
+
+const dropCs=document.getElementById('drop-cs'), fileCs=document.getElementById('file-cs');
+dropCs.addEventListener('click',()=>fileCs.click());
+fileCs.addEventListener('change',e=>{ if(e.target.files[0]) handleCSFile(e.target.files[0]); });
+['dragover','dragenter'].forEach(ev=>dropCs.addEventListener(ev,e=>{e.preventDefault();dropCs.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=>dropCs.addEventListener(ev,e=>{e.preventDefault();dropCs.classList.remove('drag');}));
+dropCs.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handleCSFile(f); });
 </script>
 </body>
 </html>
