@@ -266,13 +266,10 @@ table.reg tbody tr.brow:hover td{background:var(--surface2)}
       <p class="muted" style="margin-top:.6rem">Per ogni cliente genera fino al suo <b>Litri max/mese</b>, distribuito sulle sue <b>tessere attive</b> (capienza + giorni ammessi, festivi esclusi se impostato) come rifornimenti vicini al pieno e variati. Le tessere <b>sospese</b> sono saltate.</p>
     </div>
     <div class="row-actions" style="margin-top:.3rem">
-      <input id="bf-search" class="fld" placeholder="Cerca cliente / tessera…" style="min-width:200px">
-      <select id="bf-prod" class="fld"><option value="ALL">Tutti i prodotti</option><option value="GASOLIO">Gasolio</option><option value="VERDE">Verde</option><option value="GPL">GPL</option></select>
-      <select id="bf-day" class="fld"><option value="ALL">Tutti i giorni</option></select>
       <span class="muted" id="buoni-count" style="margin-right:auto"></span>
       <button class="btn sm danger" id="b-delall">Elimina tutti i buoni del mese</button>
     </div>
-    <div id="buoni-list"></div>
+    <p class="muted">I rifornimenti si vedono e si modificano nella sezione <b>Assegnazioni</b>.</p>
   </div>
 
   <!-- ASSEGNAZIONI -->
@@ -627,22 +624,7 @@ function delTransfer(id){ const t=TRANSFERS.find(x=>x.id===id); if(t&&transferTo
 // ---- BUONI ----
 function fillBuonoDays(){ const sel=document.getElementById('b-day'); sel.innerHTML=STATE.days.map(d=>`<option value="${d}">${fmtDay(d)}</option>`).join(''); }
 let BF_Q='', BF_PROD='ALL', BF_DAY='ALL';
-function renderBuoni(){ if(!STATE) return; fillBuoniDayFilter(); renderBuoniList(); }
-function fillBuoniDayFilter(){ const sel=document.getElementById('bf-day'); if(!sel||!STATE) return; const cur=sel.value; sel.innerHTML='<option value="ALL">Tutti i giorni</option>'+STATE.days.map(d=>`<option value="${d}">${fmtDay(d)}</option>`).join(''); sel.value=cur||'ALL'; }
-function filteredBuoni(){ const q=BF_Q.trim().toLowerCase(); return BUONI.filter(b=>{
-  if(BF_PROD!=='ALL' && b.prodotto!==BF_PROD) return false;
-  if(BF_DAY!=='ALL' && b.day!==BF_DAY) return false;
-  if(q){ const s=((b.clienteNome||'')+' '+(b.tessera||'')).toLowerCase(); if(!s.includes(q)) return false; }
-  return true; }); }
-function renderBuoniList(){
-  const cont=document.getElementById('buoni-list'); const cnt=document.getElementById('buoni-count');
-  if(!BUONI.length){ cont.innerHTML='<p class="muted">Nessun buono. Inseriscine uno o usa la generazione.</p>'; cnt.textContent=''; return; }
-  const list=filteredBuoni(); cnt.textContent=`${list.length} di ${BUONI.length} buoni · ${fmtInt(list.reduce((s,b)=>s+b.litri,0))} L`;
-  let h='<div class="tablewrap" style="max-height:42vh"><table class="reg"><thead><tr><th style="text-align:left">Cliente</th><th>Tessera</th><th>Prod</th><th>Data</th><th>Litri</th><th>Totale</th><th></th></tr></thead><tbody>';
-  list.forEach(b=>{ const r=BRESULT[b.id]||{}; h+=`<tr class="brow" data-id="${b.id}"><td style="text-align:left">${escapeHtml(b.clienteNome||'—')}${b.manual?' <span class="badge-tipo pre">MAN</span>':''}${b.gen?'':' <span class="badge-tipo post">man.</span>'}</td><td>${escapeHtml(b.tessera||'')}</td><td>${b.prodotto.slice(0,3)}</td><td>${fmtDay(b.day)}</td><td>${fmt2(b.litri)}</td><td>${fmtEur(b.totale||0)}</td><td style="white-space:nowrap">${r.short>EPS?'⚠':''} <button data-del="${b.id}" class="btn sm danger" style="padding:.05rem .35rem">✕</button></td></tr>`; });
-  h+='</tbody></table></div>'; cont.innerHTML=h;
-  cont.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',e=>{ e.stopPropagation(); delBuono(parseInt(b.dataset.del,10)); }));
-}
+function renderBuoni(){ if(!STATE) return; const cnt=document.getElementById('buoni-count'); if(cnt) cnt.textContent=BUONI.length?`${BUONI.length} buoni nel mese · ${fmtInt(BUONI.reduce((s,b)=>s+b.litri,0))} L`:'Nessun buono.'; }
 function delAllBuoni(){ if(!BUONI.length) return; if(!confirm(`Eliminare TUTTI i ${BUONI.length} buoni del mese? L'operazione non è reversibile.`)) return; BUONI=[]; CURBUONO=null; saveStore(); recompute(); renderBuoni(); renderRegistro(); refreshScheda(); if(typeof renderAssegnazioni==='function') renderAssegnazioni(); }
 function renderBuoniGrid(){
   const cont=document.getElementById('buoni-grid'); const b=BUONI.find(x=>x.id===CURBUONO);
@@ -1054,9 +1036,6 @@ function goTab(name){ document.querySelectorAll('.tab').forEach(t=>t.classList.t
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ if(!t.disabled) goTab(t.dataset.tab); }));
 document.getElementById('export-btn').addEventListener('click',exportRegistro);
 document.getElementById('b-add').addEventListener('click',addBuono);
-document.getElementById('bf-search').addEventListener('input',e=>{ BF_Q=e.target.value; renderBuoniList(); });
-document.getElementById('bf-prod').addEventListener('change',e=>{ BF_PROD=e.target.value; renderBuoniList(); });
-document.getElementById('bf-day').addEventListener('change',e=>{ BF_DAY=e.target.value; renderBuoniList(); });
 document.getElementById('b-delall').addEventListener('click',delAllBuoni);
 document.getElementById('b-cliente-btn').addEventListener('click',()=>openCliPicker(selectBuonoCli));
 document.getElementById('g-cliente-btn').addEventListener('click',()=>openCliPicker(selectGenCli));
