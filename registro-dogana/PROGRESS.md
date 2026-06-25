@@ -66,6 +66,11 @@ Ultimo aggiornamento: 2026-06-24.
 - **Corrispettivo/giorno** = vendite − (Card Smart + iCad + DKV + buoni).
 - **Credito prepagato** = saldo@data + ricariche − (Card Smart Importo + buoni), dalla `saldoData` in poi.
 
+### DUE REGOLE D'ORO (un buono/travaso deve rispettarle ENTRAMBE)
+1. **Fisica/registro**: contatore mai indietro → scarico netto ≥ 0 (già implementata).
+2. **Cassa/commercialista**: **contante mai negativo** (da implementare con CTRL CASSE).
+Un buono o un travaso che violerebbe una delle due viene **bloccato**.
+
 ### Corrispettivo CONTANTI (modello a strati — da implementare con CTRL CASSE)
 Esempio 1 giugno: vendite 10.000 (10.000 L×1€) − CS 5.000 − iCad 1.000 − DKV 1.000 = **corrispettivo 3.000**;
 con un buono di 1.000 il "non toccabile" sale e il corrispettivo scende a 2.000.
