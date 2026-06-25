@@ -434,7 +434,8 @@ const FLOOR_LT=100; // pavimento: su ogni giorno-sorgente resta sempre almeno 10
 
 function itNum(v){ if(v==null||v==='') return 0; if(typeof v==='number') return v; let s=String(v).trim().replace(/[^0-9.,-]/g,''); if(s.includes(',')&&s.includes('.')) s=s.replace(/\./g,'').replace(',','.'); else if(s.includes(',')) s=s.replace(',','.'); return parseFloat(s)||0; } // gestisce "1.234,56" (mig.+dec.), "1,566", "1.948"
 function serialToDate(s){ return new Date(Math.round((s-25569)*86400*1000)); }
-function cellDay(v){ if(v==null||v==='') return null; if(typeof v==='number'){ return serialToDate(v).toISOString().slice(0,10); } const s=String(v).trim(); let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return `${m[1]}-${m[2]}-${m[3]}`; m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/); if(m) return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`; return null; }
+function itMonth(s){ const k=String(s).trim().toLowerCase().slice(0,3); const map={gen:1,feb:2,mar:3,apr:4,mag:5,giu:6,lug:7,ago:8,set:9,ott:10,nov:11,dic:12}; return map[k]||0; }
+function cellDay(v){ if(v==null||v==='') return null; if(typeof v==='number'){ return serialToDate(v).toISOString().slice(0,10); } const s=String(v).trim(); let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return `${m[1]}-${m[2]}-${m[3]}`; m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/); if(m) return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`; m=s.match(/^(\d{1,2})\s+([a-zàèéìòù]{3,})\.?\s+(\d{4})/i); if(m){ const mo=itMonth(m[2]); if(mo) return `${m[3]}-${String(mo).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`; } return null; } // "1 giu 2026, 00:00" (resoconto POS)
 function fmtDay(key){ const[y,m,d]=key.split('-'); return `${d}/${m}/${y}`; }
 function fmtInt(n){ return Math.round(n).toLocaleString('it-IT'); }
 function fmt2(n){ return (Math.round(n*100)/100).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -986,7 +987,7 @@ function parsePos(rows){
   if(hr<0) throw new Error("Intestazione non trovata: manca 'Account'. È il file resoconto vendite POS?");
   const head=rows[hr].map(c=>String(c==null?'':c).trim().toLowerCase());
   const find=(...names)=>{ for(const n of names){ const k=head.findIndex(h=>h===n); if(k>=0) return k; } for(const n of names){ const k=head.findIndex(h=>h.includes(n)); if(k>=0) return k; } return -1; };
-  const iData=find('data','data transazione','data operazione','data vendita'), iAcc=find('account'), iImp=find('importo','prezzo','totale','total','ammontare');
+  const iData=find('data','data transazione','data operazione','data vendita'), iAcc=find('account'), iImp=find('prezzo (lordo)','importo lordo','lordo','importo','totale','total','ammontare','prezzo');
   if(iData<0||iAcc<0||iImp<0) throw new Error(`Colonne mancanti (Data / Account / Importo). Trovate: ${head.filter(Boolean).join(', ')}`);
   const byAccount={}; const dset=new Set(); let n=0;
   for(let i=hr+1;i<rows.length;i++){ const r=rows[i]; if(!r) continue; const acc=String(r[iAcc]==null?'':r[iAcc]).trim(); if(!acc) continue; const d=cellDay(r[iData]); if(!d) continue; const eur=csNum(r[iImp]); byAccount[acc]=byAccount[acc]||{}; byAccount[acc][d]=(byAccount[acc][d]||0)+eur; n++; dset.add(d); }
