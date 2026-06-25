@@ -49,6 +49,9 @@ body{min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--s
 .stat .v small{font-size:.7rem;color:var(--muted);font-weight:400}
 .warn{background:var(--red-bg);border:1.5px solid rgba(220,38,38,.25);color:#991b1b;border-radius:var(--radius);padding:.7rem .9rem;font-size:.8rem;margin-top:.7rem}
 .ok-msg{background:var(--green-bg);border:1.5px solid rgba(21,128,61,.25);color:var(--green);border-radius:var(--radius);padding:.7rem .9rem;font-size:.82rem;font-weight:600;margin-top:.7rem;display:flex;align-items:center;gap:.5rem}
+.poschips{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem}
+.poschip{border:1.5px solid var(--border2);background:var(--surface2);color:var(--muted);border-radius:999px;padding:.35rem .7rem;font-size:.78rem;font-weight:600;cursor:pointer;transition:all .12s}
+.poschip.on{border-color:var(--accent);background:var(--accent-bg);color:var(--text)}
 .btn{font-family:var(--sans);font-size:.85rem;font-weight:700;padding:.55rem 1.1rem;border-radius:9px;border:1.5px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;transition:all .12s}
 .btn:hover{filter:brightness(1.07)}
 .btn.ghost{background:none;color:var(--accent)}
@@ -232,6 +235,13 @@ table.reg tbody tr.brow:hover td{background:var(--surface2)}
       <div class="drop" id="drop-dkv"><span class="ic">🧾</span><h3>Trascina qui il file DKV</h3><p>oppure <b>clicca per sceglierlo</b> — .xlsx</p></div>
       <input type="file" id="file-dkv" accept=".xlsx,.xls" hidden>
       <div id="import-result-dkv"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">POS — Incassato (resoconto vendite)</div>
+      <div class="drop" id="drop-pos"><span class="ic">💳</span><h3>Trascina qui il file POS</h3><p>oppure <b>clicca per sceglierlo</b> — “resoconto vendite” .xlsx</p></div>
+      <input type="file" id="file-pos" accept=".xlsx,.xls" hidden>
+      <p class="muted" style="margin-top:.5rem">Sola lettura. Il file mescola Lusciano e Casaluce: dopo l'import scegli quali account sono di Lusciano.</p>
+      <div id="import-result-pos"></div>
     </div>
     <div class="card">
       <div class="card-title">Clienti — Anagrafica (estesoL)</div>
@@ -667,31 +677,32 @@ function icadEuroDay(d){ return (ICAD&&ICAD.byDay[d])||0; }
 function dkvEuroDay(d){ return (DKV&&DKV.byDay[d])||0; }
 function fattScorpDay(F,d){ return (F&&F.byDayScorp&&F.byDayScorp[d])||0; } // scorporo iCad/DKV (iCad=0, nessuna colonna sconto)
 function scorpFattDay(d){ return cardSmartScorporoDay(d)+fattScorpDay(ICAD,d)+fattScorpDay(DKV,d); } // scorporo FATTURE (CS+iCad+DKV)
-function commRows(){ return STATE.days.map(d=>{ const vg=venditeGrezzeDay(d), v=venditeDay(d), cs=cardSmartEuroDay(d), scF=scorpFattDay(d), scB=buoniScorpDay(d), ic=icadEuroDay(d), dk=dkvEuroDay(d), bu=buoniEuroDay(d), fatt=cs+ic+dk+bu; return { d, vg, v, cs, scF, scB, ic, dk, bu, fatt, corr:v-fatt }; }); }
+function commRows(){ return STATE.days.map(d=>{ const vg=venditeGrezzeDay(d), v=venditeDay(d), cs=cardSmartEuroDay(d), scF=scorpFattDay(d), scB=buoniScorpDay(d), ic=icadEuroDay(d), dk=dkvEuroDay(d), bu=buoniEuroDay(d), fatt=cs+ic+dk+bu, corr=v-fatt, pos=posDay(d), scp=scontoAllaPompaDay(d), cont=corr-pos+scp; return { d, vg, v, cs, scF, scB, ic, dk, bu, fatt, corr, pos, scp, cont }; }); }
 // 2ª REGOLA D'ORO: dato un netto candidato (work) e i buoni candidati, ritorna il 1° giorno col
 // corrispettivo (vendite nette − fatturato) < 0, oppure null. (Senza POS il contante = corrispettivo.)
 function corrViolato(buoni, work){
   for(const d of STATE.days){
     let v=0; ['GASOLIO','VERDE','GPL'].forEach(P=>{ const pumps=PUMPS.filter(p=>prodOf(p)===P); const gz=pumps.reduce((a,p)=>a+grezzo(p,d),0); const nt=pumps.reduce((a,p)=>a+((work[p]&&work[p][d]!=null)?work[p][d]:grezzo(p,d)),0); v+= gz>EPS?venditeEurProd(d,P)*(nt/gz):0; });
     const fatt=cardSmartEuroDay(d)+icadEuroDay(d)+dkvEuroDay(d)+buoni.filter(b=>b.day===d).reduce((s,b)=>s+buonoBase(b),0);
-    if(v-fatt < -0.005) return d;
+    const corr=v-fatt; const cont = POS ? (corr - posDay(d) + scontoAllaPompaDay(d)) : corr; // con POS: contante reale; senza POS: corr (più stretto)
+    if(cont < -0.005) return d;
   }
   return null;
 }
 function renderCommercialista(){
   if(!STATE) return; const rows=commRows();
-  const tot=rows.reduce((a,r)=>({vg:a.vg+r.vg,v:a.v+r.v,cs:a.cs+r.cs,scF:a.scF+r.scF,scB:a.scB+r.scB,ic:a.ic+r.ic,dk:a.dk+r.dk,bu:a.bu+r.bu,fatt:a.fatt+r.fatt,corr:a.corr+r.corr}),{vg:0,v:0,cs:0,scF:0,scB:0,ic:0,dk:0,bu:0,fatt:0,corr:0});
-  let h='<div class="tablewrap" style="max-height:74vh"><table class="reg"><thead><tr><th class="datecol" style="text-align:left">DATA</th><th title="Vendite grezze StoreSmart (prima di travasi/buoni)">Vendite grezze</th><th title="Vendite nette = seguono il registro (travasi e buoni le muovono)">Vendite nette</th><th>Card Smart</th><th>iCad</th><th>DKV</th><th>Buoni</th><th title="Sconti/maggiorazioni FATTURE — NON nel corrispettivo">Sc./Magg. fatt.</th><th title="Sconti/maggiorazioni BUONI — NON nel corrispettivo">Sc./Magg. buoni</th><th>Tot. fatturato</th><th>Corrispettivo</th></tr></thead><tbody>';
-  rows.forEach(r=>{ h+=`<tr><td class="datecol ${dateClass(r.d)}" style="text-align:left">${fmtDay(r.d)}</td><td style="color:var(--muted)">${fmtEur(r.vg)}</td><td style="font-weight:600">${fmtEur(r.v)}</td><td>${fmtEur(r.cs)}</td><td>${fmtEur(r.ic)}</td><td>${fmtEur(r.dk)}</td><td>${fmtEur(r.bu)}</td><td style="color:var(--muted)">${r.scF?fmtEur(r.scF):'—'}</td><td style="color:var(--muted)">${r.scB?fmtEur(r.scB):'—'}</td><td>${fmtEur(r.fatt)}</td><td style="font-weight:700;color:${r.corr<0?'var(--red)':'var(--text)'}">${fmtEur(r.corr)}</td></tr>`; });
-  h+=`<tr class="base"><td class="datecol" style="text-align:left">TOTALE</td><td style="color:var(--muted)">${fmtEur(tot.vg)}</td><td>${fmtEur(tot.v)}</td><td>${fmtEur(tot.cs)}</td><td>${fmtEur(tot.ic)}</td><td>${fmtEur(tot.dk)}</td><td>${fmtEur(tot.bu)}</td><td style="color:var(--muted)">${fmtEur(tot.scF)}</td><td style="color:var(--muted)">${fmtEur(tot.scB)}</td><td>${fmtEur(tot.fatt)}</td><td style="font-weight:800">${fmtEur(tot.corr)}</td></tr>`;
+  const tot=rows.reduce((a,r)=>({vg:a.vg+r.vg,v:a.v+r.v,cs:a.cs+r.cs,scF:a.scF+r.scF,scB:a.scB+r.scB,ic:a.ic+r.ic,dk:a.dk+r.dk,bu:a.bu+r.bu,fatt:a.fatt+r.fatt,corr:a.corr+r.corr,pos:a.pos+r.pos,scp:a.scp+r.scp,cont:a.cont+r.cont}),{vg:0,v:0,cs:0,scF:0,scB:0,ic:0,dk:0,bu:0,fatt:0,corr:0,pos:0,scp:0,cont:0});
+  let h='<div class="tablewrap" style="max-height:74vh"><table class="reg"><thead><tr><th class="datecol" style="text-align:left">DATA</th><th title="Vendite grezze StoreSmart (prima di travasi/buoni)">Vendite grezze</th><th title="Vendite nette = seguono il registro (travasi e buoni le muovono)">Vendite nette</th><th>Card Smart</th><th>iCad</th><th>DKV</th><th>Buoni</th><th title="Sconti/maggiorazioni FATTURE — NON nel corrispettivo">Sc./Magg. fatt.</th><th title="Sconti/maggiorazioni BUONI — NON nel corrispettivo">Sc./Magg. buoni</th><th>Tot. fatturato</th><th>Corrispettivo</th><th title="Incassato POS (file resoconto, account di Lusciano) — sola lettura">POS</th><th title="POS-su-fatture pagate alla pompa: iCad non-UTA + Card Smart Sconto/Punti — riaccreditato ai contanti">Sc. pompa</th><th title="Contanti = Corrispettivo − POS + Sc. pompa">Contanti</th></tr></thead><tbody>';
+  rows.forEach(r=>{ h+=`<tr><td class="datecol ${dateClass(r.d)}" style="text-align:left">${fmtDay(r.d)}</td><td style="color:var(--muted)">${fmtEur(r.vg)}</td><td style="font-weight:600">${fmtEur(r.v)}</td><td>${fmtEur(r.cs)}</td><td>${fmtEur(r.ic)}</td><td>${fmtEur(r.dk)}</td><td>${fmtEur(r.bu)}</td><td style="color:var(--muted)">${r.scF?fmtEur(r.scF):'—'}</td><td style="color:var(--muted)">${r.scB?fmtEur(r.scB):'—'}</td><td>${fmtEur(r.fatt)}</td><td style="font-weight:700;color:${r.corr<0?'var(--red)':'var(--text)'}">${fmtEur(r.corr)}</td><td style="color:var(--muted)">${r.pos?fmtEur(r.pos):'—'}</td><td style="color:var(--muted)">${r.scp?fmtEur(r.scp):'—'}</td><td style="font-weight:700;color:${r.cont<-0.005?'var(--red)':'var(--text)'}">${fmtEur(r.cont)}</td></tr>`; });
+  h+=`<tr class="base"><td class="datecol" style="text-align:left">TOTALE</td><td style="color:var(--muted)">${fmtEur(tot.vg)}</td><td>${fmtEur(tot.v)}</td><td>${fmtEur(tot.cs)}</td><td>${fmtEur(tot.ic)}</td><td>${fmtEur(tot.dk)}</td><td>${fmtEur(tot.bu)}</td><td style="color:var(--muted)">${fmtEur(tot.scF)}</td><td style="color:var(--muted)">${fmtEur(tot.scB)}</td><td>${fmtEur(tot.fatt)}</td><td style="font-weight:800">${fmtEur(tot.corr)}</td><td style="color:var(--muted)">${fmtEur(tot.pos)}</td><td style="color:var(--muted)">${fmtEur(tot.scp)}</td><td style="font-weight:800">${fmtEur(tot.cont)}</td></tr>`;
   h+='</tbody></table></div>';
   document.getElementById('comm-container').innerHTML=h;
 }
 function exportCommercialista(){
   if(!STATE) return; const rows=commRows();
-  const aoa=[['DATA','Vendite grezze','Vendite nette','Card Smart','iCad','DKV','Buoni','Sc./Magg. fatture','Sc./Magg. buoni','Tot. fatturato','Corrispettivo']];
-  rows.forEach(r=>aoa.push([fmtDay(r.d), r.vg, r.v, r.cs, r.ic, r.dk, r.bu, r.scF, r.scB, r.fatt, r.corr].map((x,i)=>i===0?x:Math.round(x*100)/100)));
-  const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:12},{wch:13},{wch:13},{wch:12},{wch:12},{wch:12},{wch:12},{wch:15},{wch:15},{wch:14},{wch:14}];
+  const aoa=[['DATA','Vendite grezze','Vendite nette','Card Smart','iCad','DKV','Buoni','Sc./Magg. fatture','Sc./Magg. buoni','Tot. fatturato','Corrispettivo','POS','Sc. pompa','Contanti']];
+  rows.forEach(r=>aoa.push([fmtDay(r.d), r.vg, r.v, r.cs, r.ic, r.dk, r.bu, r.scF, r.scB, r.fatt, r.corr, r.pos, r.scp, r.cont].map((x,i)=>i===0?x:Math.round(x*100)/100)));
+  const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:12},{wch:13},{wch:13},{wch:12},{wch:12},{wch:12},{wch:12},{wch:15},{wch:15},{wch:14},{wch:14},{wch:12},{wch:12},{wch:14}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Corrispettivo');
   XLSX.writeFile(wb,`Commercialista_${STATE.meta.period||'export'}.xlsx`);
 }
@@ -939,29 +950,78 @@ function saveCS(){ try{ localStorage.setItem('faboil_cs', JSON.stringify(CARDSMA
 
 // ---- iCad / DKV (fatturazione) ----
 let ICAD=null, DKV=null;
-function parseFatt(rows, dataNames, impNames){
+function parseFatt(rows, dataNames, impNames, clienteNames){
   if(!rows.length) throw new Error('File vuoto.');
   const head=rows[0].map(c=>String(c==null?'':c).trim().toLowerCase());
   const find=(...n)=>{ for(const x of n){ const k=head.findIndex(h=>h===x); if(k>=0) return k; } for(const x of n){ const k=head.findIndex(h=>h.includes(x)); if(k>=0) return k; } return -1; }; // esatto prima, poi sottostringa
   const iData=find(...dataNames), iImp=find(...impNames), iNet=find('netto'); // iNet: DKV ha colonna Netto (=Importo+sconto/magg); iCad no
   if(iData<0||iImp<0) throw new Error('Colonne mancanti (data / importo).');
-  const byDay={}, byDayScorp={}; let n=0; const dset=new Set();
-  for(let i=1;i<rows.length;i++){ const r=rows[i]; if(!r) continue; const d=cellDay(r[iData]); if(!d) continue; const base=csNum(r[iImp]); byDay[d]=(byDay[d]||0)+base; if(iNet>=0){ byDayScorp[d]=(byDayScorp[d]||0)+(csNum(r[iNet])-base); } n++; dset.add(d); } // scorporo = Netto-Importo (+magg/-sconto)
+  const wantUta=!!clienteNames; const iCli=wantUta?find(...clienteNames):-1; // iCad: scorporo UTA (incassate a parte, non POS)
+  const byDay={}, byDayScorp={}, byDayNonUta={}; let n=0, nUta=0; const dset=new Set();
+  for(let i=1;i<rows.length;i++){ const r=rows[i]; if(!r) continue; const d=cellDay(r[iData]); if(!d) continue; const base=csNum(r[iImp]); byDay[d]=(byDay[d]||0)+base; if(iNet>=0){ byDayScorp[d]=(byDayScorp[d]||0)+(csNum(r[iNet])-base); } // scorporo = Netto-Importo (+magg/-sconto)
+    if(wantUta){ const isUta = iCli>=0 ? /\buta\b/i.test(String(r[iCli]||'')) : r.some(c=>/\buta\b/i.test(String(c||''))); if(isUta) nUta++; else byDayNonUta[d]=(byDayNonUta[d]||0)+base; } // non-UTA = incassate alla pompa con POS
+    n++; dset.add(d); }
   const days=[...dset].sort();
-  return { byDay, byDayScorp, meta:{ n, tot:Object.values(byDay).reduce((a,b)=>a+b,0), scorp:Object.values(byDayScorp).reduce((a,b)=>a+b,0), periodo: days.length?`${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—' } };
+  return { byDay, byDayScorp, byDayNonUta, meta:{ n, nUta, tot:Object.values(byDay).reduce((a,b)=>a+b,0), nonUta:Object.values(byDayNonUta).reduce((a,b)=>a+b,0), scorp:Object.values(byDayScorp).reduce((a,b)=>a+b,0), periodo: days.length?`${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—' } };
 }
 function handleFattFile(file, kind){
   const id=kind==='ICAD'?'import-result-icad':'import-result-dkv';
   const res=document.getElementById(id); res.innerHTML='<p class="muted" style="margin-top:1rem">Lettura in corso…</p>';
   const reader=new FileReader();
   reader.onload=e=>{ try{ const wb=XLSX.read(e.target.result,{type:'array'}); const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:null});
-    let parsed; if(kind==='ICAD'){ parsed=parseFatt(rows,['data transazione','data'],['importo transazione','importo fattura','importo']); ICAD=parsed; localStorage.setItem('faboil_icad',JSON.stringify(ICAD)); }
+    let parsed; if(kind==='ICAD'){ parsed=parseFatt(rows,['data transazione','data'],['importo transazione','importo fattura','importo'],['cliente','ragione sociale','ragione','denominazione','intestatario']); ICAD=parsed; localStorage.setItem('faboil_icad',JSON.stringify(ICAD)); }
     else { parsed=parseFatt(rows,['data'],['importo']); DKV=parsed; localStorage.setItem('faboil_dkv',JSON.stringify(DKV)); }
-    res.innerHTML=`<div class="ok-msg">✓ Importato: <b>${file.name}</b></div><p class="muted" style="margin-top:.5rem">Periodo ${parsed.meta.periodo} · ${parsed.meta.n} righe · ${fmtEur(parsed.meta.tot)} fatturati.</p>`;
+    const utaInfo = kind==='ICAD' ? ` · di cui non-UTA (alla pompa) <b>${fmtEur(parsed.meta.nonUta)}</b>${parsed.meta.nUta?` · ${parsed.meta.nUta} righe UTA escluse`:''}` : '';
+    res.innerHTML=`<div class="ok-msg">✓ Importato: <b>${file.name}</b></div><p class="muted" style="margin-top:.5rem">Periodo ${parsed.meta.periodo} · ${parsed.meta.n} righe · ${fmtEur(parsed.meta.tot)} fatturati${utaInfo}.</p>`;
     renderCommercialista();
   }catch(err){ res.innerHTML=`<div class="warn">⚠ ${err.message}</div>`; } };
   reader.readAsArrayBuffer(file);
 }
+// ---- POS (resoconto vendite: incassato POS per operatore/account) ----
+// Sola lettura: il POS è un dato di fatto, non si modifica a mano.
+// Il file mescola Lusciano + Casaluce: l'utente sceglie quali account sono di Lusciano.
+let POS=null, POSLUS=null; // POS: {byAccount, accounts, meta}; POSLUS: array nomi account di Lusciano (null = tutti)
+function parsePos(rows){
+  let hr=-1; for(let i=0;i<Math.min(rows.length,40);i++){ const r=rows[i]; if(r && r.some(c=>String(c==null?'':c).trim().toLowerCase()==='account')){ hr=i; break; } }
+  if(hr<0) throw new Error("Intestazione non trovata: manca 'Account'. È il file resoconto vendite POS?");
+  const head=rows[hr].map(c=>String(c==null?'':c).trim().toLowerCase());
+  const find=(...names)=>{ for(const n of names){ const k=head.findIndex(h=>h===n); if(k>=0) return k; } for(const n of names){ const k=head.findIndex(h=>h.includes(n)); if(k>=0) return k; } return -1; };
+  const iData=find('data','data transazione','data operazione','data vendita'), iAcc=find('account'), iImp=find('importo','prezzo','totale','total','ammontare');
+  if(iData<0||iAcc<0||iImp<0) throw new Error(`Colonne mancanti (Data / Account / Importo). Trovate: ${head.filter(Boolean).join(', ')}`);
+  const byAccount={}; const dset=new Set(); let n=0;
+  for(let i=hr+1;i<rows.length;i++){ const r=rows[i]; if(!r) continue; const acc=String(r[iAcc]==null?'':r[iAcc]).trim(); if(!acc) continue; const d=cellDay(r[iData]); if(!d) continue; const eur=csNum(r[iImp]); byAccount[acc]=byAccount[acc]||{}; byAccount[acc][d]=(byAccount[acc][d]||0)+eur; n++; dset.add(d); }
+  const accounts=Object.keys(byAccount).map(a=>({name:a, tot:Object.values(byAccount[a]).reduce((x,y)=>x+y,0)})).sort((a,b)=>b.tot-a.tot);
+  const days=[...dset].sort();
+  return { byAccount, accounts, meta:{ n, tot:accounts.reduce((s,a)=>s+a.tot,0), periodo: days.length?`${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—' } };
+}
+function posSel(name){ return !POSLUS || POSLUS.indexOf(name)>=0; } // null = tutti selezionati
+function posDay(d){ if(!POS) return 0; let s=0; for(const a of POS.accounts){ if(posSel(a.name)) s+=(POS.byAccount[a.name][d]||0); } return s; }
+function savePos(){ if(POS) localStorage.setItem('faboil_pos',JSON.stringify(POS)); if(POSLUS) localStorage.setItem('faboil_poslus',JSON.stringify(POSLUS)); }
+function togglePosAcc(name){ if(!POS) return; if(!POSLUS) POSLUS=POS.accounts.map(a=>a.name); const i=POSLUS.indexOf(name); if(i>=0) POSLUS.splice(i,1); else POSLUS.push(name); savePos(); renderPosResult(); renderCommercialista(); }
+function handlePosFile(file){
+  const res=document.getElementById('import-result-pos'); res.innerHTML='<p class="muted" style="margin-top:1rem">Lettura in corso…</p>';
+  const reader=new FileReader();
+  reader.onload=e=>{ try{ const wb=XLSX.read(e.target.result,{type:'array'}); const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:null});
+    POS=parsePos(rows); POSLUS=POS.accounts.map(a=>a.name); savePos(); renderPosResult(file.name); renderCommercialista();
+  }catch(err){ res.innerHTML=`<div class="warn">⚠ ${err.message}</div>`; } };
+  reader.readAsArrayBuffer(file);
+}
+function renderPosResult(fname){
+  if(!POS){ return; } const m=POS.meta;
+  const selTot=POS.accounts.filter(a=>posSel(a.name)).reduce((s,a)=>s+a.tot,0);
+  let chips=POS.accounts.map(a=>{ const on=posSel(a.name); return `<button class="poschip ${on?'on':''}" data-acc="${escapeAttr(a.name)}">${on?'☑':'☐'} ${escapeHtml(a.name)} · ${fmtEur(a.tot)}</button>`; }).join('');
+  const head = fname ? `<div class="ok-msg">✓ Importato: <b>${escapeHtml(fname)}</b></div>` : `<div class="ok-msg">✓ POS ripristinato</div>`;
+  document.getElementById('import-result-pos').innerHTML=`${head}
+    <p class="muted" style="margin-top:.5rem">Periodo ${m.periodo} · ${m.n} transazioni · totale file ${fmtEur(m.tot)}.</p>
+    <p class="muted" style="margin-top:.6rem"><b>Account di Lusciano</b> (clicca per escludere quelli di Casaluce):</p>
+    <div class="poschips">${chips}</div>
+    <p class="muted" style="margin-top:.5rem">POS selezionato (Lusciano): <b>${fmtEur(selTot)}</b>.</p>`;
+}
+// sconto-alla-pompa (POS-su-fatture): iCad non-UTA + Card Smart tipologia Sconto/Punti. NON abbassa i contanti.
+function icadNonUtaDay(d){ return (ICAD&&ICAD.byDayNonUta&&ICAD.byDayNonUta[d])||0; }
+function cardSmartScontoPuntiDay(d){ return (CARDSMART&&CARDSMART.byDayScontoPunti&&CARDSMART.byDayScontoPunti[d])||0; }
+function scontoAllaPompaDay(d){ return icadNonUtaDay(d)+cardSmartScontoPuntiDay(d); }
+
 function restoreImports(){
   try{ const s=localStorage.getItem('faboil_ss'); if(s){ STATE=JSON.parse(s); loadStore(); recompute();
     ['tab-registro','tab-rettifiche','tab-buoni','tab-assegnazioni','tab-commercialista'].forEach(id=>document.getElementById(id).disabled=false);
@@ -973,6 +1033,7 @@ function restoreImports(){
   } }catch(e){}
   try{ const x=localStorage.getItem('faboil_icad'); if(x){ ICAD=JSON.parse(x); document.getElementById('import-result-icad').innerHTML=`<div class="ok-msg">✓ iCad ripristinato: <b>${ICAD.meta.periodo}</b> · ${fmtEur(ICAD.meta.tot)}</div>`; } }catch(e){}
   try{ const x=localStorage.getItem('faboil_dkv'); if(x){ DKV=JSON.parse(x); document.getElementById('import-result-dkv').innerHTML=`<div class="ok-msg">✓ DKV ripristinato: <b>${DKV.meta.periodo}</b> · ${fmtEur(DKV.meta.tot)}</div>`; } }catch(e){}
+  try{ const x=localStorage.getItem('faboil_pos'); if(x){ POS=JSON.parse(x); const l=localStorage.getItem('faboil_poslus'); POSLUS=l?JSON.parse(l):POS.accounts.map(a=>a.name); renderPosResult(); } }catch(e){}
 }
 
 // ---- ANAGRAFICA CLIENTI / TESSERE (popolata da import estesoL) ----
@@ -1292,6 +1353,14 @@ dropCs.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handl
   ['dragleave','drop'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.remove('drag');}));
   d.addEventListener('drop',e=>{ const x=e.dataTransfer.files[0]; if(x) handleFattFile(x,kind); });
 });
+
+const dropPos=document.getElementById('drop-pos'), filePos=document.getElementById('file-pos');
+dropPos.addEventListener('click',()=>filePos.click());
+filePos.addEventListener('change',e=>{ if(e.target.files[0]) handlePosFile(e.target.files[0]); });
+['dragover','dragenter'].forEach(ev=>dropPos.addEventListener(ev,e=>{e.preventDefault();dropPos.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=>dropPos.addEventListener(ev,e=>{e.preventDefault();dropPos.classList.remove('drag');}));
+dropPos.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handlePosFile(f); });
+document.getElementById('import-result-pos').addEventListener('click',e=>{ const c=e.target.closest('.poschip'); if(c) togglePosAcc(c.dataset.acc); }); // delegation
 
 const dropCl=document.getElementById('drop-cl'), fileCl=document.getElementById('file-cl');
 dropCl.addEventListener('click',()=>fileCl.click());

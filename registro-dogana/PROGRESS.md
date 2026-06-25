@@ -137,8 +137,9 @@ colonna "Sc./Magg.".
 | Backup/Restore JSON | ✅ |
 | Responsive telefono (CSS, opz. A) | ✅ tab scrollabili, tabelle con scroll orizz. e colonna DATA congelata, tocchi grandi |
 | Ricerca clienti fluida su telefono | ✅ debounce 140ms + event delegation (1 listener invece di ~700/keystroke) |
-| **POS / contanti (file CTRL CASSE)** | ❌ da fare |
-| **Travasi subordinati a "contanti ≥ 0"** | ❌ da fare (con i contanti): un travaso non deve mai rendere negativo il corrispettivo contanti del giorno — 2° tetto oltre alla regola d'oro fisica |
+| **POS nel commercialista (file resoconto vendite)** | ✅ fatto: import sola lettura, filtro account Lusciano/Casaluce, colonne POS / Sc. pompa / Contanti |
+| **Travasi/buoni subordinati a "contanti ≥ 0"** | ✅ fatto: `corrViolato` usa il contante reale (corr − POS + sconto-alla-pompa) quando il POS è caricato, altrimenti fallback corr≥0 |
+| **Controllo benzinai (per operatore, CTRL CASSE)** | ❌ da fare (separato dal commercialista): scheda+nome editabili, multi-distributore, Servito(StoreSmart per tessera) − POS(per account) |
 | Colonna scorporo separata per i buoni | ✅ fatto: due colonne "Sc./Magg. fatt." e "Sc./Magg. buoni" |
 | Ordine prepagati/postpagati su corrispettivo contanti | ❌ parcheggiato |
 
@@ -160,6 +161,29 @@ colonna "Sc./Magg.".
 - `find()` nei parser: match esatto prima del match per sottostringa.
 - Codice morto rimosso: `renderBuoniGrid`, `fillBuonoClienti`/`b-cliente-list`, `BCLI_LABELS`.
 - (Il clamp `Math.max(0,...)` è già nel nuovo `simulaNetto` FASE 2.)
+
+## POS / Contanti nel commercialista — FATTO (2026-06-25)
+- **Import POS** dal file *resoconto vendite* (`parsePos`): legge Data / Account / Importo,
+  aggrega per **account** (= operatore) e per giorno. **Sola lettura** (il POS è un dato di
+  fatto, non si modifica). Card import "POS — Incassato" in Importazioni.
+- **Filtro distributore**: il file mescola Lusciano + Casaluce. Dopo l'import si mostrano i
+  chip degli account (con totale €); cliccandoli si escludono quelli di Casaluce. La
+  selezione (`POSLUS`) è salvata in `localStorage` (`faboil_pos`, `faboil_poslus`).
+  `posDay(d)` somma solo gli account selezionati (Lusciano).
+- **Sconto-alla-pompa** (POS-su-fatture, automatico) = **iCad non-UTA** + **Card Smart
+  tipologia Sconto/Punti**. `parseFatt` per iCad ora scorpora le righe UTA (cliente contiene
+  "UTA", incassate a parte) → `byDayNonUta`. `parseCardSmart` accumula `byDayScontoPunti`
+  (tipologia cliente Sconto/Punti, con fill-down sulle celle unite).
+- **Formula contanti** (verificata sull'esempio dell'utente: 10000 vendite −7000 fatt
+  = 3000 corr, POS 1500 di cui 500 alla pompa → 1000 contante margine):
+  `CONTANTI = Corrispettivo − POS + Sconto-alla-pompa`. Il POS andato su fatture pagate alla
+  pompa non deve abbassare i contanti, perciò si ri-aggiunge.
+- **Colonne commercialista**: aggiunte **POS**, **Sc. pompa**, **Contanti** (oltre a
+  Corrispettivo). Export Excel aggiornato di conseguenza.
+- **2ª regola d'oro** ora sui contanti reali: `corrViolato` blocca buoni/travasi che rendono
+  `CONTANTI < 0` quando il POS è caricato; senza POS resta il fallback `Corrispettivo ≥ 0`.
+- Verifica jsdom: 5/5 check OK (modello completo, filtro Casaluce, regola d'oro contanti,
+  parsePos, fallback senza POS).
 
 ## File di riferimento (upload di sessione)
 - StoreSmart erogazioni giugno 2026 (registro di partenza, contatori 0 al 31/5).
