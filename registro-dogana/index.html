@@ -384,6 +384,7 @@ table.reg tbody tr.brow:hover td{background:var(--surface2)}
         <button data-mode="grezzo">Grezzo (StoreSmart)</button>
       </div>
       <button class="btn" id="export-btn">⬇ Esporta Excel</button>
+      <span style="display:inline-flex;align-items:center;gap:.4rem;margin-left:.4rem"><span class="f-lbl" style="margin:0">🔒 Cristallizza fino al</span><input type="date" id="cristal-date" class="fld sm" style="width:auto"><button class="btn sm ghost" id="cristal-set">Blocca</button><button class="btn sm danger" id="cristal-clear" style="display:none">Sblocca</button></span>
       <span class="muted" id="reg-info"></span>
     </div>
     <div class="legend">
@@ -409,7 +410,10 @@ let NETTO={};        // pump->day->scarico netto finale (>=0 garantito)
 let REGBUONI={};     // pump->day->registro coi buoni (senza travasi): tetto dei travasi
 let BRESULT={};      // buonoId -> {placed, short, alloc:{pump:{day:signed}}}
 let REGMODE='netto';
+let CRISTAL='';      // data cristallizzazione (registro cartaceo scritto): giorni <= CRISTAL congelati
+let CRISTALNET={};   // snapshot del netto dei giorni congelati: pump->day->valore (immutabile)
 const EPS=1e-6;
+function isCristal(day){ return CRISTAL && day<=CRISTAL; } // giorno congelato (registro cartaceo già scritto)
 const FLOOR_LT=100; // pavimento: su ogni giorno-sorgente resta sempre almeno 100 L di prodotto
 
 function itNum(v){ if(v==null||v==='') return 0; if(typeof v==='number') return v; let s=String(v).trim().replace(/[^0-9.,-]/g,''); if(s.includes(',')&&s.includes('.')) s=s.replace(/\./g,'').replace(',','.'); else if(s.includes(',')) s=s.replace(',','.'); return parseFloat(s)||0; } // gestisce "1.234,56" (mig.+dec.), "1,566", "1.948"
@@ -530,35 +534,37 @@ function renderCSResult(fname){
 // Ordine: 1) i buoni spostano vendite sul grezzo, una pistola alla volta (più margine per prima);
 //         2) i travasi sottraggono dal registro coi buoni (il loro tetto è il netto post-buoni).
 function simulaNetto(buoni, transfers){
-  // FASE 1 — buoni sul grezzo
-  const work={}; PUMPS.forEach(p=>{ work[p]={}; STATE.days.forEach(d=>work[p][d]=grezzo(p,d)); });
-  const tierDays=tier=>STATE.days.filter(d=>dayCat(d)===tier);
+  // FASE 1 — buoni sul grezzo. I giorni CONGELATI usano lo snapshot (immutabile).
+  const work={}; PUMPS.forEach(p=>{ work[p]={}; STATE.days.forEach(d=>{ work[p][d]= isCristal(d) ? ((CRISTALNET[p]&&CRISTALNET[p][d]!=null)?CRISTALNET[p][d]:grezzo(p,d)) : grezzo(p,d); }); });
+  const tierDays=tier=>STATE.days.filter(d=>dayCat(d)===tier && !isCristal(d)); // sorgenti: SOLO giorni liberi
   const bres={};
   for(const b of buoni){
     const X=b.day; const pumps=PUMPS.filter(p=>prodOf(p)===b.prodotto);
     if(!pumps.length){ bres[b.id]={placed:0,short:b.litri,alloc:{}}; continue; }
+    if(isCristal(X)){ bres[b.id]={placed:b.litri,short:0,alloc:{},cash:true}; continue; } // buono su giorno congelato: solo cassa, niente litri
     const alloc={}; let remaining=b.litri;
-    const margin=p=>STATE.days.reduce((s,d)=>s+Math.max(0,work[p][d]-FLOOR_LT),0); // quanto può cedere una pistola
+    const margin=p=>STATE.days.reduce((s,d)=> isCristal(d)?s : s+Math.max(0,work[p][d]-FLOOR_LT),0); // quanto può cedere una pistola (solo giorni liberi)
     const ordered=pumps.slice().sort((a,c)=>margin(c)-margin(a)); // più margine per prima
     for(const p of ordered){
       if(remaining<=EPS) break;
-      // sposta da 'days' (≠X) verso X, proporzionale all'estraibile, pavimento 100
+      // sposta da 'days' (≠X, liberi) verso X, proporzionale all'estraibile, pavimento 100
       const drain=days=>{ if(remaining<=EPS) return; const ext={}; let tot=0; days.forEach(d=>{ const e=Math.max(0,work[p][d]-FLOOR_LT); ext[d]=e; tot+=e; }); if(tot<=EPS) return;
         const amount=Math.min(remaining,tot);
         days.forEach(d=>{ if(ext[d]>EPS){ const take=amount*ext[d]/tot; work[p][d]-=take; work[p][X]+=take; alloc[p]=alloc[p]||{}; alloc[p][d]=(alloc[p][d]||0)-take; alloc[p][X]=(alloc[p][X]||0)+take; } });
         remaining-=amount; };
-      drain(tierDays(0).filter(d=>d!==X)); // festivi
-      drain(tierDays(1).filter(d=>d!==X)); // sabati
+      drain(tierDays(0).filter(d=>d!==X)); // festivi (liberi)
+      drain(tierDays(1).filter(d=>d!==X)); // sabati (liberi)
       if(remaining>EPS){ const cap=Math.max(0,grezzo(p,X)-FLOOR_LT); const take=Math.min(remaining,cap); remaining-=take; } // il giorno stesso: vendite proprie di X (nessun movimento)
-      drain(tierDays(2).filter(d=>d!==X)); // altri normali, dove c'è possibilità
+      drain(tierDays(2).filter(d=>d!==X)); // altri normali liberi
     }
     bres[b.id]={ placed:b.litri-Math.max(0,remaining), short:Math.max(0,remaining), alloc };
   }
   // registro coi buoni (senza travasi): è il tetto dei travasi per cella
   const regBuoni={}; PUMPS.forEach(p=>{ regBuoni[p]={}; STATE.days.forEach(d=>regBuoni[p][d]=work[p][d]); });
-  // FASE 2 — travasi: sottraggono dal registro coi buoni
+  // FASE 2 — travasi: sottraggono dal registro coi buoni (solo giorni LIBERI; i congelati sono nello snapshot)
   let transferViol=false;
   PUMPS.forEach(p=>STATE.days.forEach(d=>{
+    if(isCristal(d)) return; // congelato: niente nuovi travasi
     let tr=0; transfers.forEach(t=>{ tr+=(t.cells[p]&&t.cells[p][d])||0; });
     const v=work[p][d]-tr; if(v<-EPS) transferViol=true; work[p][d]=Math.max(0,v);
   }));
@@ -567,6 +573,15 @@ function simulaNetto(buoni, transfers){
   return { work, regBuoni, bres, transferViol, buonoShort, shortByProd, feasible: !transferViol && !buonoShort };
 }
 function recompute(){ const r=simulaNetto(BUONI, TRANSFERS); NETTO=r.work; REGBUONI=r.regBuoni; BRESULT=r.bres; }
+// cristallizza il registro fino a 'date' (incluso): fotografa il netto corrente dei giorni <= date
+function setCristal(date){
+  if(!date){ CRISTAL=''; CRISTALNET={}; }
+  else { recompute(); CRISTALNET={}; PUMPS.forEach(p=>{ CRISTALNET[p]={}; STATE.days.forEach(d=>{ if(d<=date) CRISTALNET[p][d]=(NETTO[p]&&NETTO[p][d]!=null)?NETTO[p][d]:grezzo(p,d); }); }); CRISTAL=date; }
+  saveStore(); recompute();
+  renderRegistro(); renderRettifiche(); renderBuoni(); renderCommercialista(); try{ if(typeof renderAssegnazioni==='function') renderAssegnazioni(); }catch(e){}
+  syncCristalUI();
+}
+function syncCristalUI(){ const di=document.getElementById('cristal-date'), cl=document.getElementById('cristal-clear'); if(!di) return; di.value=CRISTAL||''; if(cl) cl.style.display=CRISTAL?'':'none'; }
 // alloc per giorno (somma pompe) di un buono, dal risultato calcolato
 function buonoDayAlloc(b){ const r=BRESULT[b.id]; const out={}; if(!r) return out; for(const p in r.alloc) for(const d in r.alloc[p]) out[d]=(out[d]||0)+r.alloc[p][d]; return out; }
 function prodNettoDay(prod,d){ return PUMPS.filter(p=>prodOf(p)===prod).reduce((s,p)=>s+(NETTO[p][d]||0),0); }
@@ -692,7 +707,7 @@ function handleFile(file){
     loadStore(); recompute();
     renderImportResult(file.name);
     ['tab-registro','tab-rettifiche','tab-buoni','tab-assegnazioni','tab-commercialista'].forEach(id=>document.getElementById(id).disabled=false);
-    fillBuonoDays(); renderRettifiche(); renderBuoni(); renderAssegnazioni(); renderRegistro(); renderCommercialista();
+    fillBuonoDays(); renderRettifiche(); renderBuoni(); renderAssegnazioni(); renderRegistro(); renderCommercialista(); syncCristalUI();
   }catch(err){ res.innerHTML=`<div class="warn">⚠ ${err.message}</div>`; } };
   reader.readAsArrayBuffer(file);
 }
@@ -722,10 +737,10 @@ function prodShort(pr){ return pr==='GASOLIO'?'Gas':pr==='VERDE'?'Ver':'GPL'; }
 function renderRegistro(){
   if(!STATE) return; const R=readingAt(REGMODE);
   document.getElementById('reg-sub').textContent=`PV-2993 · ${STATE.meta.periodo} · baseline contatori = 0`;
-  document.getElementById('reg-info').textContent=`${STATE.days.length} giorni · vista ${REGMODE.toUpperCase()}`;
+  document.getElementById('reg-info').textContent=`${STATE.days.length} giorni · vista ${REGMODE.toUpperCase()}${CRISTAL?` · 🔒 cristallizzato fino al ${fmtDay(CRISTAL)}`:''}`;
   let h='<div class="tablewrap"><table class="reg">'+colgroup()+headRow()+'<tbody>';
   h+=`<tr class="base"><td class="datecol">${baselineLabel()}</td>`; PUMPS.forEach(()=>h+='<td>0</td>'); h+='</tr>';
-  STATE.days.forEach(day=>{ h+=`<tr><td class="datecol ${dateClass(day)}">${fmtDay(day)}</td>`;
+  STATE.days.forEach(day=>{ const froz=isCristal(day); h+=`<tr${froz?' style="background:var(--surface3)"':''}><td class="datecol ${dateClass(day)}" title="${froz?'cristallizzato (registro cartaceo scritto)':''}">${froz?'🔒':''}${fmtDay(day)}</td>`;
     PUMPS.forEach(p=>{ const v=R[day][p]; h+=`<td class="${prodClass(p)} ${v===0?'zero':''}">${fmtInt(v)}</td>`; }); h+='</tr>'; });
   h+='</tbody></table></div>'; document.getElementById('reg-container').innerHTML=h;
 }
@@ -749,8 +764,9 @@ function renderRettGrid(){
   if(!t){ cont.innerHTML='<div class="empty-state"><span class="ic">🚚</span>Crea un trasferimento interno per inserire le rettifiche.</div>'; return; }
   const pumps=PUMPS.filter(p=>prodOf(p)===TPROD);
   let h='<div class="tablewrap"><table class="reg">'+colgroup(pumps)+headRow(pumps)+'<tbody>';
-  STATE.days.forEach(day=>{ h+=`<tr><td class="datecol ${dateClass(day)}">${fmtDay(day)}</td>`;
+  STATE.days.forEach(day=>{ const froz=isCristal(day); h+=`<tr><td class="datecol ${dateClass(day)}">${froz?'🔒 ':''}${fmtDay(day)}</td>`;
     pumps.forEach(p=>{ const base=Math.round(regBuoniVal(p,day)); const other=otherTotalAt(p,day); const v=cellOf(t,p,day); const max=Math.max(0,base-other); const full=max===0&&base>0; const resid=Math.max(0,max-v);
+      if(froz){ h+=`<td class="${prodClass(p)}" style="opacity:.5" title="${fmtDay(day)} cristallizzato — niente travasi"><input type="number" value="${v||''}" disabled style="cursor:not-allowed"></td>`; return; }
       h+=`<td class="${prodClass(p)} ${full?'full':''}"><input type="number" min="0" max="${max}" step="1" value="${v||''}" data-p="${p}" data-d="${day}" title="registro coi buoni ${fmtInt(base)} · altri travasi ${fmtInt(other)} · max ${fmtInt(max)}" class="${v>0?'has':''}"><span class="resid ${resid===0?'z':''}" data-r="${p}|${day}">↓${fmtInt(resid)}</span></td>`; });
     h+='</tr>'; });
   h+='</tbody></table></div>'; cont.innerHTML=h;
@@ -759,7 +775,9 @@ function renderRettGrid(){
 function regBuoniVal(p,day){ return (REGBUONI[p]&&REGBUONI[p][day]!=null)?REGBUONI[p][day]:grezzo(p,day); } // registro coi buoni (tetto travaso)
 function onRettInput(e){
   const t=curTransfer(); if(!t) return;
-  const inp=e.target, p=inp.dataset.p, day=inp.dataset.d, base=Math.round(regBuoniVal(p,day)), max=Math.max(0,base-otherTotalAt(p,day));
+  const inp=e.target, p=inp.dataset.p, day=inp.dataset.d;
+  if(isCristal(day)){ return; } // giorno cristallizzato: niente travasi
+  const base=Math.round(regBuoniVal(p,day)), max=Math.max(0,base-otherTotalAt(p,day));
   let val=parseInt(inp.value,10); if(isNaN(val)||val<0) val=0;
   if(val>max){ val=max; inp.value=max||''; inp.classList.add('bad'); setTimeout(()=>inp.classList.remove('bad'),600); }
   const prev=(t.cells[p]&&t.cells[p][day])||0;
@@ -904,8 +922,8 @@ function delBuono(id){ const b=BUONI.find(x=>x.id===id); if(b && !confirm(`Elimi
 
 // ---- persistenza ----
 function storeKey(){ return 'faboil_reg_'+(STATE?STATE.meta.period:''); }
-function saveStore(){ try{ localStorage.setItem(storeKey(), JSON.stringify({seq:SEQ,current:CURRENT,transfers:TRANSFERS,bseq:BSEQ,curbuono:CURBUONO,buoni:BUONI})); }catch(e){} }
-function loadStore(){ TRANSFERS=[];CURRENT=null;SEQ=1;BUONI=[];CURBUONO=null;BSEQ=1; try{ const s=localStorage.getItem(storeKey()); if(s){ const o=JSON.parse(s); TRANSFERS=o.transfers||[]; SEQ=o.seq||(TRANSFERS.length+1); CURRENT=o.current!=null?o.current:(TRANSFERS[0]&&TRANSFERS[0].id); BUONI=o.buoni||[]; BSEQ=o.bseq||(BUONI.length+1); CURBUONO=o.curbuono!=null?o.curbuono:(BUONI[0]&&BUONI[0].id); } }catch(e){} }
+function saveStore(){ try{ localStorage.setItem(storeKey(), JSON.stringify({seq:SEQ,current:CURRENT,transfers:TRANSFERS,bseq:BSEQ,curbuono:CURBUONO,buoni:BUONI,cristal:CRISTAL,cristalnet:CRISTALNET})); }catch(e){} }
+function loadStore(){ TRANSFERS=[];CURRENT=null;SEQ=1;BUONI=[];CURBUONO=null;BSEQ=1;CRISTAL='';CRISTALNET={}; try{ const s=localStorage.getItem(storeKey()); if(s){ const o=JSON.parse(s); TRANSFERS=o.transfers||[]; SEQ=o.seq||(TRANSFERS.length+1); CURRENT=o.current!=null?o.current:(TRANSFERS[0]&&TRANSFERS[0].id); BUONI=o.buoni||[]; BSEQ=o.bseq||(BUONI.length+1); CURBUONO=o.curbuono!=null?o.curbuono:(BUONI[0]&&BUONI[0].id); CRISTAL=o.cristal||''; CRISTALNET=o.cristalnet||{}; } }catch(e){} }
 
 // ---- persistenza file importati (StoreSmart / Card Smart) ----
 function saveSS(){ try{ localStorage.setItem('faboil_ss', JSON.stringify(STATE)); }catch(e){} }
@@ -939,7 +957,7 @@ function handleFattFile(file, kind){
 function restoreImports(){
   try{ const s=localStorage.getItem('faboil_ss'); if(s){ STATE=JSON.parse(s); loadStore(); recompute();
     ['tab-registro','tab-rettifiche','tab-buoni','tab-assegnazioni','tab-commercialista'].forEach(id=>document.getElementById(id).disabled=false);
-    fillBuonoDays(); renderRettifiche(); renderBuoni(); renderAssegnazioni(); renderRegistro(); renderCommercialista();
+    fillBuonoDays(); renderRettifiche(); renderBuoni(); renderAssegnazioni(); renderRegistro(); renderCommercialista(); syncCristalUI();
     document.getElementById('import-result').innerHTML=`<div class="ok-msg">✓ StoreSmart ripristinato: <b>${STATE.meta.periodo}</b> · ${STATE.meta.kept.toLocaleString('it-IT')} erogazioni</div><p class="muted" style="margin-top:.5rem">I dati sono salvati nel browser. Carica un nuovo file solo se vuoi cambiare periodo.</p><div style="margin-top:.8rem;display:flex;gap:.6rem"><button class="btn ghost" onclick="goTab('rettifiche')">Trasferimenti →</button><button class="btn ghost" onclick="goTab('buoni')">Buoni →</button><button class="btn ghost" onclick="goTab('registro')">Registro →</button></div>`;
   } }catch(e){}
   try{ const c=localStorage.getItem('faboil_cs'); if(c){ CARDSMART=JSON.parse(c); const m=CARDSMART.meta;
@@ -1242,6 +1260,8 @@ document.getElementById('b-totale').addEventListener('input',syncFromTotale);
 ['b-prod','b-day'].forEach(id=>document.getElementById(id).addEventListener('change',updateBuonoPrezzo));
 document.querySelectorAll('#rett-prod-toggle button').forEach(b=>b.addEventListener('click',()=>{ TPROD=b.dataset.p; document.querySelectorAll('#rett-prod-toggle button').forEach(x=>x.classList.toggle('on',x===b)); const t=curTransfer(); const bd=document.getElementById('t-badge'); if(t&&bd) bd.textContent=`${prodName(TPROD)}: ${fmtInt(transferTotalProd(t,TPROD))} L`; renderRettGrid(); }));
 document.querySelectorAll('#reg-toggle button').forEach(b=>b.addEventListener('click',()=>{ REGMODE=b.dataset.mode; document.querySelectorAll('#reg-toggle button').forEach(x=>x.classList.toggle('on',x===b)); renderRegistro(); }));
+document.getElementById('cristal-set').addEventListener('click',()=>{ const d=document.getElementById('cristal-date').value; if(!d){ alert('Scegli la data fino a cui il registro cartaceo è scritto.'); return; } if(!confirm(`Cristallizzare il registro fino al ${fmtDay(d)}?\nDa lì a ritroso: niente travasi, niente spostamento litri; solo buoni entro il contante.`)) return; setCristal(d); });
+document.getElementById('cristal-clear').addEventListener('click',()=>{ if(!confirm('Sbloccare la cristallizzazione? I giorni torneranno modificabili.')) return; setCristal(''); });
 
 const drop=document.getElementById('drop'), fileInput=document.getElementById('file');
 drop.addEventListener('click',()=>fileInput.click());

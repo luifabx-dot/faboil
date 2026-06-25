@@ -70,6 +70,17 @@ Ultimo aggiornamento: 2026-06-24.
 - **Corrispettivo/giorno** = vendite − (Card Smart + iCad + DKV + buoni).
 - **Credito prepagato** = saldo@data + ricariche − (Card Smart Importo + buoni), dalla `saldoData` in poi.
 
+### CRISTALLIZZAZIONE (registro cartaceo scritto → giorni congelati)
+Flag `CRISTAL` (data) + snapshot `CRISTALNET` (netto dei giorni ≤ data, fotografato al momento).
+Giorni **≤ CRISTAL = congelati** (`isCristal(day)`):
+- **Registro fisso**: usa lo snapshot, non si ricalcola.
+- **Niente travasi** sui congelati (cella disabilitata 🔒; guardia in `onRettInput`).
+- **Buoni sui congelati = solo cassa** (no movimento litri): `bres.cash=true`, riducono il contante,
+  bloccati dalla 2ª regola se lo porterebbero < 0.
+- **Buoni sui giorni liberi NON attingono dai congelati** (sorgenti escludono `isCristal`).
+- UI: pagina Registro, "🔒 Cristallizza fino al [data] · Blocca/Sblocca"; lucchetto sui giorni
+  congelati nel registro e nei trasferimenti. Persistito in `faboil_reg_<mese>`.
+
 ### DUE REGOLE D'ORO (un buono/travaso deve rispettarle ENTRAMBE)
 1. **Fisica/registro**: contatore mai indietro → scarico netto ≥ 0 (implementata).
 2. **Cassa/commercialista**: **corrispettivo (= contante senza POS) mai negativo** — implementata sui
