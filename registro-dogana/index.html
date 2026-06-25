@@ -1067,11 +1067,18 @@ function renderCassa(){ const el=document.getElementById('cassa-container'), hin
   let h='<div class="tablewrap" style="max-height:70vh"><table class="reg"><thead><tr><th class="datecol" style="text-align:left">DATA</th><th>Servito</th><th>POS</th><th>DROP</th><th>Monete</th><th>Sospese</th><th>UTA</th><th>DKV</th><th>= TOT</th></tr></thead><tbody>';
   days.forEach(d=>{ const serv=servitoDay(s,d), pos=posAccountDay(r.account,d); const m={}; MANUF.forEach(f=>m[f]=manVal(s,d,f)); const ctrl=serv-pos-m.drop-m.monete-m.sospese-m.uta-m.dkv;
     tot.serv+=serv; tot.pos+=pos; MANUF.forEach(f=>tot[f]+=m[f]); tot.ctrl+=ctrl;
-    const inp=f=>`<input class="fld cassa-in" data-d="${d}" data-f="${f}" type="number" step="0.01" value="${m[f]||''}" style="width:5.4rem;text-align:right">`;
+    const inp=f=>`<input class="fld cassa-in" data-d="${d}" data-f="${f}" type="number" inputmode="decimal" step="0.01" value="${m[f]||''}" style="width:5.4rem;text-align:right">`;
     h+=`<tr><td class="datecol ${dateClass(d)}" style="text-align:left">${fmtDay(d)}</td><td>${fmtEur(serv)}</td><td>${fmtEur(pos)}</td><td>${inp('drop')}</td><td>${inp('monete')}</td><td>${inp('sospese')}</td><td>${inp('uta')}</td><td>${inp('dkv')}</td>
-      <td style="font-weight:700;color:${Math.abs(ctrl)>0.5?'var(--red)':'var(--text)'}">${fmtEur(ctrl)}</td></tr>`; });
-  h+=`<tr class="base"><td class="datecol" style="text-align:left">TOTALE</td><td>${fmtEur(tot.serv)}</td><td>${fmtEur(tot.pos)}</td><td>${fmtEur(tot.drop)}</td><td>${fmtEur(tot.monete)}</td><td>${fmtEur(tot.sospese)}</td><td>${fmtEur(tot.uta)}</td><td>${fmtEur(tot.dkv)}</td><td style="font-weight:800;color:${Math.abs(tot.ctrl)>0.5?'var(--red)':'var(--text)'}">${fmtEur(tot.ctrl)}</td></tr>`;
+      <td class="rowtot" data-d="${d}" style="font-weight:700;color:${Math.abs(ctrl)>0.5?'var(--red)':'var(--text)'}">${fmtEur(ctrl)}</td></tr>`; });
+  h+=`<tr class="base"><td class="datecol" style="text-align:left">TOTALE</td><td>${fmtEur(tot.serv)}</td><td>${fmtEur(tot.pos)}</td><td class="f-drop">${fmtEur(tot.drop)}</td><td class="f-monete">${fmtEur(tot.monete)}</td><td class="f-sospese">${fmtEur(tot.sospese)}</td><td class="f-uta">${fmtEur(tot.uta)}</td><td class="f-dkv">${fmtEur(tot.dkv)}</td><td class="f-tot" style="font-weight:800;color:${Math.abs(tot.ctrl)>0.5?'var(--red)':'var(--text)'}">${fmtEur(tot.ctrl)}</td></tr>`;
   h+='</tbody></table></div>'; el.innerHTML=h; }
+// aggiornamento SUL POSTO (niente ridisegno degli input: editabile anche da telefono)
+function refreshCassaTotals(changedDay){ const el=document.getElementById('cassa-container'); if(!el||!STATE||!CASSA_OP) return; const s=CASSA_OP, r=casseRec(s);
+  const tot={drop:0,monete:0,sospese:0,uta:0,dkv:0,ctrl:0};
+  STATE.days.forEach(d=>{ const serv=servitoDay(s,d), pos=posAccountDay(r.account,d); const m={}; MANUF.forEach(f=>{ m[f]=manVal(s,d,f); tot[f]+=m[f]; }); const ctrl=serv-pos-m.drop-m.monete-m.sospese-m.uta-m.dkv; tot.ctrl+=ctrl;
+    if(d===changedDay){ const c=el.querySelector(`.rowtot[data-d="${d}"]`); if(c){ c.textContent=fmtEur(ctrl); c.style.color=Math.abs(ctrl)>0.5?'var(--red)':'var(--text)'; } } });
+  ['drop','monete','sospese','uta','dkv'].forEach(f=>{ const c=el.querySelector('.f-'+f); if(c) c.textContent=fmtEur(tot[f]); });
+  const ft=el.querySelector('.f-tot'); if(ft){ ft.textContent=fmtEur(tot.ctrl); ft.style.color=Math.abs(tot.ctrl)>0.5?'var(--red)':'var(--text)'; } }
 function utaInsDay(d){ let s=0; for(const k in CASSE) s+=manVal(k,d,'uta'); return s; }
 function dkvInsDay(d){ let s=0; for(const k in CASSE) s+=manVal(k,d,'dkv'); return s; }
 function renderConvalida(){ const el=document.getElementById('cassa-convalida'); if(!el) return;
@@ -1477,7 +1484,8 @@ document.getElementById('import-list').addEventListener('click',e=>{ const b=e.t
 document.getElementById('op-list').addEventListener('change',e=>{ const n=e.target.closest('.casse-nome'); if(n){ editCasse(n.dataset.s,'nome',n.target.value); renderOperatori(); fillCassaOp(); return; } const a=e.target.closest('.casse-acc'); if(a){ editCasse(a.dataset.s,'account',a.target.value); renderOperatori(); if(CASSA_OP===a.dataset.s) renderCassa(); } });
 document.getElementById('op-list').addEventListener('click',e=>{ const l=e.target.closest('.casse-sel'); if(l){ e.preventDefault(); CASSA_OP=l.dataset.s; const sel=document.getElementById('cassa-op'); if(sel) sel.value=l.dataset.s; renderCassa(); document.getElementById('page-cassa').querySelector('#cassa-container').scrollIntoView({behavior:'smooth',block:'nearest'}); } });
 document.getElementById('cassa-op').addEventListener('change',e=>{ CASSA_OP=e.target.value||null; renderCassa(); });
-document.getElementById('cassa-container').addEventListener('change',e=>{ const i=e.target.closest('.cassa-in'); if(i && CASSA_OP){ setMan(CASSA_OP,i.dataset.d,i.dataset.f,itNum(i.target.value)); renderCassa(); renderOperatori(); } });
+document.getElementById('cassa-container').addEventListener('input',e=>{ const i=e.target.closest('.cassa-in'); if(i && CASSA_OP){ setMan(CASSA_OP,i.dataset.d,i.dataset.f,itNum(i.value)); refreshCassaTotals(i.dataset.d); } }); // sul posto: non distrugge l'input (telefono)
+document.getElementById('cassa-container').addEventListener('change',e=>{ const i=e.target.closest('.cassa-in'); if(i && CASSA_OP){ renderOperatori(); } }); // all'uscita aggiorna elenco + convalida
 
 document.getElementById('cl-search').addEventListener('input',debounce(()=>{ CLQ=document.getElementById('cl-search').value; renderClList(); },140));
 document.getElementById('cl-list').addEventListener('click',e=>{ const it=e.target.closest('.cl-item'); if(!it) return; CURCLI=it.dataset.id; saveClienti(); renderClList(); renderClDetail(); }); // delegation: 1 listener
