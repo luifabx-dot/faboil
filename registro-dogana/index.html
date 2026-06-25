@@ -384,8 +384,14 @@ table.reg tbody tr.brow:hover td{background:var(--surface2)}
         <button data-mode="grezzo">Grezzo (StoreSmart)</button>
       </div>
       <button class="btn" id="export-btn">⬇ Esporta Excel</button>
-      <span style="display:inline-flex;align-items:center;gap:.4rem;margin-left:.4rem"><span class="f-lbl" style="margin:0">🔒 Cristallizza fino al</span><input type="date" id="cristal-date" class="fld sm" style="width:auto"><button class="btn sm ghost" id="cristal-set">Blocca</button><button class="btn sm danger" id="cristal-clear" style="display:none">Sblocca</button></span>
       <span class="muted" id="reg-info"></span>
+    </div>
+    <div class="row-actions" style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:.6rem .8rem">
+      <span style="font-weight:700;font-size:.85rem">🔒 Cristallizza registro fino al</span>
+      <input type="date" id="cristal-date" class="fld" style="width:170px">
+      <button class="btn sm" id="cristal-set">Blocca</button>
+      <button class="btn sm danger" id="cristal-clear" style="display:none">Sblocca</button>
+      <span class="muted" id="cristal-info"></span>
     </div>
     <div class="legend">
       <span><i class="dot" style="background:var(--gas)"></i> Gasolio</span><span><i class="dot" style="background:var(--ver)"></i> Verde</span><span><i class="dot" style="background:var(--gpl)"></i> GPL</span>
@@ -581,7 +587,7 @@ function setCristal(date){
   renderRegistro(); renderRettifiche(); renderBuoni(); renderCommercialista(); try{ if(typeof renderAssegnazioni==='function') renderAssegnazioni(); }catch(e){}
   syncCristalUI();
 }
-function syncCristalUI(){ const di=document.getElementById('cristal-date'), cl=document.getElementById('cristal-clear'); if(!di) return; di.value=CRISTAL||''; if(cl) cl.style.display=CRISTAL?'':'none'; }
+function syncCristalUI(){ const di=document.getElementById('cristal-date'), cl=document.getElementById('cristal-clear'), inf=document.getElementById('cristal-info'); if(!di) return; di.value=CRISTAL||''; if(cl) cl.style.display=CRISTAL?'':'none'; if(inf) inf.textContent=CRISTAL?`congelato fino al ${fmtDay(CRISTAL)}`:'nessuna cristallizzazione'; }
 // alloc per giorno (somma pompe) di un buono, dal risultato calcolato
 function buonoDayAlloc(b){ const r=BRESULT[b.id]; const out={}; if(!r) return out; for(const p in r.alloc) for(const d in r.alloc[p]) out[d]=(out[d]||0)+r.alloc[p][d]; return out; }
 function prodNettoDay(prod,d){ return PUMPS.filter(p=>prodOf(p)===prod).reduce((s,p)=>s+(NETTO[p][d]||0),0); }
