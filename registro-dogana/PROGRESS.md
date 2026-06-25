@@ -57,10 +57,14 @@ Ultimo aggiornamento: 2026-06-24.
   La **generazione automatica** (opz. A) resta col razionamento per percentuale (water-filling), che
   già non viola mai la regola.
 - **Due prezzi distinti (importante):**
-  - **Vendite (corrispettivo)** = `STATE.venditeEur[day][prod]` = Σ della colonna **Importo €** di
-    StoreSmart (già arrotondato per transazione) → vendite **ESATTE**, combaciano al centesimo col
-    totale vendite reale. Fallback: Σ qta×prezzo se manca Importo; poi litri×prezzoDay per backup vecchi.
-    NOTA: il riferimento "totale vendite" dell'utente È la somma della colonna Importo € di StoreSmart.
+  - **Vendite GREZZE** = `STATE.venditeEur[day][prod]` = Σ colonna **Importo €** StoreSmart (esatte,
+    combaciano col riferimento utente = somma colonna Importo €).
+  - **Vendite NETTE (usate nel corrispettivo)** = vendite grezze **scalate per (litri netti / litri
+    grezzi)** del giorno → **travasi e buoni MUOVONO le vendite**. Senza travasi/buoni: netto=grezzo →
+    nette=grezze=esatte. Travaso → vendite del giorno ↓; buono → sposta vendite sul suo giorno (così
+    "copre" il suo fatturato) prendendole dai festivi; totale conservato dai buoni.
+    `corrispettivo = vendite NETTE − fatturato`. Commercialista mostra entrambe (grezze + nette) —
+    colonne complete in sviluppo, poi si trimmano.
   - **Addebiti cartacei (buoni)** = prezzo di **fine giornata** (`prezzoDay` = ultima erogazione del
     giorno per prodotto). NON usare il prezzo esatto qui: i buoni si prezzano al riferimento di chiusura.
 - **Corrispettivo/giorno** = vendite − (Card Smart + iCad + DKV + buoni).
