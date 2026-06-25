@@ -613,7 +613,8 @@ function onAsCellClick(e){
   else { const tess=c.tessere.find(x=>x.id===t); const prod=(AS_PROD!=='ALL')?AS_PROD:(tess?tess.prodotto:'GASOLIO'); const prezzo=priceOfDay(prod,d)||(tess&&tess.prezzo)||0; const sconto=(tess&&tess.sconto)||0; prodChk=prod;
     cand=BUONI.concat([{ id:BSEQ, clienteId:c.id, clienteNome:c.ragione, tessera:t==='—'?'':t, prodotto:prod, day:d, litri:val, prezzo, sconto, totale:Math.round(val*(prezzo-sconto)*100)/100, gen:false }]); isNew=true; }
   // GUARDIA REGOLA D'ORO (solo quando si aggiunge/aumenta; eliminare è sempre permesso)
-  if(val>0){ const sim=simulaNetto(cand, TRANSFERS); if(!sim.feasible){ const miss=sim.shortByProd[prodChk]||Object.values(sim.shortByProd).reduce((a,x)=>a+x,0); alert(`⛔ Impossibile: romperebbe la regola d'oro.\nMancano ${fmtInt(miss)} L di ${prodName(prodChk)} nei giorni disponibili.\nRiduci il valore.`); return; } }
+  if(val>0){ const sim=simulaNetto(cand, TRANSFERS); if(!sim.feasible){ const miss=sim.shortByProd[prodChk]||Object.values(sim.shortByProd).reduce((a,x)=>a+x,0); alert(`⛔ Impossibile: romperebbe la regola d'oro.\nMancano ${fmtInt(miss)} L di ${prodName(prodChk)} nei giorni disponibili.\nRiduci il valore.`); return; }
+    const dv=corrViolato(cand, sim.work); if(dv){ alert(`⛔ Impossibile: il corrispettivo del ${fmtDay(dv)} andrebbe NEGATIVO (2ª regola d'oro).\nRiduci il valore.`); return; } }
   BUONI=cand; if(isNew) BSEQ++;
   saveStore(); recompute(); renderAssegnazioni(); renderRegistro(); renderBuoni(); renderCommercialista(); refreshScheda();
 }
@@ -644,6 +645,16 @@ function dkvEuroDay(d){ return (DKV&&DKV.byDay[d])||0; }
 function fattScorpDay(F,d){ return (F&&F.byDayScorp&&F.byDayScorp[d])||0; } // scorporo iCad/DKV (iCad=0, nessuna colonna sconto)
 function scorpFattDay(d){ return cardSmartScorporoDay(d)+fattScorpDay(ICAD,d)+fattScorpDay(DKV,d); } // scorporo FATTURE (CS+iCad+DKV)
 function commRows(){ return STATE.days.map(d=>{ const vg=venditeGrezzeDay(d), v=venditeDay(d), cs=cardSmartEuroDay(d), scF=scorpFattDay(d), scB=buoniScorpDay(d), ic=icadEuroDay(d), dk=dkvEuroDay(d), bu=buoniEuroDay(d), fatt=cs+ic+dk+bu; return { d, vg, v, cs, scF, scB, ic, dk, bu, fatt, corr:v-fatt }; }); }
+// 2ª REGOLA D'ORO: dato un netto candidato (work) e i buoni candidati, ritorna il 1° giorno col
+// corrispettivo (vendite nette − fatturato) < 0, oppure null. (Senza POS il contante = corrispettivo.)
+function corrViolato(buoni, work){
+  for(const d of STATE.days){
+    let v=0; ['GASOLIO','VERDE','GPL'].forEach(P=>{ const pumps=PUMPS.filter(p=>prodOf(p)===P); const gz=pumps.reduce((a,p)=>a+grezzo(p,d),0); const nt=pumps.reduce((a,p)=>a+((work[p]&&work[p][d]!=null)?work[p][d]:grezzo(p,d)),0); v+= gz>EPS?venditeEurProd(d,P)*(nt/gz):0; });
+    const fatt=cardSmartEuroDay(d)+icadEuroDay(d)+dkvEuroDay(d)+buoni.filter(b=>b.day===d).reduce((s,b)=>s+buonoBase(b),0);
+    if(v-fatt < -0.005) return d;
+  }
+  return null;
+}
 function renderCommercialista(){
   if(!STATE) return; const rows=commRows();
   const tot=rows.reduce((a,r)=>({vg:a.vg+r.vg,v:a.v+r.v,cs:a.cs+r.cs,scF:a.scF+r.scF,scB:a.scB+r.scB,ic:a.ic+r.ic,dk:a.dk+r.dk,bu:a.bu+r.bu,fatt:a.fatt+r.fatt,corr:a.corr+r.corr}),{vg:0,v:0,cs:0,scF:0,scB:0,ic:0,dk:0,bu:0,fatt:0,corr:0});
@@ -751,7 +762,12 @@ function onRettInput(e){
   const inp=e.target, p=inp.dataset.p, day=inp.dataset.d, base=Math.round(regBuoniVal(p,day)), max=Math.max(0,base-otherTotalAt(p,day));
   let val=parseInt(inp.value,10); if(isNaN(val)||val<0) val=0;
   if(val>max){ val=max; inp.value=max||''; inp.classList.add('bad'); setTimeout(()=>inp.classList.remove('bad'),600); }
+  const prev=(t.cells[p]&&t.cells[p][day])||0;
   if(!t.cells[p]) t.cells[p]={}; if(val>0) t.cells[p][day]=val; else delete t.cells[p][day];
+  // GUARDIA 2ª REGOLA D'ORO: il travaso non deve rendere negativo il corrispettivo
+  if(val>prev){ const sim=simulaNetto(BUONI, TRANSFERS); const dv=corrViolato(BUONI, sim.work);
+    if(dv){ if(prev>0) t.cells[p][day]=prev; else delete t.cells[p][day]; inp.value=prev||''; inp.classList.add('bad'); setTimeout(()=>inp.classList.remove('bad'),900);
+      alert(`⛔ Questo travaso renderebbe NEGATIVO il corrispettivo del ${fmtDay(dv)} (2ª regola d'oro).\nRiducilo.`); return; } }
   inp.classList.toggle('has',val>0);
   const resid=Math.max(0,max-val); const rs=inp.parentElement.querySelector('.resid'); if(rs){ rs.textContent='↓'+fmtInt(resid); rs.classList.toggle('z',resid===0); }
   saveStore(); renderChipsOnly(); const b=document.getElementById('t-badge'); if(b) b.textContent=`${prodName(TPROD)}: ${fmtInt(transferTotalProd(t,TPROD))} L`;
@@ -874,9 +890,12 @@ function addBuono(){
   const cli=CLIENTI.find(x=>x.id===cliId);
   const b={ id:BSEQ, clienteId:cliId||'', clienteNome: cli?cli.ragione:'', tessera:tess||'', prodotto:prod, day, litri,
     prezzo:parseFloat(document.getElementById('b-prezzo').value)||0, sconto:parseFloat(document.getElementById('b-sconto').value)||0, totale:parseFloat(document.getElementById('b-totale').value)||0 };
-  // GUARDIA REGOLA D'ORO: il buono deve poter essere piazzato per intero
+  // GUARDIA 1ª REGOLA D'ORO: il buono deve poter essere piazzato per intero
   const sim=simulaNetto(BUONI.concat([b]), TRANSFERS);
   if(!sim.feasible){ const miss=sim.shortByProd[prod]||0; alert(`⛔ Impossibile: il buono romperebbe la regola d'oro.\nMancano ${fmtInt(miss)} L di ${prodName(prod)} nei giorni disponibili per spostare le vendite.\nRiduci i litri o scegli un altro giorno.`); return; }
+  // GUARDIA 2ª REGOLA D'ORO: il corrispettivo non deve andare negativo
+  const dv=corrViolato(BUONI.concat([b]), sim.work);
+  if(dv){ alert(`⛔ Impossibile: il corrispettivo del ${fmtDay(dv)} andrebbe NEGATIVO (2ª regola d'oro).\nRiduci i litri o scegli un altro giorno.`); return; }
   BSEQ++; BUONI.push(b); CURBUONO=b.id;
   ['b-litri','b-totale'].forEach(id=>document.getElementById(id).value='');
   saveStore(); recompute(); renderBuoni(); renderRegistro(); renderCommercialista(); refreshScheda();

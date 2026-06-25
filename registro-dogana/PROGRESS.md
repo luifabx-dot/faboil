@@ -71,8 +71,11 @@ Ultimo aggiornamento: 2026-06-24.
 - **Credito prepagato** = saldo@data + ricariche − (Card Smart Importo + buoni), dalla `saldoData` in poi.
 
 ### DUE REGOLE D'ORO (un buono/travaso deve rispettarle ENTRAMBE)
-1. **Fisica/registro**: contatore mai indietro → scarico netto ≥ 0 (già implementata).
-2. **Cassa/commercialista**: **contante mai negativo** (da implementare con CTRL CASSE).
+1. **Fisica/registro**: contatore mai indietro → scarico netto ≥ 0 (implementata).
+2. **Cassa/commercialista**: **corrispettivo (= contante senza POS) mai negativo** — implementata sui
+   controlli manuali (`addBuono`, `onAsCellClick`, `onRettInput`) via `corrViolato()`. Senza POS il
+   contante coincide col corrispettivo; con CTRL CASSE diventerà `corrispettivo − POS-su-corrispettivi`.
+   NB: la **generazione automatica** non applica ancora la 2ª regola (da fare).
 Un buono o un travaso che violerebbe una delle due viene **bloccato**.
 
 ### Corrispettivo CONTANTI (modello a strati — da implementare con CTRL CASSE)
