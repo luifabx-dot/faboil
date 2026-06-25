@@ -196,6 +196,25 @@ colonna "Sc./Magg.".
   (sintetizza i metadati per i backup vecchi). Verificato: 6/6 file riconosciuti, ripristino OK.
 - `cellDay` ora legge anche le date "1 giu 2026, 00:00" (mesi italiani) usate dal resoconto POS.
 
+## Controllo casse — FATTO (2026-06-25)
+- Nuova scheda **Controllo casse**, per operatore, **giorno per giorno** (deciso: 1a).
+- **Anagrafica operatori**: Nome · Scheda gestore · Account POS, modificabili/cancellabili.
+  «Importa dagli account POS» crea un operatore per ogni account di Lusciano selezionato e
+  pre-assegna la scheda dalla mappa nota del CTRL CASSE (`SCHEDE_NOTE`, solo suggerimento).
+  Salvati in `localStorage` (`faboil_operatori`, `faboil_cassa`).
+- **Servito** = erogato StoreSmart per *scheda gestore* (colonna Tessera). `parseStoreSmart`
+  ora accumula `servitoTess[tessera][day]` = Σ Importo € **prima** dei filtri ADBLUE/pompa
+  (il benzinaio incassa anche l'ADBLUE). Verificato: Notaro 4273013 = €133.442.
+- **POS** = incassato per *account* dal file resoconto (match nome case-insensitive), sommato
+  **solo sui giorni del registro** (allineamento periodo: se StoreSmart copre 01-24, il POS del
+  25 non entra nella quadratura).
+- **DROP** e **MONETE** inseriti a mano (deciso: 2a). **CTRL = POS + DROP + Monete − Servito**
+  (≈0 quadra, |CTRL|>0,5 in rosso). Riga TOTALE di periodo.
+- Mappa nome↔scheda (CTRL CASSE): 4273001 Vitale · 4273002 Blandini · 4273003 Mottola ·
+  4273007 Di Gennaro · 4273008 Zampella · 4273009 Vernetti · 4273013 Notaro · 4273014 Cantile ·
+  4273015 Carmine · 4273016 Cipullo · 4273017 sospesa. (File obsoleto: schede da confermare.)
+- Verifica jsdom: servito/POS/CTRL corretti, import operatori OK, quadratura 24 giorni.
+
 ## File di riferimento (upload di sessione)
 - StoreSmart erogazioni giugno 2026 (registro di partenza, contatori 0 al 31/5).
 - Card Smart `RifornimentiPerPeriodo.xlsx` (col: Prezzo Unitario, Sconto, Quantita, Importo).

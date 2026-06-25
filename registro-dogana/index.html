@@ -196,6 +196,7 @@ table.reg tbody tr.brow:hover td{background:var(--surface2)}
     <button class="tab" data-tab="clienti" id="tab-clienti">Clienti</button>
     <button class="tab" data-tab="ricariche" id="tab-ricariche">Ricariche</button>
     <button class="tab" data-tab="commercialista" id="tab-commercialista" disabled>Commercialista</button>
+    <button class="tab" data-tab="cassa" id="tab-cassa">Controllo casse</button>
     <button class="tab" data-tab="registro" id="tab-registro" disabled>Registro</button>
   </div>
 </div>
@@ -351,6 +352,31 @@ table.reg tbody tr.brow:hover td{background:var(--surface2)}
     <div id="comm-container"></div>
   </div>
 
+  <!-- CONTROLLO CASSE -->
+  <div class="page" id="page-cassa">
+    <div class="sh"><h1>Controllo casse</h1><p>per operatore, giorno per giorno: <b>CTRL = POS + DROP + Monete − Servito</b> (≈0 quadra)</p></div>
+    <div class="card">
+      <div class="card-title">Operatori</div>
+      <div class="formline" style="flex-wrap:wrap;gap:.5rem;align-items:flex-end">
+        <div class="f"><label>Nome</label><input id="op-nome" class="fld" placeholder="es. Antonino Notaro" style="width:13rem"></div>
+        <div class="f"><label>Scheda gestore</label><input id="op-scheda" class="fld" placeholder="es. 4273013" style="width:9rem"></div>
+        <div class="f"><label>Account POS</label><input id="op-account" class="fld" placeholder="es. antonino notaro" style="width:13rem"></div>
+        <button class="btn" id="op-add">+ Aggiungi</button>
+        <button class="btn ghost" id="op-import">Importa dagli account POS</button>
+      </div>
+      <p class="muted" style="margin-top:.5rem">Il <b>servito</b> viene da StoreSmart per <i>scheda gestore</i>; il <b>POS</b> dal file resoconto per <i>account</i>. Modificabili e cancellabili.</p>
+      <div id="op-list" style="margin-top:.7rem"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Quadratura</div>
+      <div class="formline" style="gap:.5rem;align-items:flex-end;flex-wrap:wrap">
+        <div class="f"><label>Operatore</label><select id="cassa-op" class="fld" style="width:15rem"></select></div>
+        <span class="muted" id="cassa-hint"></span>
+      </div>
+      <div id="cassa-container" style="margin-top:.7rem"></div>
+    </div>
+  </div>
+
   <!-- REGISTRO -->
   <div class="page" id="page-registro">
     <div class="sh"><h1>Registro di scarico</h1><p id="reg-sub">letture progressive contatori (litri)</p></div>
@@ -431,30 +457,33 @@ function parseStoreSmart(rows){
   if(hr<0) throw new Error("Intestazione non trovata: manca la colonna 'Pompa'. È un report StoreSmart?");
   const head=rows[hr].map(c=>String(c==null?'':c).trim().toLowerCase());
   const find=(...names)=>{ for(const n of names){ const k=head.findIndex(h=>h===n); if(k>=0) return k; } for(const n of names){ const k=head.findIndex(h=>h.includes(n)); if(k>=0) return k; } return -1; }; // esatto prima, poi sottostringa
-  const iPag=find('tipo pagamento','pagamento'), iData=find('data rifornimento','data'), iPompa=find('pompa'), iProd=find('prodotto'), iQta=find('quantità','quantita'), iPrezzo=find('prezzo'), iImp=find('importo');
+  const iPag=find('tipo pagamento','pagamento'), iData=find('data rifornimento','data'), iPompa=find('pompa'), iProd=find('prodotto'), iQta=find('quantità','quantita'), iPrezzo=find('prezzo'), iImp=find('importo'), iTess=find('tessera');
   if([iData,iPompa,iProd,iQta].some(x=>x<0)) throw new Error('Colonne mancanti (servono Data, Pompa, Prodotto, Quantità).');
   const daily={}; PUMPS.forEach(p=>daily[p]={});
   const prezzoDay={}, prezzoTs={}; // prezzo dell'ultima erogazione del giorno per prodotto (per gli ADDEBITI CARTACEI)
   const venditeEur={};             // venditeEur[day][prod] = Σ qta×prezzo per transazione (vendite ESATTE, per il corrispettivo)
+  const servitoTess={};            // servitoTess[tessera][day] = Σ Importo € (per il controllo casse: erogato per scheda gestore)
   let kept=0,skTot=0,skAdb=0,skUnknown=0; const daySet=new Set(); const prodCount={GASOLIO:0,VERDE:0,GPL:0};
   for(let i=hr+1;i<rows.length;i++){
     const r=rows[i]; if(!r) continue;
     const pag=iPag>=0?String(r[iPag]||''):''; if(pag.toLowerCase().includes('totale')){ skTot++; continue; }
     const pompa=String(r[iPompa]||'').trim(); const prod=String(r[iProd]||'').trim().toUpperCase();
     if(!pompa && !prod) continue;
+    // servito per scheda (controllo casse): TUTTO l'erogato, anche ADBLUE/pompe non a registro
+    { const sd=cellDay(r[iData]); const st=iTess>=0?String(r[iTess]||'').trim():''; if(sd&&st){ const si=(iImp>=0?itNum(r[iImp]):(iPrezzo>=0?itNum(r[iQta])*itNum(r[iPrezzo]):0)); servitoTess[st]=servitoTess[st]||{}; servitoTess[st][sd]=(servitoTess[st][sd]||0)+si; } }
     if(prod==='ADBLUE'||pompa==='ADBL7'){ skAdb++; continue; }
     const day=cellDay(r[iData]); if(!day||!pompa) continue;
     if(!PUMPS.includes(pompa)){ skUnknown++; continue; }
     const q=itNum(r[iQta]); daily[pompa][day]=(daily[pompa][day]||0)+q; daySet.add(day); kept++;
     const pc=prodOf(pompa); if(pc) prodCount[pc]+=q;
+    const importo=(iImp>=0||iPrezzo>=0) ? (iImp>=0?itNum(r[iImp]):q*itNum(r[iPrezzo])) : 0; // Importo € (lordo) della transazione
     if(pc && (iImp>=0||iPrezzo>=0)){
       // vendite esatte: usa l'Importo € di StoreSmart (già arrotondato a transazione); fallback qta×prezzo
-      const importo=iImp>=0?itNum(r[iImp]):q*itNum(r[iPrezzo]);
       venditeEur[day]=venditeEur[day]||{}; venditeEur[day][pc]=(venditeEur[day][pc]||0)+importo;
       if(iPrezzo>=0){ const prezzo=itNum(r[iPrezzo]); const ts=(typeof r[iData]==='number')?r[iData]:(Date.parse(String(r[iData]))||0); prezzoDay[day]=prezzoDay[day]||{}; prezzoTs[day]=prezzoTs[day]||{}; if(!(pc in prezzoTs[day])||ts>=prezzoTs[day][pc]){ prezzoTs[day][pc]=ts; prezzoDay[day][pc]=prezzo; } } }
   }
   const days=[...daySet].sort();
-  return { days, daily, prezzoDay, venditeEur, meta:{kept,skTot,skAdb,skUnknown,prodCount, period: days.length? days[0].slice(0,7):'', periodo: days.length? `${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—'} };
+  return { days, daily, prezzoDay, venditeEur, servitoTess, meta:{kept,skTot,skAdb,skUnknown,prodCount, period: days.length? days[0].slice(0,7):'', periodo: days.length? `${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—'} };
 }
 
 // ---- parsing Card Smart (fatturato per cliente/tessera, NON per pistola) ----
@@ -989,6 +1018,59 @@ function icadNonUtaDay(d){ return (ICAD&&ICAD.byDayNonUta&&ICAD.byDayNonUta[d])|
 function cardSmartScontoPuntiDay(d){ return (CARDSMART&&CARDSMART.byDayScontoPunti&&CARDSMART.byDayScontoPunti[d])||0; }
 function scontoAllaPompaDay(d){ return icadNonUtaDay(d)+cardSmartScontoPuntiDay(d); }
 
+// ---- CONTROLLO CASSE (per operatore, giorno per giorno: CTRL = POS + DROP + Monete − Servito) ----
+let OPERATORI=[], CASSA={}, CASSA_OP=null, OPSEQ=1;
+// mappa nome↔scheda nota dal CTRL CASSE (solo suggerimento: le schede le conferma l'utente)
+const SCHEDE_NOTE={ '4273001':'NICOLA VITALE','4273002':'FABIO BLANDINI','4273003':'NICOLA MOTTOLA','4273007':'NICOLA DI GENNARO','4273008':'GIUSEPPE ZAMPELLA','4273009':'ALESSANDRO VERNETTI','4273013':'ANTONINO NOTARO','4273014':'CANTILE','4273015':'RICCARDO CARMINE','4273016':'BRUNO CIPULLO' };
+function loadCassa(){ try{ const o=JSON.parse(localStorage.getItem('faboil_operatori')||'null'); if(o){ OPERATORI=o.operatori||[]; OPSEQ=o.seq||(OPERATORI.length+1); } }catch(e){} try{ CASSA=JSON.parse(localStorage.getItem('faboil_cassa')||'{}')||{}; }catch(e){ CASSA={}; } }
+function saveCassa(){ try{ localStorage.setItem('faboil_operatori', JSON.stringify({operatori:OPERATORI,seq:OPSEQ})); localStorage.setItem('faboil_cassa', JSON.stringify(CASSA)); }catch(e){} }
+function normName(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,' '); }
+function schedaSuggerita(nome){ const n=normName(nome); for(const k in SCHEDE_NOTE){ if(normName(SCHEDE_NOTE[k])===n) return k; } return ''; }
+function servitoDay(scheda,d){ if(!STATE||!STATE.servitoTess||!scheda) return 0; const t=STATE.servitoTess[scheda]; return (t&&t[d])||0; }
+function posAccountDay(account,d){ if(!POS||!account) return 0; for(const a of POS.accounts){ if(normName(a.name)===normName(account)) return (POS.byAccount[a.name][d])||0; } return 0; }
+function cassaCell(opId,d){ return (CASSA[opId]&&CASSA[opId][d])||{drop:0,monete:0}; }
+function setCassaCell(opId,d,field,value){ CASSA[opId]=CASSA[opId]||{}; CASSA[opId][d]=CASSA[opId][d]||{drop:0,monete:0}; CASSA[opId][d][field]=value; saveCassa(); }
+function addOperatore(){ const nome=(document.getElementById('op-nome').value||'').trim(); if(!nome){ alert('Inserisci il nome.'); return; }
+  const scheda=(document.getElementById('op-scheda').value||'').trim(); const account=(document.getElementById('op-account').value||'').trim()||nome;
+  OPERATORI.push({id:'O'+(OPSEQ++), nome, scheda, account}); saveCassa();
+  document.getElementById('op-nome').value=''; document.getElementById('op-scheda').value=''; document.getElementById('op-account').value='';
+  renderOperatori(); fillCassaOp(); }
+function importOperatoriDaPos(){ if(!POS||!POS.accounts.length){ alert('Carica prima il file POS.'); return; }
+  let add=0; POS.accounts.forEach(a=>{ if(!posSel(a.name)) return; if(OPERATORI.some(o=>normName(o.account)===normName(a.name))) return;
+    OPERATORI.push({id:'O'+(OPSEQ++), nome:a.name, scheda:schedaSuggerita(a.name), account:a.name}); add++; });
+  saveCassa(); renderOperatori(); fillCassaOp(); alert(add?`Aggiunti ${add} operatori dagli account POS (solo Lusciano selezionati).`:'Nessun nuovo operatore da aggiungere.'); }
+function delOperatore(id){ const o=OPERATORI.find(x=>x.id===id); if(o && !confirm(`Eliminare l'operatore ${o.nome}?`)) return; OPERATORI=OPERATORI.filter(x=>x.id!==id); if(CASSA_OP===id) CASSA_OP=null; saveCassa(); renderOperatori(); fillCassaOp(); }
+function editOperatore(id,field,value){ const o=OPERATORI.find(x=>x.id===id); if(!o) return; o[field]=String(value).trim(); saveCassa(); renderOperatori(); fillCassaOp(); }
+function renderOperatori(){ const el=document.getElementById('op-list'); if(!el) return;
+  if(!OPERATORI.length){ el.innerHTML='<p class="muted">Nessun operatore. Aggiungilo sopra, oppure «Importa dagli account POS».</p>'; return; }
+  const days=STATE?STATE.days:[];
+  let h='<div class="tablewrap"><table class="reg"><thead><tr><th style="text-align:left">Nome</th><th>Scheda gestore</th><th style="text-align:left">Account POS</th><th>Servito</th><th>POS</th><th></th></tr></thead><tbody>';
+  OPERATORI.forEach(o=>{ const serv=days.reduce((s,d)=>s+servitoDay(o.scheda,d),0); const pos=days.reduce((s,d)=>s+posAccountDay(o.account,d),0);
+    const noServ=o.scheda && STATE && !STATE.servitoTess[o.scheda];
+    h+=`<tr><td style="text-align:left"><input class="fld op-ed" data-id="${o.id}" data-f="nome" value="${escapeAttr(o.nome)}" style="width:12rem"></td>
+      <td><input class="fld op-ed" data-id="${o.id}" data-f="scheda" value="${escapeAttr(o.scheda||'')}" style="width:8rem;text-align:center${noServ?';border-color:var(--red)':''}" title="${noServ?'nessun servito StoreSmart per questa scheda':''}"></td>
+      <td style="text-align:left"><input class="fld op-ed" data-id="${o.id}" data-f="account" value="${escapeAttr(o.account||'')}" style="width:12rem"></td>
+      <td>${fmtEur(serv)}</td><td>${fmtEur(pos)}</td>
+      <td><button class="btn ghost op-del" data-id="${o.id}" title="Elimina" style="padding:.2rem .5rem">✕</button></td></tr>`; });
+  h+='</tbody></table></div>'; el.innerHTML=h; }
+function fillCassaOp(){ const sel=document.getElementById('cassa-op'); if(!sel) return; const cur=CASSA_OP;
+  sel.innerHTML='<option value="">— scegli operatore —</option>'+OPERATORI.map(o=>`<option value="${o.id}">${escapeHtml(o.nome)}</option>`).join('');
+  if(cur && OPERATORI.some(o=>o.id===cur)) sel.value=cur; else CASSA_OP=null; renderCassa(); }
+function renderCassa(){ const el=document.getElementById('cassa-container'), hint=document.getElementById('cassa-hint'); if(!el) return;
+  if(!STATE){ el.innerHTML='<p class="muted">Carica prima il report StoreSmart (serve il servito per scheda).</p>'; if(hint) hint.textContent=''; return; }
+  const o=OPERATORI.find(x=>x.id===CASSA_OP); if(!o){ el.innerHTML='<p class="muted">Scegli un operatore per la quadratura giornaliera.</p>'; if(hint) hint.textContent=''; return; }
+  if(hint){ const noServ=o.scheda && !STATE.servitoTess[o.scheda]; hint.innerHTML=`scheda <b>${escapeHtml(o.scheda||'—')}</b> · account <b>${escapeHtml(o.account||'—')}</b>${noServ?' · <span style="color:var(--red)">nessun servito per questa scheda</span>':''}${!POS?' · <span style="color:var(--muted)">POS non caricato</span>':''}`; }
+  const days=STATE.days; const tot={serv:0,pos:0,drop:0,mon:0,ctrl:0};
+  let h='<div class="tablewrap" style="max-height:70vh"><table class="reg"><thead><tr><th class="datecol" style="text-align:left">DATA</th><th>Servito</th><th>POS</th><th>DROP</th><th>Monete</th><th title="POS + DROP + Monete − Servito">CTRL</th></tr></thead><tbody>';
+  days.forEach(d=>{ const serv=servitoDay(o.scheda,d), pos=posAccountDay(o.account,d), c=cassaCell(o.id,d); const drop=c.drop||0, mon=c.monete||0; const ctrl=pos+drop+mon-serv;
+    tot.serv+=serv; tot.pos+=pos; tot.drop+=drop; tot.mon+=mon; tot.ctrl+=ctrl;
+    h+=`<tr><td class="datecol ${dateClass(d)}" style="text-align:left">${fmtDay(d)}</td><td>${fmtEur(serv)}</td><td>${fmtEur(pos)}</td>
+      <td><input class="fld cassa-in" data-d="${d}" data-f="drop" type="number" step="0.01" value="${drop||''}" style="width:6.5rem;text-align:right"></td>
+      <td><input class="fld cassa-in" data-d="${d}" data-f="monete" type="number" step="0.01" value="${mon||''}" style="width:6rem;text-align:right"></td>
+      <td style="font-weight:700;color:${Math.abs(ctrl)>0.5?'var(--red)':'var(--text)'}">${fmtEur(ctrl)}</td></tr>`; });
+  h+=`<tr class="base"><td class="datecol" style="text-align:left">TOTALE</td><td>${fmtEur(tot.serv)}</td><td>${fmtEur(tot.pos)}</td><td>${fmtEur(tot.drop)}</td><td>${fmtEur(tot.mon)}</td><td style="font-weight:800;color:${Math.abs(tot.ctrl)>0.5?'var(--red)':'var(--text)'}">${fmtEur(tot.ctrl)}</td></tr>`;
+  h+='</tbody></table></div>'; el.innerHTML=h; }
+
 // ---- import unificato: una sola card, riconoscimento automatico, elenco file ----
 let SRCMETA={}; // {ss:{name,periodo,at,extra}, cs, icad, dkv, pos, cl}
 const SRC_LABEL={ss:'Registro StoreSmart', cs:'Card Smart (fatturato)', icad:'iCad (fatture)', dkv:'DKV', pos:'POS (incassato)', cl:'Clienti'};
@@ -1334,7 +1416,7 @@ function escapeHtml(s){ return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'
 function escapeAttr(s){ return String(s).replace(/"/g,'&quot;'); }
 function debounce(fn,ms){ let h; return function(){ clearTimeout(h); h=setTimeout(fn,ms); }; } // ricerca fluida su telefono con tante schede
 function goTab(name){ document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===name)); document.querySelectorAll('.page').forEach(p=>p.classList.remove('on')); document.getElementById('page-'+name).classList.add('on');
-  try{ if(name==='commercialista') renderCommercialista(); else if(name==='ricariche') renderRicariche(); else if(name==='registro') renderRegistro(); }catch(e){} }
+  try{ if(name==='commercialista') renderCommercialista(); else if(name==='ricariche') renderRicariche(); else if(name==='registro') renderRegistro(); else if(name==='cassa'){ renderOperatori(); fillCassaOp(); } }catch(e){} }
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ if(!t.disabled) goTab(t.dataset.tab); }));
 document.getElementById('export-btn').addEventListener('click',exportRegistro);
 document.getElementById('comm-export').addEventListener('click',exportCommercialista);
@@ -1372,6 +1454,14 @@ dropAny.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) hand
 document.getElementById('import-result-pos').addEventListener('click',e=>{ const c=e.target.closest('.poschip'); if(c) togglePosAcc(c.dataset.acc); }); // delegation chip Lusciano
 document.getElementById('import-list').addEventListener('click',e=>{ const b=e.target.closest('.xsrc'); if(b) removeSrc(b.dataset.k); }); // delegation rimozione
 
+// controllo casse
+document.getElementById('op-add').addEventListener('click',addOperatore);
+document.getElementById('op-import').addEventListener('click',importOperatoriDaPos);
+document.getElementById('op-list').addEventListener('change',e=>{ const i=e.target.closest('.op-ed'); if(i) editOperatore(i.dataset.id,i.dataset.f,i.target.value); });
+document.getElementById('op-list').addEventListener('click',e=>{ const b=e.target.closest('.op-del'); if(b) delOperatore(b.dataset.id); });
+document.getElementById('cassa-op').addEventListener('change',e=>{ CASSA_OP=e.target.value||null; renderCassa(); });
+document.getElementById('cassa-container').addEventListener('change',e=>{ const i=e.target.closest('.cassa-in'); if(i && CASSA_OP){ setCassaCell(CASSA_OP,i.dataset.d,i.dataset.f,itNum(i.target.value)); renderCassa(); } });
+
 document.getElementById('cl-search').addEventListener('input',debounce(()=>{ CLQ=document.getElementById('cl-search').value; renderClList(); },140));
 document.getElementById('cl-list').addEventListener('click',e=>{ const it=e.target.closest('.cl-item'); if(!it) return; CURCLI=it.dataset.id; saveClienti(); renderClList(); renderClDetail(); }); // delegation: 1 listener
 
@@ -1386,7 +1476,9 @@ document.getElementById('ric-add').addEventListener('click',addRicarica);
 // anagrafica clienti: indipendente dal file importato
 loadClienti(); renderClienti();
 loadRic(); renderRicariche();
+loadCassa();
 restoreImports();
+renderOperatori(); fillCassaOp();
 </script>
 </body>
 </html>
