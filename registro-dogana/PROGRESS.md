@@ -66,6 +66,21 @@ Ultimo aggiornamento: 2026-06-24.
 - **Corrispettivo/giorno** = vendite − (Card Smart + iCad + DKV + buoni).
 - **Credito prepagato** = saldo@data + ricariche − (Card Smart Importo + buoni), dalla `saldoData` in poi.
 
+### Corrispettivo CONTANTI (modello a strati — da implementare con CTRL CASSE)
+Esempio 1 giugno: vendite 10.000 (10.000 L×1€) − CS 5.000 − iCad 1.000 − DKV 1.000 = **corrispettivo 3.000**;
+con un buono di 1.000 il "non toccabile" sale e il corrispettivo scende a 2.000.
+- **🔒 Non toccabili**: Card Smart, iCad, DKV, buoni, **POS-su-corrispettivi**.
+- **✅ Toccabile (contante)** = Corrispettivo − POS-su-corrispettivi → **deve restare ≥ 0**. Solo questo
+  contante è **spostabile** (buoni su altri giorni) o **rettificabile** (travasi).
+- **POS-su-fatture** (POS che paga fatture alla pompa, NON è corrispettivo) si ricava dai file:
+  - **iCad**: tutte TRANNE UTA (UTA = clienti con "UTA" nel nome/Numero Fattura, pagate Bonifico;
+    le non-UTA sono tutte "Carta di pagamento"). Giugno: non-UTA €9.860,85 · UTA €4.895,22.
+  - **Card Smart**: righe con **Tipologia Cliente = "Sconto" o "Punti"** (colonna C / "Tipologia Cliente",
+    cella unita). Giugno: Sconto €38.289,33 · Punti €0. (Post Pagati/Pre Pagati NON sono POS.)
+  - Totale POS-su-fatture giugno = €48.150,18.
+- **POS-su-corrispettivi** = POS totale (da **CTRL CASSE**, ancora mancante) − POS-su-fatture.
+- **Contante** = Corrispettivo − POS-su-corrispettivi. Buoni/travasi limitati a "contante ≥ 0".
+
 ### IVA / lordo-netto — VERIFICATO sui dati di giugno 2026
 - StoreSmart prezzo pompa = **LORDO** (IVA inclusa): GASOLIO 1.948, VERDE 1.887, GPL 0.769.
 - **Card Smart** "Prezzo Unitario" giugno = **identico** al prezzo pompa → **LORDO**.
