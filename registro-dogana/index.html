@@ -488,12 +488,13 @@ function parseCardSmart(rows){
   if(hr<0) throw new Error("Intestazione non trovata: manca 'Prodotto'. È un file Card Smart (RifornimentiPerPeriodo)?");
   const head=rows[hr].map(c=>String(c==null?'':c).trim().toLowerCase());
   const find=(...names)=>{ for(const n of names){ const k=head.findIndex(h=>h===n); if(k>=0) return k; } for(const n of names){ const k=head.findIndex(h=>h.includes(n)); if(k>=0) return k; } return -1; }; // esatto prima, poi sottostringa
-  const iErog=find('data erogazione','erogazione'), iReg=find('data registrazione','registrazione'), iProd=find('prodotto'), iQta=find('quantita','quantità'), iImp=find('importo'), iTess=find('codice tessera','tessera'), iPrz=find('prezzo unitario','prezzo');
+  const iErog=find('data erogazione','erogazione'), iReg=find('data registrazione','registrazione'), iProd=find('prodotto'), iQta=find('quantita','quantità'), iImp=find('importo'), iTess=find('codice tessera','tessera'), iPrz=find('prezzo unitario','prezzo'), iTip=find('tipologia cliente','tipologia');
   if([iProd,iQta].some(x=>x<0)) throw new Error('Colonne mancanti (servono Prodotto e Quantità).');
-  const byDayProd={}; const byTessera={}; const byDayBase={}; const byDayImp={}; const litri={GASOLIO:0,VERDE:0,GPL:0}; const imp={GASOLIO:0,VERDE:0,GPL:0};
-  let kept=0,skTot=0,skExtra=0; const daySet=new Set();
+  const byDayProd={}; const byTessera={}; const byDayBase={}; const byDayImp={}; const byDayScontoPunti={}; const litri={GASOLIO:0,VERDE:0,GPL:0}; const imp={GASOLIO:0,VERDE:0,GPL:0};
+  let kept=0,skTot=0,skExtra=0,lastTip=''; const daySet=new Set();
   for(let i=hr+1;i<rows.length;i++){
     const r=rows[i]; if(!r) continue;
+    if(iTip>=0){ const t=String(r[iTip]||'').trim(); if(t) lastTip=t; } // celle unite: tieni l'ultima tipologia
     if(r.some(c=>String(c).toLowerCase().includes('totale'))){ skTot++; continue; }
     const prodRaw=r[iProd]; if(prodRaw==null||prodRaw==='') continue;
     const prod=normCSProd(prodRaw); if(!prod){ skExtra++; continue; } // ADBLUE / Metano esclusi
@@ -501,11 +502,12 @@ function parseCardSmart(rows){
     const q=csNum(r[iQta]); const importo=iImp>=0?csNum(r[iImp]):0; const prezzo=iPrz>=0?csNum(r[iPrz]):0; const base=q*prezzo; // base = qta x prezzo (LORDO, senza sconto/magg)
     byDayProd[day]=byDayProd[day]||{}; byDayProd[day][prod]=(byDayProd[day][prod]||0)+q;
     byDayBase[day]=(byDayBase[day]||0)+base; byDayImp[day]=(byDayImp[day]||0)+importo; // corrispettivo = base; scorporo = importo - base
+    const tipL=lastTip.toLowerCase(); if(tipL.includes('sconto')||tipL.includes('punti')) byDayScontoPunti[day]=(byDayScontoPunti[day]||0)+importo; // POS-su-fatture (pagate alla pompa)
     litri[prod]+=q; imp[prod]+=importo; kept++; daySet.add(day);
     const tess=iTess>=0?String(r[iTess]||'').trim():''; if(tess){ byTessera[tess]=byTessera[tess]||{}; byTessera[tess][day]=(byTessera[tess][day]||0)+importo; }
   }
   const days=[...daySet].sort();
-  return { byDayProd, byTessera, byDayBase, byDayImp, meta:{kept,skTot,skExtra,litri,imp, periodo: days.length?`${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—'} };
+  return { byDayProd, byTessera, byDayBase, byDayImp, byDayScontoPunti, meta:{kept,skTot,skExtra,litri,imp, periodo: days.length?`${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—'} };
 }
 function handleCSFile(file){
   const res=document.getElementById('import-result-cs'); res.innerHTML='<p class="muted" style="margin-top:1rem">Lettura in corso…</p>';
