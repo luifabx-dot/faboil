@@ -196,24 +196,34 @@ colonna "Sc./Magg.".
   (sintetizza i metadati per i backup vecchi). Verificato: 6/6 file riconosciuti, ripristino OK.
 - `cellDay` ora legge anche le date "1 giu 2026, 00:00" (mesi italiani) usate dal resoconto POS.
 
-## Controllo casse — FATTO (2026-06-25)
-- Nuova scheda **Controllo casse**, per operatore, **giorno per giorno** (deciso: 1a).
-- **Anagrafica operatori**: Nome · Scheda gestore · Account POS, modificabili/cancellabili.
-  «Importa dagli account POS» crea un operatore per ogni account di Lusciano selezionato e
-  pre-assegna la scheda dalla mappa nota del CTRL CASSE (`SCHEDE_NOTE`, solo suggerimento).
-  Salvati in `localStorage` (`faboil_operatori`, `faboil_cassa`).
-- **Servito** = erogato StoreSmart per *scheda gestore* (colonna Tessera). `parseStoreSmart`
-  ora accumula `servitoTess[tessera][day]` = Σ Importo € **prima** dei filtri ADBLUE/pompa
-  (il benzinaio incassa anche l'ADBLUE). Verificato: Notaro 4273013 = €133.442.
-- **POS** = incassato per *account* dal file resoconto (match nome case-insensitive), sommato
-  **solo sui giorni del registro** (allineamento periodo: se StoreSmart copre 01-24, il POS del
-  25 non entra nella quadratura).
-- **DROP** e **MONETE** inseriti a mano (deciso: 2a). **CTRL = POS + DROP + Monete − Servito**
-  (≈0 quadra, |CTRL|>0,5 in rosso). Riga TOTALE di periodo.
-- Mappa nome↔scheda (CTRL CASSE): 4273001 Vitale · 4273002 Blandini · 4273003 Mottola ·
-  4273007 Di Gennaro · 4273008 Zampella · 4273009 Vernetti · 4273013 Notaro · 4273014 Cantile ·
-  4273015 Carmine · 4273016 Cipullo · 4273017 sospesa. (File obsoleto: schede da confermare.)
-- Verifica jsdom: servito/POS/CTRL corretti, import operatori OK, quadratura 24 giorni.
+## Controllo casse — FATTO v2 (2026-06-25)
+- Scheda **Controllo casse** come **elenco di schede gestore auto-rilevate**.
+- **Scheda gestore = tessera (7 cifre) presente in StoreSmart e ASSENTE dall'anagrafica
+  clienti (estesoL).** (Criterio corretto: il primo tentativo "non in Card Smart" sbagliava —
+  es. tessere Sabatino 3331xxx assenti da Card Smart ma clienti veri.) Verificato: dà
+  esattamente le 10 schede 4273xxx, zero falsi positivi; una clandestina (badge non a
+  registro clienti) emergerebbe da sola. Richiede StoreSmart + anagrafica clienti.
+- **Elenco** (totali periodo, una riga per scheda): N. tessera · Nome (editabile, precompilato
+  da `SCHEDE_NOTE`) · Account POS (tendina, abbinamento manuale) · Servito · POS · DROP ·
+  Monete · Sospese · UTA · DKV · **= TOT**. Riga **rossa + ⚠** = scheda non riconosciuta
+  (possibile clandestina). `TOT = Servito − POS − DROP − Monete − Sospese − UTA − DKV` (≈0).
+- **Dettaglio giornaliero** per scheda: DROP/Monete/Sospese/UTA/DKV **a mano per giorno**.
+  - **Sospese** = transazioni autorizzate col badge gestore, poi assegnate al cliente in Card
+    Smart e scalate dal badge → non sono contante dovuto.
+  - **UTA/DKV** = riforniti con carta carburante (fattura a UTA/DKV) → non contante né POS.
+- **Convalida giornaliera UTA/DKV**: per giorno confronta Σ UTA inserita vs **iCad UTA**
+  (`byDay − byDayNonUta`) e Σ DKV inserita vs **file DKV**; i giorni con Δ>0,50 € = anomalia.
+- **Servito** = `STATE.servitoTess[scheda][day]` (Σ Importo €, **incluso ADBLUE**, prima dei
+  filtri pompa). **POS** = per account abbinato, sui giorni del registro.
+- **Filtro Lusciano nel commercialista**: tolti i chip POS. Ora `posSel(account)` = l'account è
+  abbinato a una scheda gestore nel controllo casse (Casaluce escluso da sé perché non ha
+  scheda in StoreSmart); finché non abbini nulla → tutti. Auto-abbino le 8 schede note il cui
+  nome combacia col POS; Carmine e Cantile (nome invertito) li abbini a mano.
+- Stato in `localStorage` (`faboil_casse`). Verifica jsdom: 10 schede, Casaluce escluso,
+  posDay filtrato, convalida OK; regressione POS 5/5.
+- **PENDENTE**: parametrizzazione per **turno (giorno + ora)** — ogni operatore ha turni diversi
+  (anche a cavallo di mezzanotte). Serve conservare l'orario delle transazioni; da definire come
+  l'utente descrive i turni. Il totale periodo per scheda è indipendente dal turno.
 
 ## File di riferimento (upload di sessione)
 - StoreSmart erogazioni giugno 2026 (registro di partenza, contatori 0 al 31/5).

@@ -354,26 +354,26 @@ table.reg tbody tr.brow:hover td{background:var(--surface2)}
 
   <!-- CONTROLLO CASSE -->
   <div class="page" id="page-cassa">
-    <div class="sh"><h1>Controllo casse</h1><p>per operatore, giorno per giorno: <b>CTRL = POS + DROP + Monete − Servito</b> (≈0 quadra)</p></div>
+    <div class="sh"><h1>Controllo casse</h1><p>schede gestore (StoreSmart, non clienti) · <b>TOT = Servito − POS − DROP − Monete − Sospese − UTA − DKV</b> (≈0 quadra)</p></div>
     <div class="card">
-      <div class="card-title">Operatori</div>
-      <div class="formline" style="flex-wrap:wrap;gap:.5rem;align-items:flex-end">
-        <div class="f"><label>Nome</label><input id="op-nome" class="fld" placeholder="es. Antonino Notaro" style="width:13rem"></div>
-        <div class="f"><label>Scheda gestore</label><input id="op-scheda" class="fld" placeholder="es. 4273013" style="width:9rem"></div>
-        <div class="f"><label>Account POS</label><input id="op-account" class="fld" placeholder="es. antonino notaro" style="width:13rem"></div>
-        <button class="btn" id="op-add">+ Aggiungi</button>
-        <button class="btn ghost" id="op-import">Importa dagli account POS</button>
-      </div>
-      <p class="muted" style="margin-top:.5rem">Il <b>servito</b> viene da StoreSmart per <i>scheda gestore</i>; il <b>POS</b> dal file resoconto per <i>account</i>. Modificabili e cancellabili.</p>
-      <div id="op-list" style="margin-top:.7rem"></div>
+      <div class="card-title">Schede gestore</div>
+      <div id="cassa-warn"></div>
+      <div id="op-list" style="margin-top:.4rem"></div>
+      <p class="muted" style="margin-top:.5rem">Rilevate da StoreSmart (tessera di 7 cifre <b>non</b> in anagrafica clienti). <b>Nome</b> e <b>Account POS</b> li abbini tu. Riga in rosso = scheda non riconosciuta (possibile clandestina).</p>
     </div>
     <div class="card">
-      <div class="card-title">Quadratura</div>
+      <div class="card-title">Dettaglio giornaliero</div>
       <div class="formline" style="gap:.5rem;align-items:flex-end;flex-wrap:wrap">
-        <div class="f"><label>Operatore</label><select id="cassa-op" class="fld" style="width:15rem"></select></div>
+        <div class="f"><label>Scheda / operatore</label><select id="cassa-op" class="fld" style="width:17rem"></select></div>
         <span class="muted" id="cassa-hint"></span>
       </div>
-      <div id="cassa-container" style="margin-top:.7rem"></div>
+      <p class="muted" style="margin-top:.4rem">DROP, Monete, Sospese, UTA, DKV si inseriscono qui giorno per giorno.</p>
+      <div id="cassa-container" style="margin-top:.5rem"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Convalida giornaliera UTA / DKV</div>
+      <p class="muted">Confronto fra gli scontrini inseriti (somma di tutte le schede) e le fatture nei file iCad (UTA) e DKV, giorno per giorno. I giorni che non quadrano sono evidenziati.</p>
+      <div id="cassa-convalida" style="margin-top:.5rem"></div>
     </div>
   </div>
 
@@ -990,7 +990,8 @@ function parsePos(rows){
   const days=[...dset].sort();
   return { byAccount, accounts, meta:{ n, tot:accounts.reduce((s,a)=>s+a.tot,0), periodo: days.length?`${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—' } };
 }
-function posSel(name){ return !POSLUS || POSLUS.indexOf(name)>=0; } // null = tutti selezionati
+// Lusciano = account abbinato a una scheda gestore nel controllo casse; finché non abbini nulla, tutti.
+function posSel(name){ let any=false; for(const k in CASSE){ const a=CASSE[k]&&CASSE[k].account; if(a){ any=true; if(normName(a)===normName(name)) return true; } } return !any; }
 function posDay(d){ if(!POS) return 0; let s=0; for(const a of POS.accounts){ if(posSel(a.name)) s+=(POS.byAccount[a.name][d]||0); } return s; }
 function savePos(){ if(POS) localStorage.setItem('faboil_pos',JSON.stringify(POS)); if(POSLUS) localStorage.setItem('faboil_poslus',JSON.stringify(POSLUS)); }
 function togglePosAcc(name){ if(!POS) return; if(!POSLUS) POSLUS=POS.accounts.map(a=>a.name); const i=POSLUS.indexOf(name); if(i>=0) POSLUS.splice(i,1); else POSLUS.push(name); savePos(); renderPosResult(); renderCommercialista(); }
@@ -1004,72 +1005,90 @@ function handlePosFile(file){
 }
 function renderPosResult(fname){
   if(!POS){ return; } const m=POS.meta;
-  const selTot=POS.accounts.filter(a=>posSel(a.name)).reduce((s,a)=>s+a.tot,0);
-  let chips=POS.accounts.map(a=>{ const on=posSel(a.name); return `<button class="poschip ${on?'on':''}" data-acc="${escapeAttr(a.name)}">${on?'☑':'☐'} ${escapeHtml(a.name)} · ${fmtEur(a.tot)}</button>`; }).join('');
   const head = fname ? `<div class="ok-msg">✓ Importato: <b>${escapeHtml(fname)}</b></div>` : `<div class="ok-msg">✓ POS ripristinato</div>`;
   document.getElementById('import-result-pos').innerHTML=`${head}
-    <p class="muted" style="margin-top:.5rem">Periodo ${m.periodo} · ${m.n} transazioni · totale file ${fmtEur(m.tot)}.</p>
-    <p class="muted" style="margin-top:.6rem"><b>Account di Lusciano</b> (clicca per escludere quelli di Casaluce):</p>
-    <div class="poschips">${chips}</div>
-    <p class="muted" style="margin-top:.5rem">POS selezionato (Lusciano): <b>${fmtEur(selTot)}</b>.</p>`;
+    <p class="muted" style="margin-top:.5rem">Periodo ${m.periodo} · ${m.n} transazioni · totale file ${fmtEur(m.tot)} · ${POS.accounts.length} account. Gli account si abbinano alle schede gestore in <b>Controllo casse</b> (Casaluce escluso da sé).</p>`;
 }
 // sconto-alla-pompa (POS-su-fatture): iCad non-UTA + Card Smart tipologia Sconto/Punti. NON abbassa i contanti.
 function icadNonUtaDay(d){ return (ICAD&&ICAD.byDayNonUta&&ICAD.byDayNonUta[d])||0; }
 function cardSmartScontoPuntiDay(d){ return (CARDSMART&&CARDSMART.byDayScontoPunti&&CARDSMART.byDayScontoPunti[d])||0; }
 function scontoAllaPompaDay(d){ return icadNonUtaDay(d)+cardSmartScontoPuntiDay(d); }
 
-// ---- CONTROLLO CASSE (per operatore, giorno per giorno: CTRL = POS + DROP + Monete − Servito) ----
-let OPERATORI=[], CASSA={}, CASSA_OP=null, OPSEQ=1;
-// mappa nome↔scheda nota dal CTRL CASSE (solo suggerimento: le schede le conferma l'utente)
+// ---- CONTROLLO CASSE (schede gestore: TOT = Servito − POS − DROP − Monete − Sospese − UTA − DKV) ----
+// Scheda gestore = tessera (7 cifre) in StoreSmart e NON in anagrafica clienti (estesoL).
+let CASSE={}, CASSA_OP=null; // CASSE[scheda]={nome,account,byDay:{day:{drop,monete,sospese,uta,dkv}}}
+const MANUF=['drop','monete','sospese','uta','dkv'];
 const SCHEDE_NOTE={ '4273001':'NICOLA VITALE','4273002':'FABIO BLANDINI','4273003':'NICOLA MOTTOLA','4273007':'NICOLA DI GENNARO','4273008':'GIUSEPPE ZAMPELLA','4273009':'ALESSANDRO VERNETTI','4273013':'ANTONINO NOTARO','4273014':'CANTILE','4273015':'RICCARDO CARMINE','4273016':'BRUNO CIPULLO' };
-function loadCassa(){ try{ const o=JSON.parse(localStorage.getItem('faboil_operatori')||'null'); if(o){ OPERATORI=o.operatori||[]; OPSEQ=o.seq||(OPERATORI.length+1); } }catch(e){} try{ CASSA=JSON.parse(localStorage.getItem('faboil_cassa')||'{}')||{}; }catch(e){ CASSA={}; } }
-function saveCassa(){ try{ localStorage.setItem('faboil_operatori', JSON.stringify({operatori:OPERATORI,seq:OPSEQ})); localStorage.setItem('faboil_cassa', JSON.stringify(CASSA)); }catch(e){} }
+function loadCassa(){ try{ CASSE=JSON.parse(localStorage.getItem('faboil_casse')||'{}')||{}; }catch(e){ CASSE={}; } }
+function saveCassa(){ try{ localStorage.setItem('faboil_casse', JSON.stringify(CASSE)); }catch(e){} }
 function normName(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,' '); }
-function schedaSuggerita(nome){ const n=normName(nome); for(const k in SCHEDE_NOTE){ if(normName(SCHEDE_NOTE[k])===n) return k; } return ''; }
 function servitoDay(scheda,d){ if(!STATE||!STATE.servitoTess||!scheda) return 0; const t=STATE.servitoTess[scheda]; return (t&&t[d])||0; }
 function posAccountDay(account,d){ if(!POS||!account) return 0; for(const a of POS.accounts){ if(normName(a.name)===normName(account)) return (POS.byAccount[a.name][d])||0; } return 0; }
-function cassaCell(opId,d){ return (CASSA[opId]&&CASSA[opId][d])||{drop:0,monete:0}; }
-function setCassaCell(opId,d,field,value){ CASSA[opId]=CASSA[opId]||{}; CASSA[opId][d]=CASSA[opId][d]||{drop:0,monete:0}; CASSA[opId][d][field]=value; saveCassa(); }
-function addOperatore(){ const nome=(document.getElementById('op-nome').value||'').trim(); if(!nome){ alert('Inserisci il nome.'); return; }
-  const scheda=(document.getElementById('op-scheda').value||'').trim(); const account=(document.getElementById('op-account').value||'').trim()||nome;
-  OPERATORI.push({id:'O'+(OPSEQ++), nome, scheda, account}); saveCassa();
-  document.getElementById('op-nome').value=''; document.getElementById('op-scheda').value=''; document.getElementById('op-account').value='';
-  renderOperatori(); fillCassaOp(); }
-function importOperatoriDaPos(){ if(!POS||!POS.accounts.length){ alert('Carica prima il file POS.'); return; }
-  let add=0; POS.accounts.forEach(a=>{ if(!posSel(a.name)) return; if(OPERATORI.some(o=>normName(o.account)===normName(a.name))) return;
-    OPERATORI.push({id:'O'+(OPSEQ++), nome:a.name, scheda:schedaSuggerita(a.name), account:a.name}); add++; });
-  saveCassa(); renderOperatori(); fillCassaOp(); alert(add?`Aggiunti ${add} operatori dagli account POS (solo Lusciano selezionati).`:'Nessun nuovo operatore da aggiungere.'); }
-function delOperatore(id){ const o=OPERATORI.find(x=>x.id===id); if(o && !confirm(`Eliminare l'operatore ${o.nome}?`)) return; OPERATORI=OPERATORI.filter(x=>x.id!==id); if(CASSA_OP===id) CASSA_OP=null; saveCassa(); renderOperatori(); fillCassaOp(); }
-function editOperatore(id,field,value){ const o=OPERATORI.find(x=>x.id===id); if(!o) return; o[field]=String(value).trim(); saveCassa(); renderOperatori(); fillCassaOp(); }
-function renderOperatori(){ const el=document.getElementById('op-list'); if(!el) return;
-  if(!OPERATORI.length){ el.innerHTML='<p class="muted">Nessun operatore. Aggiungilo sopra, oppure «Importa dagli account POS».</p>'; return; }
-  const days=STATE?STATE.days:[];
-  let h='<div class="tablewrap"><table class="reg"><thead><tr><th style="text-align:left">Nome</th><th>Scheda gestore</th><th style="text-align:left">Account POS</th><th>Servito</th><th>POS</th><th></th></tr></thead><tbody>';
-  OPERATORI.forEach(o=>{ const serv=days.reduce((s,d)=>s+servitoDay(o.scheda,d),0); const pos=days.reduce((s,d)=>s+posAccountDay(o.account,d),0);
-    const noServ=o.scheda && STATE && !STATE.servitoTess[o.scheda];
-    h+=`<tr><td style="text-align:left"><input class="fld op-ed" data-id="${o.id}" data-f="nome" value="${escapeAttr(o.nome)}" style="width:12rem"></td>
-      <td><input class="fld op-ed" data-id="${o.id}" data-f="scheda" value="${escapeAttr(o.scheda||'')}" style="width:8rem;text-align:center${noServ?';border-color:var(--red)':''}" title="${noServ?'nessun servito StoreSmart per questa scheda':''}"></td>
-      <td style="text-align:left"><input class="fld op-ed" data-id="${o.id}" data-f="account" value="${escapeAttr(o.account||'')}" style="width:12rem"></td>
-      <td>${fmtEur(serv)}</td><td>${fmtEur(pos)}</td>
-      <td><button class="btn ghost op-del" data-id="${o.id}" title="Elimina" style="padding:.2rem .5rem">✕</button></td></tr>`; });
-  h+='</tbody></table></div>'; el.innerHTML=h; }
-function fillCassaOp(){ const sel=document.getElementById('cassa-op'); if(!sel) return; const cur=CASSA_OP;
-  sel.innerHTML='<option value="">— scegli operatore —</option>'+OPERATORI.map(o=>`<option value="${o.id}">${escapeHtml(o.nome)}</option>`).join('');
-  if(cur && OPERATORI.some(o=>o.id===cur)) sel.value=cur; else CASSA_OP=null; renderCassa(); }
+function icadUtaDay(d){ if(!ICAD) return 0; return Math.max(0,((ICAD.byDay&&ICAD.byDay[d])||0)-((ICAD.byDayNonUta&&ICAD.byDayNonUta[d])||0)); } // UTA = iCad totale − non-UTA
+function dkvDay(d){ return (DKV&&DKV.byDay&&DKV.byDay[d])||0; }
+function clientiTessSet(){ const s=new Set(); (CLIENTI||[]).forEach(c=>(c.tessere||[]).forEach(t=>{ if(t&&t.id) s.add(String(t.id).trim()); })); return s; }
+function schedeGestore(){ if(!STATE||!STATE.servitoTess) return []; const cli=clientiTessSet();
+  return Object.keys(STATE.servitoTess).filter(t=>/^\d{7}$/.test(t) && !cli.has(t)).sort((a,b)=>{ const sa=STATE.days.reduce((x,d)=>x+servitoDay(a,d),0), sb=STATE.days.reduce((x,d)=>x+servitoDay(b,d),0); return sb-sa; }); }
+function casseRec(scheda){ if(!CASSE[scheda]){ const nome=SCHEDE_NOTE[scheda]||''; let account=''; if(nome&&POS){ const m=POS.accounts.find(a=>normName(a.name)===normName(nome)); if(m) account=m.name; } CASSE[scheda]={nome,account,byDay:{}}; } return CASSE[scheda]; }
+function manVal(scheda,d,f){ const r=CASSE[scheda]; return (r&&r.byDay&&r.byDay[d]&&r.byDay[d][f])||0; }
+function setMan(scheda,d,f,v){ const r=casseRec(scheda); r.byDay[d]=r.byDay[d]||{}; r.byDay[d][f]=v; saveCassa(); }
+function editCasse(scheda,field,value){ const r=casseRec(scheda); r[field]=String(value).trim(); saveCassa(); }
+function totSchedaPeriodo(scheda){ const r=CASSE[scheda]||{}; const o={serv:0,pos:0,drop:0,monete:0,sospese:0,uta:0,dkv:0};
+  (STATE?STATE.days:[]).forEach(d=>{ o.serv+=servitoDay(scheda,d); o.pos+=posAccountDay(r.account,d); MANUF.forEach(f=>o[f]+=manVal(scheda,d,f)); });
+  o.tot=o.serv-o.pos-o.drop-o.monete-o.sospese-o.uta-o.dkv; return o; }
+function renderOperatori(){ const el=document.getElementById('op-list'), warn=document.getElementById('cassa-warn'); if(!el) return;
+  if(warn){ const miss=[]; if(!STATE) miss.push('StoreSmart'); if(!CLIENTI||!CLIENTI.length) miss.push('anagrafica clienti'); if(!POS) miss.push('POS'); if(!ICAD) miss.push('iCad'); if(!DKV) miss.push('DKV');
+    warn.innerHTML=miss.length?`<div class="warn">⚠ Per il controllo completo manca: <b>${miss.join(', ')}</b>. ${(!STATE||!CLIENTI||!CLIENTI.length)?'Servono almeno StoreSmart e anagrafica clienti per rilevare le schede.':''}</div>`:''; }
+  if(!STATE||!CLIENTI||!CLIENTI.length){ el.innerHTML='<p class="muted">Carica StoreSmart e l\'anagrafica clienti per rilevare le schede gestore.</p>'; renderConvalida(); return; }
+  const schede=schedeGestore();
+  if(!schede.length){ el.innerHTML='<p class="muted">Nessuna scheda gestore rilevata.</p>'; renderConvalida(); return; }
+  const posOpts=acc=>'<option value="">—</option>'+(POS?POS.accounts.map(a=>`<option value="${escapeAttr(a.name)}"${normName(a.name)===normName(acc)?' selected':''}>${escapeHtml(a.name)}</option>`).join(''):'');
+  let h='<div class="tablewrap"><table class="reg"><thead><tr><th>N. tessera</th><th style="text-align:left">Nome</th><th style="text-align:left">Account POS</th><th>Servito</th><th>POS</th><th>DROP</th><th>Monete</th><th>Sospese</th><th>UTA</th><th>DKV</th><th title="Servito − POS − DROP − Monete − Sospese − UTA − DKV">= TOT</th></tr></thead><tbody>';
+  const sum={serv:0,pos:0,drop:0,monete:0,sospese:0,uta:0,dkv:0,tot:0};
+  schede.forEach(s=>{ const r=casseRec(s); const t=totSchedaPeriodo(s); const clan=!(r.nome||SCHEDE_NOTE[s]);
+    Object.keys(sum).forEach(k=>sum[k]+=t[k]);
+    h+=`<tr${clan?' style="background:var(--red-bg,rgba(220,38,38,.08))"':''}>
+      <td style="font-weight:700"><a href="#" class="casse-sel" data-s="${s}" title="dettaglio">${s}</a>${clan?' <span title="non in anagrafica clienti e non riconosciuta" style="color:var(--red)">⚠</span>':''}</td>
+      <td style="text-align:left"><input class="fld casse-nome" data-s="${s}" value="${escapeAttr(r.nome||'')}" placeholder="${clan?'clandestina?':'nome'}" style="width:11rem"></td>
+      <td style="text-align:left"><select class="fld casse-acc" data-s="${s}" style="width:11rem">${posOpts(r.account)}</select></td>
+      <td>${fmtEur(t.serv)}</td><td>${fmtEur(t.pos)}</td><td>${fmtEur(t.drop)}</td><td>${fmtEur(t.monete)}</td><td>${fmtEur(t.sospese)}</td><td>${fmtEur(t.uta)}</td><td>${fmtEur(t.dkv)}</td>
+      <td style="font-weight:700;color:${Math.abs(t.tot)>0.5?'var(--red)':'var(--text)'}">${fmtEur(t.tot)}</td></tr>`; });
+  h+=`<tr class="base"><td>TOTALE</td><td></td><td></td><td>${fmtEur(sum.serv)}</td><td>${fmtEur(sum.pos)}</td><td>${fmtEur(sum.drop)}</td><td>${fmtEur(sum.monete)}</td><td>${fmtEur(sum.sospese)}</td><td>${fmtEur(sum.uta)}</td><td>${fmtEur(sum.dkv)}</td><td style="font-weight:800;color:${Math.abs(sum.tot)>0.5?'var(--red)':'var(--text)'}">${fmtEur(sum.tot)}</td></tr>`;
+  h+='</tbody></table></div>'; el.innerHTML=h; saveCassa(); renderConvalida(); }
+function fillCassaOp(){ const sel=document.getElementById('cassa-op'); if(!sel) return; const cur=CASSA_OP; const schede=(STATE&&CLIENTI&&CLIENTI.length)?schedeGestore():[];
+  sel.innerHTML='<option value="">— scegli scheda —</option>'+schede.map(s=>{ const r=CASSE[s]||{}; return `<option value="${s}">${s}${r.nome?' · '+escapeHtml(r.nome):''}</option>`; }).join('');
+  if(cur && schede.indexOf(cur)>=0) sel.value=cur; else CASSA_OP=null; renderCassa(); }
 function renderCassa(){ const el=document.getElementById('cassa-container'), hint=document.getElementById('cassa-hint'); if(!el) return;
-  if(!STATE){ el.innerHTML='<p class="muted">Carica prima il report StoreSmart (serve il servito per scheda).</p>'; if(hint) hint.textContent=''; return; }
-  const o=OPERATORI.find(x=>x.id===CASSA_OP); if(!o){ el.innerHTML='<p class="muted">Scegli un operatore per la quadratura giornaliera.</p>'; if(hint) hint.textContent=''; return; }
-  if(hint){ const noServ=o.scheda && !STATE.servitoTess[o.scheda]; hint.innerHTML=`scheda <b>${escapeHtml(o.scheda||'—')}</b> · account <b>${escapeHtml(o.account||'—')}</b>${noServ?' · <span style="color:var(--red)">nessun servito per questa scheda</span>':''}${!POS?' · <span style="color:var(--muted)">POS non caricato</span>':''}`; }
-  const days=STATE.days; const tot={serv:0,pos:0,drop:0,mon:0,ctrl:0};
-  let h='<div class="tablewrap" style="max-height:70vh"><table class="reg"><thead><tr><th class="datecol" style="text-align:left">DATA</th><th>Servito</th><th>POS</th><th>DROP</th><th>Monete</th><th title="POS + DROP + Monete − Servito">CTRL</th></tr></thead><tbody>';
-  days.forEach(d=>{ const serv=servitoDay(o.scheda,d), pos=posAccountDay(o.account,d), c=cassaCell(o.id,d); const drop=c.drop||0, mon=c.monete||0; const ctrl=pos+drop+mon-serv;
-    tot.serv+=serv; tot.pos+=pos; tot.drop+=drop; tot.mon+=mon; tot.ctrl+=ctrl;
-    h+=`<tr><td class="datecol ${dateClass(d)}" style="text-align:left">${fmtDay(d)}</td><td>${fmtEur(serv)}</td><td>${fmtEur(pos)}</td>
-      <td><input class="fld cassa-in" data-d="${d}" data-f="drop" type="number" step="0.01" value="${drop||''}" style="width:6.5rem;text-align:right"></td>
-      <td><input class="fld cassa-in" data-d="${d}" data-f="monete" type="number" step="0.01" value="${mon||''}" style="width:6rem;text-align:right"></td>
+  if(!STATE){ el.innerHTML='<p class="muted">Carica prima StoreSmart.</p>'; if(hint) hint.textContent=''; return; }
+  const s=CASSA_OP; if(!s){ el.innerHTML='<p class="muted">Scegli una scheda per inserire DROP / Monete / Sospese / UTA / DKV giorno per giorno.</p>'; if(hint) hint.textContent=''; return; }
+  const r=casseRec(s);
+  if(hint) hint.innerHTML=`scheda <b>${s}</b> · ${r.nome?escapeHtml(r.nome):'<span style="color:var(--red)">non riconosciuta</span>'} · account <b>${escapeHtml(r.account||'—')}</b>`;
+  const days=STATE.days; const tot={serv:0,pos:0,drop:0,monete:0,sospese:0,uta:0,dkv:0,ctrl:0};
+  let h='<div class="tablewrap" style="max-height:70vh"><table class="reg"><thead><tr><th class="datecol" style="text-align:left">DATA</th><th>Servito</th><th>POS</th><th>DROP</th><th>Monete</th><th>Sospese</th><th>UTA</th><th>DKV</th><th>= TOT</th></tr></thead><tbody>';
+  days.forEach(d=>{ const serv=servitoDay(s,d), pos=posAccountDay(r.account,d); const m={}; MANUF.forEach(f=>m[f]=manVal(s,d,f)); const ctrl=serv-pos-m.drop-m.monete-m.sospese-m.uta-m.dkv;
+    tot.serv+=serv; tot.pos+=pos; MANUF.forEach(f=>tot[f]+=m[f]); tot.ctrl+=ctrl;
+    const inp=f=>`<input class="fld cassa-in" data-d="${d}" data-f="${f}" type="number" step="0.01" value="${m[f]||''}" style="width:5.4rem;text-align:right">`;
+    h+=`<tr><td class="datecol ${dateClass(d)}" style="text-align:left">${fmtDay(d)}</td><td>${fmtEur(serv)}</td><td>${fmtEur(pos)}</td><td>${inp('drop')}</td><td>${inp('monete')}</td><td>${inp('sospese')}</td><td>${inp('uta')}</td><td>${inp('dkv')}</td>
       <td style="font-weight:700;color:${Math.abs(ctrl)>0.5?'var(--red)':'var(--text)'}">${fmtEur(ctrl)}</td></tr>`; });
-  h+=`<tr class="base"><td class="datecol" style="text-align:left">TOTALE</td><td>${fmtEur(tot.serv)}</td><td>${fmtEur(tot.pos)}</td><td>${fmtEur(tot.drop)}</td><td>${fmtEur(tot.mon)}</td><td style="font-weight:800;color:${Math.abs(tot.ctrl)>0.5?'var(--red)':'var(--text)'}">${fmtEur(tot.ctrl)}</td></tr>`;
+  h+=`<tr class="base"><td class="datecol" style="text-align:left">TOTALE</td><td>${fmtEur(tot.serv)}</td><td>${fmtEur(tot.pos)}</td><td>${fmtEur(tot.drop)}</td><td>${fmtEur(tot.monete)}</td><td>${fmtEur(tot.sospese)}</td><td>${fmtEur(tot.uta)}</td><td>${fmtEur(tot.dkv)}</td><td style="font-weight:800;color:${Math.abs(tot.ctrl)>0.5?'var(--red)':'var(--text)'}">${fmtEur(tot.ctrl)}</td></tr>`;
   h+='</tbody></table></div>'; el.innerHTML=h; }
+function utaInsDay(d){ let s=0; for(const k in CASSE) s+=manVal(k,d,'uta'); return s; }
+function dkvInsDay(d){ let s=0; for(const k in CASSE) s+=manVal(k,d,'dkv'); return s; }
+function renderConvalida(){ const el=document.getElementById('cassa-convalida'); if(!el) return;
+  if(!STATE){ el.innerHTML='<p class="muted">Carica StoreSmart.</p>'; return; }
+  if(!ICAD&&!DKV){ el.innerHTML='<p class="muted">Carica i file iCad e DKV per convalidare gli scontrini UTA/DKV.</p>'; return; }
+  const days=STATE.days; const tot={uIns:0,uFile:0,dIns:0,dFile:0}; let anom=0;
+  let h='<div class="tablewrap" style="max-height:60vh"><table class="reg"><thead><tr><th class="datecol" style="text-align:left">DATA</th><th>UTA inserita</th><th>UTA iCad</th><th>Δ UTA</th><th>DKV inserita</th><th>DKV file</th><th>Δ DKV</th></tr></thead><tbody>';
+  days.forEach(d=>{ const ui=utaInsDay(d), uf=icadUtaDay(d), di=dkvInsDay(d), df=dkvDay(d); const du=ui-uf, dd=di-df; const bad=Math.abs(du)>0.5||Math.abs(dd)>0.5; if(bad) anom++;
+    tot.uIns+=ui; tot.uFile+=uf; tot.dIns+=di; tot.dFile+=df;
+    if(ui===0&&uf===0&&di===0&&df===0) return; // salta i giorni tutti a zero
+    h+=`<tr${bad?' style="background:var(--red-bg,rgba(220,38,38,.08))"':''}><td class="datecol ${dateClass(d)}" style="text-align:left">${fmtDay(d)}</td>
+      <td>${fmtEur(ui)}</td><td>${fmtEur(uf)}</td><td style="color:${Math.abs(du)>0.5?'var(--red)':'var(--muted)'}">${du?fmtEur(du):'—'}</td>
+      <td>${fmtEur(di)}</td><td>${fmtEur(df)}</td><td style="color:${Math.abs(dd)>0.5?'var(--red)':'var(--muted)'}">${dd?fmtEur(dd):'—'}</td></tr>`; });
+  h+=`<tr class="base"><td>TOTALE</td><td>${fmtEur(tot.uIns)}</td><td>${fmtEur(tot.uFile)}</td><td style="color:${Math.abs(tot.uIns-tot.uFile)>0.5?'var(--red)':'inherit'}">${fmtEur(tot.uIns-tot.uFile)}</td><td>${fmtEur(tot.dIns)}</td><td>${fmtEur(tot.dFile)}</td><td style="color:${Math.abs(tot.dIns-tot.dFile)>0.5?'var(--red)':'inherit'}">${fmtEur(tot.dIns-tot.dFile)}</td></tr>`;
+  h+='</tbody></table></div>';
+  h=(anom?`<div class="warn" style="margin-bottom:.5rem">⚠ ${anom} giorni non quadrano (Δ &gt; 0,50 €): scontrini UTA/DKV inseriti diversi dalle fatture nei file.</div>`:`<div class="ok-msg" style="margin-bottom:.5rem">✓ Nessuna anomalia: UTA/DKV inseriti coincidono con i file.</div>`)+h;
+  el.innerHTML=h; }
 
 // ---- import unificato: una sola card, riconoscimento automatico, elenco file ----
 let SRCMETA={}; // {ss:{name,periodo,at,extra}, cs, icad, dkv, pos, cl}
@@ -1455,12 +1474,10 @@ document.getElementById('import-result-pos').addEventListener('click',e=>{ const
 document.getElementById('import-list').addEventListener('click',e=>{ const b=e.target.closest('.xsrc'); if(b) removeSrc(b.dataset.k); }); // delegation rimozione
 
 // controllo casse
-document.getElementById('op-add').addEventListener('click',addOperatore);
-document.getElementById('op-import').addEventListener('click',importOperatoriDaPos);
-document.getElementById('op-list').addEventListener('change',e=>{ const i=e.target.closest('.op-ed'); if(i) editOperatore(i.dataset.id,i.dataset.f,i.target.value); });
-document.getElementById('op-list').addEventListener('click',e=>{ const b=e.target.closest('.op-del'); if(b) delOperatore(b.dataset.id); });
+document.getElementById('op-list').addEventListener('change',e=>{ const n=e.target.closest('.casse-nome'); if(n){ editCasse(n.dataset.s,'nome',n.target.value); renderOperatori(); fillCassaOp(); return; } const a=e.target.closest('.casse-acc'); if(a){ editCasse(a.dataset.s,'account',a.target.value); renderOperatori(); if(CASSA_OP===a.dataset.s) renderCassa(); } });
+document.getElementById('op-list').addEventListener('click',e=>{ const l=e.target.closest('.casse-sel'); if(l){ e.preventDefault(); CASSA_OP=l.dataset.s; const sel=document.getElementById('cassa-op'); if(sel) sel.value=l.dataset.s; renderCassa(); document.getElementById('page-cassa').querySelector('#cassa-container').scrollIntoView({behavior:'smooth',block:'nearest'}); } });
 document.getElementById('cassa-op').addEventListener('change',e=>{ CASSA_OP=e.target.value||null; renderCassa(); });
-document.getElementById('cassa-container').addEventListener('change',e=>{ const i=e.target.closest('.cassa-in'); if(i && CASSA_OP){ setCassaCell(CASSA_OP,i.dataset.d,i.dataset.f,itNum(i.target.value)); renderCassa(); } });
+document.getElementById('cassa-container').addEventListener('change',e=>{ const i=e.target.closest('.cassa-in'); if(i && CASSA_OP){ setMan(CASSA_OP,i.dataset.d,i.dataset.f,itNum(i.target.value)); renderCassa(); renderOperatori(); } });
 
 document.getElementById('cl-search').addEventListener('input',debounce(()=>{ CLQ=document.getElementById('cl-search').value; renderClList(); },140));
 document.getElementById('cl-list').addEventListener('click',e=>{ const it=e.target.closest('.cl-item'); if(!it) return; CURCLI=it.dataset.id; saveClienti(); renderClList(); renderClDetail(); }); // delegation: 1 listener
