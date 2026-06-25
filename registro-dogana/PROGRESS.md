@@ -185,6 +185,17 @@ colonna "Sc./Magg.".
 - Verifica jsdom: 5/5 check OK (modello completo, filtro Casaluce, regola d'oro contanti,
   parsePos, fallback senza POS).
 
+## Sezione Importazioni — riordino (2026-06-25)
+- Da 7 box impilati a **una sola card "Importa un file"**: si trascina un .xlsx e il tipo
+  viene **riconosciuto in automatico** (`detectType` per firme d'intestazione):
+  POS (`account`+`prezzo (lordo)`), iCad (`data transazione`+`importo transazione`),
+  DKV (`netto`+`cliente`+`sconto/magg.`), Card Smart (`prodotto`+tessera/tipologia/prezzo unit.),
+  StoreSmart (`pompa`+`data rifornimento`), Clienti (`idcliente`+`ragione` o fogli estesoL).
+- Sotto, **elenco "File caricati"**: Tipo · File · Caricato il · Copre fino a (periodo), con ✕
+  per rimuovere una fonte. Stato in `faboil_srcmeta`; `restoreImports` ricostruisce l'elenco
+  (sintetizza i metadati per i backup vecchi). Verificato: 6/6 file riconosciuti, ripristino OK.
+- `cellDay` ora legge anche le date "1 giu 2026, 00:00" (mesi italiani) usate dal resoconto POS.
+
 ## File di riferimento (upload di sessione)
 - StoreSmart erogazioni giugno 2026 (registro di partenza, contatori 0 al 31/5).
 - Card Smart `RifornimentiPerPeriodo.xlsx` (col: Prezzo Unitario, Sconto, Quantita, Importo).

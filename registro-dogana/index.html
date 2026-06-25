@@ -203,55 +203,21 @@ table.reg tbody tr.brow:hover td{background:var(--surface2)}
 <div class="content">
   <!-- IMPORTAZIONI -->
   <div class="page on" id="page-import">
-    <div class="sh"><h1>Importazioni</h1><p>carica il report StoreSmart (.xlsx)</p></div>
+    <div class="sh"><h1>Importazioni</h1><p>trascina un file: lo riconosco da solo</p></div>
     <div class="card">
-      <div class="card-title">StoreSmart — Report transazioni</div>
-      <div class="drop" id="drop">
+      <div class="card-title">Importa un file</div>
+      <div class="drop" id="drop-any">
         <span class="ic">📥</span>
-        <h3>Trascina qui il file StoreSmart</h3>
-        <p>oppure <b>clicca per sceglierlo</b> — formato .xlsx</p>
+        <h3>Trascina qui un file</h3>
+        <p>oppure <b>clicca per sceglierlo</b> — StoreSmart · Card Smart · iCad · DKV · POS · Clienti (.xlsx)</p>
       </div>
-      <input type="file" id="file" accept=".xlsx,.xls" hidden>
-      <div id="import-result"></div>
+      <input type="file" id="file-any" accept=".xlsx,.xls" hidden>
+      <div id="import-feedback"></div>
     </div>
     <div class="card">
-      <div class="card-title">Card Smart — Rifornimenti fatturati</div>
-      <div class="drop" id="drop-cs">
-        <span class="ic">🧾</span>
-        <h3>Trascina qui il file Card Smart</h3>
-        <p>oppure <b>clicca per sceglierlo</b> — “RifornimentiPerPeriodo” .xlsx</p>
-      </div>
-      <input type="file" id="file-cs" accept=".xlsx,.xls" hidden>
-      <div id="import-result-cs"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">iCad — Fatture (ElencoTransazioniFatture)</div>
-      <div class="drop" id="drop-icad"><span class="ic">🧾</span><h3>Trascina qui il file iCad</h3><p>oppure <b>clicca per sceglierlo</b> — .xlsx</p></div>
-      <input type="file" id="file-icad" accept=".xlsx,.xls" hidden>
-      <div id="import-result-icad"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">DKV — Erogazioni</div>
-      <div class="drop" id="drop-dkv"><span class="ic">🧾</span><h3>Trascina qui il file DKV</h3><p>oppure <b>clicca per sceglierlo</b> — .xlsx</p></div>
-      <input type="file" id="file-dkv" accept=".xlsx,.xls" hidden>
-      <div id="import-result-dkv"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">POS — Incassato (resoconto vendite)</div>
-      <div class="drop" id="drop-pos"><span class="ic">💳</span><h3>Trascina qui il file POS</h3><p>oppure <b>clicca per sceglierlo</b> — “resoconto vendite” .xlsx</p></div>
-      <input type="file" id="file-pos" accept=".xlsx,.xls" hidden>
-      <p class="muted" style="margin-top:.5rem">Sola lettura. Il file mescola Lusciano e Casaluce: dopo l'import scegli quali account sono di Lusciano.</p>
-      <div id="import-result-pos"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Clienti — Anagrafica (estesoL)</div>
-      <div class="drop" id="drop-cl">
-        <span class="ic">👥</span>
-        <h3>Trascina qui il file Clienti</h3>
-        <p>oppure <b>clicca per sceglierlo</b> — “estesoL” .xlsx (Fine mese / Prepagati / Scontati / Punti)</p>
-      </div>
-      <input type="file" id="file-cl" accept=".xlsx,.xls" hidden>
-      <div id="import-result-cl"></div>
+      <div class="card-title">File caricati</div>
+      <div id="import-list"></div>
+      <div id="import-result-pos" style="margin-top:.8rem"></div>
     </div>
     <div class="card">
       <div class="card-title">Backup / Ripristino</div>
@@ -1023,18 +989,82 @@ function icadNonUtaDay(d){ return (ICAD&&ICAD.byDayNonUta&&ICAD.byDayNonUta[d])|
 function cardSmartScontoPuntiDay(d){ return (CARDSMART&&CARDSMART.byDayScontoPunti&&CARDSMART.byDayScontoPunti[d])||0; }
 function scontoAllaPompaDay(d){ return icadNonUtaDay(d)+cardSmartScontoPuntiDay(d); }
 
+// ---- import unificato: una sola card, riconoscimento automatico, elenco file ----
+let SRCMETA={}; // {ss:{name,periodo,at,extra}, cs, icad, dkv, pos, cl}
+const SRC_LABEL={ss:'Registro StoreSmart', cs:'Card Smart (fatturato)', icad:'iCad (fatture)', dkv:'DKV', pos:'POS (incassato)', cl:'Clienti'};
+const SRC_ORDER=['ss','cs','icad','dkv','pos','cl'];
+function loadSrcMeta(){ try{ SRCMETA=JSON.parse(localStorage.getItem('faboil_srcmeta')||'{}')||{}; }catch(e){ SRCMETA={}; } }
+function saveSrcMeta(){ try{ localStorage.setItem('faboil_srcmeta', JSON.stringify(SRCMETA)); }catch(e){} }
+function nowISO(){ try{ return new Date().toISOString(); }catch(e){ return ''; } }
+function setSrc(key,name,periodo,extra){ SRCMETA[key]={name:name||'(ripristinato)', periodo:periodo||'', at:nowISO(), extra:extra||''}; saveSrcMeta(); renderImportList(); }
+function fmtAt(iso){ if(!iso) return '—'; try{ const d=new Date(iso); const p=n=>String(n).padStart(2,'0'); return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`; }catch(e){ return '—'; } }
+function renderImportList(){
+  const el=document.getElementById('import-list'); if(!el) return;
+  const keys=SRC_ORDER.filter(k=>SRCMETA[k]);
+  if(!keys.length){ el.innerHTML='<p class="muted">Nessun file caricato. Trascina qui sopra StoreSmart, Card Smart, iCad, DKV, POS o Clienti.</p>'; return; }
+  let h='<div class="tablewrap"><table class="reg"><thead><tr><th style="text-align:left">Tipo</th><th style="text-align:left">File</th><th style="text-align:left">Caricato il</th><th style="text-align:left">Copre fino a</th><th></th></tr></thead><tbody>';
+  keys.forEach(k=>{ const m=SRCMETA[k]; const cov=m.periodo||m.extra||'—'; const extra=(m.periodo&&m.extra)?` · ${m.extra}`:'';
+    h+=`<tr><td style="text-align:left;font-weight:600">${SRC_LABEL[k]}</td><td style="text-align:left;color:var(--muted)">${escapeHtml(m.name||'—')}</td><td style="text-align:left;color:var(--muted)">${fmtAt(m.at)}</td><td style="text-align:left">${escapeHtml(cov)}${extra}</td><td><button class="btn ghost xsrc" data-k="${k}" title="Rimuovi" style="padding:.2rem .5rem">✕</button></td></tr>`; });
+  h+='</tbody></table></div>';
+  el.innerHTML=h;
+}
+function removeSrc(k){
+  if(!confirm(`Rimuovere ${SRC_LABEL[k]}? (i dati restano finché non ricarichi)`)) return;
+  const map={ss:['faboil_ss'],cs:['faboil_cs'],icad:['faboil_icad'],dkv:['faboil_dkv'],pos:['faboil_pos','faboil_poslus'],cl:['faboil_clienti']};
+  (map[k]||[]).forEach(x=>localStorage.removeItem(x));
+  if(k==='ss') STATE=null; else if(k==='cs') CARDSMART=null; else if(k==='icad') ICAD=null; else if(k==='dkv') DKV=null;
+  else if(k==='pos'){ POS=null; POSLUS=null; const r=document.getElementById('import-result-pos'); if(r) r.innerHTML=''; }
+  else if(k==='cl'){ CLIENTI=[]; CURCLI=null; }
+  delete SRCMETA[k]; saveSrcMeta(); renderImportList(); try{ renderCommercialista(); }catch(e){}
+}
+function detectType(wb){
+  const sheets=wb.SheetNames.map(s=>String(s).toLowerCase());
+  const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:null});
+  const cells=new Set(); for(let i=0;i<Math.min(rows.length,30);i++){ const r=rows[i]; if(!r) continue; for(const c of r){ const s=String(c==null?'':c).trim().toLowerCase(); if(s) cells.add(s); } }
+  const has=(...xs)=>xs.every(x=>cells.has(x));
+  if(has('account','prezzo (lordo)')) return 'pos';
+  if(has('data transazione','importo transazione')) return 'icad';
+  if(cells.has('netto') && cells.has('cliente') && (cells.has('n° trans.')||cells.has('tot. sconto/magg.')||cells.has('sconto/magg.'))) return 'dkv';
+  if(cells.has('prodotto') && (cells.has('codice tessera')||cells.has('tipologia cliente')||cells.has('prezzo unitario'))) return 'cardsmart';
+  if(cells.has('pompa') && (cells.has('data rifornimento')||cells.has('importo €'))) return 'storesmart';
+  if(has('idcliente','ragione') || ['fine mese','prepagati','scontati','punti'].some(s=>sheets.includes(s))) return 'clienti';
+  return null;
+}
+function handleAnyFile(file){
+  const res=document.getElementById('import-feedback'); res.innerHTML=`<p class="muted" style="margin-top:.7rem">Lettura di ${escapeHtml(file.name)}…</p>`;
+  const reader=new FileReader();
+  reader.onload=e=>{ try{
+    const wb=XLSX.read(e.target.result,{type:'array'});
+    const t=detectType(wb);
+    if(!t){ res.innerHTML='<div class="warn">⚠ Non riconosco questo file. Attesi: StoreSmart, Card Smart, iCad, DKV, POS o Clienti (.xlsx).</div>'; return; }
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:null});
+    let msg='';
+    if(t==='storesmart'){ STATE=parseStoreSmart(rows); saveSS(); loadStore(); recompute();
+      ['tab-registro','tab-rettifiche','tab-buoni','tab-assegnazioni','tab-commercialista'].forEach(id=>document.getElementById(id).disabled=false);
+      fillBuonoDays(); renderRettifiche(); renderBuoni(); renderAssegnazioni(); renderRegistro(); renderCommercialista(); syncCristalUI();
+      setSrc('ss',file.name,STATE.meta.periodo,`${STATE.days.length} giorni`); msg='Registro StoreSmart'; }
+    else if(t==='cardsmart'){ CARDSMART=parseCardSmart(rows); saveCS(); renderCommercialista(); setSrc('cs',file.name,CARDSMART.meta.periodo); msg='Card Smart'; }
+    else if(t==='icad'){ ICAD=parseFatt(rows,['data transazione','data'],['importo transazione','importo fattura','importo'],['cliente','ragione sociale','ragione','denominazione','intestatario']); localStorage.setItem('faboil_icad',JSON.stringify(ICAD)); renderCommercialista(); setSrc('icad',file.name,ICAD.meta.periodo,`non-UTA ${fmtEur(ICAD.meta.nonUta)}`); msg='iCad'; }
+    else if(t==='dkv'){ DKV=parseFatt(rows,['data'],['importo']); localStorage.setItem('faboil_dkv',JSON.stringify(DKV)); renderCommercialista(); setSrc('dkv',file.name,DKV.meta.periodo); msg='DKV'; }
+    else if(t==='pos'){ POS=parsePos(rows); POSLUS=POS.accounts.map(a=>a.name); savePos(); renderPosResult(file.name); renderCommercialista(); setSrc('pos',file.name,POS.meta.periodo,`file ${fmtEur(POS.meta.tot)}`); msg='POS'; }
+    else if(t==='clienti'){ const parsed=parseEstesoL(wb); if(!parsed.nClienti) throw new Error('Nessun cliente trovato (servono IdCliente e CodiceTessera).'); mergeClienti(parsed); renderClienti(); setSrc('cl',file.name,'',`${parsed.nClienti} clienti · ${parsed.nTessere} tessere`); msg='Clienti'; }
+    res.innerHTML=`<div class="ok-msg">✓ ${msg} caricato: <b>${escapeHtml(file.name)}</b></div>`;
+  }catch(err){ res.innerHTML=`<div class="warn">⚠ ${escapeHtml(err.message)}</div>`; } };
+  reader.readAsArrayBuffer(file);
+}
 function restoreImports(){
+  loadSrcMeta();
   try{ const s=localStorage.getItem('faboil_ss'); if(s){ STATE=JSON.parse(s); loadStore(); recompute();
     ['tab-registro','tab-rettifiche','tab-buoni','tab-assegnazioni','tab-commercialista'].forEach(id=>document.getElementById(id).disabled=false);
     fillBuonoDays(); renderRettifiche(); renderBuoni(); renderAssegnazioni(); renderRegistro(); renderCommercialista(); syncCristalUI();
-    document.getElementById('import-result').innerHTML=`<div class="ok-msg">✓ StoreSmart ripristinato: <b>${STATE.meta.periodo}</b> · ${STATE.meta.kept.toLocaleString('it-IT')} erogazioni</div><p class="muted" style="margin-top:.5rem">I dati sono salvati nel browser. Carica un nuovo file solo se vuoi cambiare periodo.</p><div style="margin-top:.8rem;display:flex;gap:.6rem"><button class="btn ghost" onclick="goTab('rettifiche')">Trasferimenti →</button><button class="btn ghost" onclick="goTab('buoni')">Buoni →</button><button class="btn ghost" onclick="goTab('registro')">Registro →</button></div>`;
+    if(!SRCMETA.ss) SRCMETA.ss={name:'(ripristinato)',periodo:STATE.meta.periodo,at:'',extra:`${STATE.days.length} giorni`};
   } }catch(e){}
-  try{ const c=localStorage.getItem('faboil_cs'); if(c){ CARDSMART=JSON.parse(c); const m=CARDSMART.meta;
-    document.getElementById('import-result-cs').innerHTML=`<div class="ok-msg">✓ Card Smart ripristinato: <b>${m.periodo}</b></div><p class="muted" style="margin-top:.5rem">Gasolio ${fmtInt(m.litri.GASOLIO)} · Verde ${fmtInt(m.litri.VERDE)} · GPL ${fmtInt(m.litri.GPL)} L fatturati (salvati nel browser).</p>`;
-  } }catch(e){}
-  try{ const x=localStorage.getItem('faboil_icad'); if(x){ ICAD=JSON.parse(x); document.getElementById('import-result-icad').innerHTML=`<div class="ok-msg">✓ iCad ripristinato: <b>${ICAD.meta.periodo}</b> · ${fmtEur(ICAD.meta.tot)}</div>`; } }catch(e){}
-  try{ const x=localStorage.getItem('faboil_dkv'); if(x){ DKV=JSON.parse(x); document.getElementById('import-result-dkv').innerHTML=`<div class="ok-msg">✓ DKV ripristinato: <b>${DKV.meta.periodo}</b> · ${fmtEur(DKV.meta.tot)}</div>`; } }catch(e){}
-  try{ const x=localStorage.getItem('faboil_pos'); if(x){ POS=JSON.parse(x); const l=localStorage.getItem('faboil_poslus'); POSLUS=l?JSON.parse(l):POS.accounts.map(a=>a.name); renderPosResult(); } }catch(e){}
+  try{ const c=localStorage.getItem('faboil_cs'); if(c){ CARDSMART=JSON.parse(c); if(!SRCMETA.cs) SRCMETA.cs={name:'(ripristinato)',periodo:CARDSMART.meta.periodo,at:'',extra:''}; } }catch(e){}
+  try{ const x=localStorage.getItem('faboil_icad'); if(x){ ICAD=JSON.parse(x); if(!SRCMETA.icad) SRCMETA.icad={name:'(ripristinato)',periodo:ICAD.meta.periodo,at:'',extra:ICAD.meta.nonUta!=null?`non-UTA ${fmtEur(ICAD.meta.nonUta)}`:''}; } }catch(e){}
+  try{ const x=localStorage.getItem('faboil_dkv'); if(x){ DKV=JSON.parse(x); if(!SRCMETA.dkv) SRCMETA.dkv={name:'(ripristinato)',periodo:DKV.meta.periodo,at:'',extra:''}; } }catch(e){}
+  try{ const x=localStorage.getItem('faboil_pos'); if(x){ POS=JSON.parse(x); const l=localStorage.getItem('faboil_poslus'); POSLUS=l?JSON.parse(l):POS.accounts.map(a=>a.name); renderPosResult(); if(!SRCMETA.pos) SRCMETA.pos={name:'(ripristinato)',periodo:POS.meta.periodo,at:'',extra:`file ${fmtEur(POS.meta.tot)}`}; } }catch(e){}
+  try{ const x=localStorage.getItem('faboil_clienti'); if(x && !SRCMETA.cl){ const o=JSON.parse(x); const arr=Array.isArray(o)?o:(o&&o.clienti)||[]; if(arr.length) SRCMETA.cl={name:'(ripristinato)',periodo:'',at:'',extra:`${arr.length} clienti`}; } }catch(e){}
+  saveSrcMeta(); renderImportList();
 }
 
 // ---- ANAGRAFICA CLIENTI / TESSERE (popolata da import estesoL) ----
@@ -1333,42 +1363,14 @@ document.querySelectorAll('#reg-toggle button').forEach(b=>b.addEventListener('c
 document.getElementById('cristal-set').addEventListener('click',()=>{ const d=document.getElementById('cristal-date').value; if(!d){ alert('Scegli la data fino a cui il registro cartaceo è scritto.'); return; } if(!confirm(`Cristallizzare il registro fino al ${fmtDay(d)}?\nDa lì a ritroso: niente travasi, niente spostamento litri; solo buoni entro il contante.`)) return; setCristal(d); });
 document.getElementById('cristal-clear').addEventListener('click',()=>{ if(!confirm('Sbloccare la cristallizzazione? I giorni torneranno modificabili.')) return; setCristal(''); });
 
-const drop=document.getElementById('drop'), fileInput=document.getElementById('file');
-drop.addEventListener('click',()=>fileInput.click());
-fileInput.addEventListener('change',e=>{ if(e.target.files[0]) handleFile(e.target.files[0]); });
-['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('drag');}));
-['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('drag');}));
-drop.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handleFile(f); });
-
-const dropCs=document.getElementById('drop-cs'), fileCs=document.getElementById('file-cs');
-dropCs.addEventListener('click',()=>fileCs.click());
-fileCs.addEventListener('change',e=>{ if(e.target.files[0]) handleCSFile(e.target.files[0]); });
-['dragover','dragenter'].forEach(ev=>dropCs.addEventListener(ev,e=>{e.preventDefault();dropCs.classList.add('drag');}));
-['dragleave','drop'].forEach(ev=>dropCs.addEventListener(ev,e=>{e.preventDefault();dropCs.classList.remove('drag');}));
-dropCs.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handleCSFile(f); });
-[['drop-icad','file-icad','ICAD'],['drop-dkv','file-dkv','DKV']].forEach(([dz,fi,kind])=>{
-  const d=document.getElementById(dz), f=document.getElementById(fi);
-  d.addEventListener('click',()=>f.click());
-  f.addEventListener('change',e=>{ if(e.target.files[0]) handleFattFile(e.target.files[0],kind); });
-  ['dragover','dragenter'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.add('drag');}));
-  ['dragleave','drop'].forEach(ev=>d.addEventListener(ev,e=>{e.preventDefault();d.classList.remove('drag');}));
-  d.addEventListener('drop',e=>{ const x=e.dataTransfer.files[0]; if(x) handleFattFile(x,kind); });
-});
-
-const dropPos=document.getElementById('drop-pos'), filePos=document.getElementById('file-pos');
-dropPos.addEventListener('click',()=>filePos.click());
-filePos.addEventListener('change',e=>{ if(e.target.files[0]) handlePosFile(e.target.files[0]); });
-['dragover','dragenter'].forEach(ev=>dropPos.addEventListener(ev,e=>{e.preventDefault();dropPos.classList.add('drag');}));
-['dragleave','drop'].forEach(ev=>dropPos.addEventListener(ev,e=>{e.preventDefault();dropPos.classList.remove('drag');}));
-dropPos.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handlePosFile(f); });
-document.getElementById('import-result-pos').addEventListener('click',e=>{ const c=e.target.closest('.poschip'); if(c) togglePosAcc(c.dataset.acc); }); // delegation
-
-const dropCl=document.getElementById('drop-cl'), fileCl=document.getElementById('file-cl');
-dropCl.addEventListener('click',()=>fileCl.click());
-fileCl.addEventListener('change',e=>{ if(e.target.files[0]) handleClFile(e.target.files[0]); });
-['dragover','dragenter'].forEach(ev=>dropCl.addEventListener(ev,e=>{e.preventDefault();dropCl.classList.add('drag');}));
-['dragleave','drop'].forEach(ev=>dropCl.addEventListener(ev,e=>{e.preventDefault();dropCl.classList.remove('drag');}));
-dropCl.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handleClFile(f); });
+const dropAny=document.getElementById('drop-any'), fileAny=document.getElementById('file-any');
+dropAny.addEventListener('click',()=>fileAny.click());
+fileAny.addEventListener('change',e=>{ if(e.target.files[0]){ handleAnyFile(e.target.files[0]); e.target.value=''; } });
+['dragover','dragenter'].forEach(ev=>dropAny.addEventListener(ev,e=>{e.preventDefault();dropAny.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=>dropAny.addEventListener(ev,e=>{e.preventDefault();dropAny.classList.remove('drag');}));
+dropAny.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handleAnyFile(f); });
+document.getElementById('import-result-pos').addEventListener('click',e=>{ const c=e.target.closest('.poschip'); if(c) togglePosAcc(c.dataset.acc); }); // delegation chip Lusciano
+document.getElementById('import-list').addEventListener('click',e=>{ const b=e.target.closest('.xsrc'); if(b) removeSrc(b.dataset.k); }); // delegation rimozione
 
 document.getElementById('cl-search').addEventListener('input',debounce(()=>{ CLQ=document.getElementById('cl-search').value; renderClList(); },140));
 document.getElementById('cl-list').addEventListener('click',e=>{ const it=e.target.closest('.cl-item'); if(!it) return; CURCLI=it.dataset.id; saveClienti(); renderClList(); renderClDetail(); }); // delegation: 1 listener
