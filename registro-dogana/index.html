@@ -412,7 +412,7 @@ let REGMODE='netto';
 const EPS=1e-6;
 const FLOOR_LT=100; // pavimento: su ogni giorno-sorgente resta sempre almeno 100 L di prodotto
 
-function itNum(v){ if(v==null||v==='') return 0; if(typeof v==='number') return v; return parseFloat(String(v).replace(/\./g,'').replace(',','.'))||parseFloat(String(v).replace(',','.'))||0; }
+function itNum(v){ if(v==null||v==='') return 0; if(typeof v==='number') return v; let s=String(v).trim().replace(/[^0-9.,-]/g,''); if(s.includes(',')&&s.includes('.')) s=s.replace(/\./g,'').replace(',','.'); else if(s.includes(',')) s=s.replace(',','.'); return parseFloat(s)||0; } // gestisce "1.234,56" (mig.+dec.), "1,566", "1.948"
 function serialToDate(s){ return new Date(Math.round((s-25569)*86400*1000)); }
 function cellDay(v){ if(v==null||v==='') return null; if(typeof v==='number'){ return serialToDate(v).toISOString().slice(0,10); } const s=String(v).trim(); let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return `${m[1]}-${m[2]}-${m[3]}`; m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/); if(m) return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`; return null; }
 function fmtDay(key){ const[y,m,d]=key.split('-'); return `${d}/${m}/${y}`; }
@@ -443,7 +443,7 @@ function parseStoreSmart(rows){
   let hr=-1; for(let i=0;i<Math.min(rows.length,40);i++){ if(rows[i] && rows[i].some(c=>String(c).trim().toLowerCase()==='pompa')){ hr=i; break; } }
   if(hr<0) throw new Error("Intestazione non trovata: manca la colonna 'Pompa'. È un report StoreSmart?");
   const head=rows[hr].map(c=>String(c==null?'':c).trim().toLowerCase());
-  const find=(...names)=>{ for(const n of names){ const k=head.findIndex(h=>h===n||h.includes(n)); if(k>=0) return k; } return -1; };
+  const find=(...names)=>{ for(const n of names){ const k=head.findIndex(h=>h===n); if(k>=0) return k; } for(const n of names){ const k=head.findIndex(h=>h.includes(n)); if(k>=0) return k; } return -1; }; // esatto prima, poi sottostringa
   const iPag=find('tipo pagamento','pagamento'), iData=find('data rifornimento','data'), iPompa=find('pompa'), iProd=find('prodotto'), iQta=find('quantità','quantita'), iPrezzo=find('prezzo'), iImp=find('importo');
   if([iData,iPompa,iProd,iQta].some(x=>x<0)) throw new Error('Colonne mancanti (servono Data, Pompa, Prodotto, Quantità).');
   const daily={}; PUMPS.forEach(p=>daily[p]={});
@@ -471,13 +471,13 @@ function parseStoreSmart(rows){
 }
 
 // ---- parsing Card Smart (fatturato per cliente/tessera, NON per pistola) ----
-function csNum(v){ if(v==null||v==='') return 0; if(typeof v==='number') return v; return parseFloat(String(v).replace(/\s/g,'').replace(',','.'))||0; }
+function csNum(v){ return itNum(v); } // stessa logica robusta (numeri italiani con migliaia/decimali)
 function normCSProd(p){ const u=String(p||'').trim().toUpperCase(); if(u==='DIESEL') return 'GASOLIO'; if(u==='BENZINA') return 'VERDE'; if(u==='GPL') return 'GPL'; return null; }
 function parseCardSmart(rows){
   let hr=-1; for(let i=0;i<Math.min(rows.length,30);i++){ if(rows[i] && rows[i].some(c=>String(c).trim().toLowerCase()==='prodotto')){ hr=i; break; } }
   if(hr<0) throw new Error("Intestazione non trovata: manca 'Prodotto'. È un file Card Smart (RifornimentiPerPeriodo)?");
   const head=rows[hr].map(c=>String(c==null?'':c).trim().toLowerCase());
-  const find=(...names)=>{ for(const n of names){ const k=head.findIndex(h=>h===n||h.includes(n)); if(k>=0) return k; } return -1; };
+  const find=(...names)=>{ for(const n of names){ const k=head.findIndex(h=>h===n); if(k>=0) return k; } for(const n of names){ const k=head.findIndex(h=>h.includes(n)); if(k>=0) return k; } return -1; }; // esatto prima, poi sottostringa
   const iErog=find('data erogazione','erogazione'), iReg=find('data registrazione','registrazione'), iProd=find('prodotto'), iQta=find('quantita','quantità'), iImp=find('importo'), iTess=find('codice tessera','tessera'), iPrz=find('prezzo unitario','prezzo');
   if([iProd,iQta].some(x=>x<0)) throw new Error('Colonne mancanti (servono Prodotto e Quantità).');
   const byDayProd={}; const byTessera={}; const byDayBase={}; const byDayImp={}; const litri={GASOLIO:0,VERDE:0,GPL:0}; const imp={GASOLIO:0,VERDE:0,GPL:0};
@@ -635,22 +635,22 @@ function buoniScorpDay(d){ return BUONI.filter(b=>b.day===d).reduce((s,b)=>s+((b
 function icadEuroDay(d){ return (ICAD&&ICAD.byDay[d])||0; }
 function dkvEuroDay(d){ return (DKV&&DKV.byDay[d])||0; }
 function fattScorpDay(F,d){ return (F&&F.byDayScorp&&F.byDayScorp[d])||0; } // scorporo iCad/DKV (iCad=0, nessuna colonna sconto)
-function scorpDay(d){ return cardSmartScorporoDay(d)+fattScorpDay(ICAD,d)+fattScorpDay(DKV,d)+buoniScorpDay(d); } // scorporo totale (CS + iCad + DKV + buoni)
-function commRows(){ return STATE.days.map(d=>{ const v=venditeDay(d), cs=cardSmartEuroDay(d), sc=scorpDay(d), ic=icadEuroDay(d), dk=dkvEuroDay(d), bu=buoniEuroDay(d), fatt=cs+ic+dk+bu; return { d, v, cs, sc, ic, dk, bu, fatt, corr:v-fatt }; }); }
+function scorpFattDay(d){ return cardSmartScorporoDay(d)+fattScorpDay(ICAD,d)+fattScorpDay(DKV,d); } // scorporo FATTURE (CS+iCad+DKV)
+function commRows(){ return STATE.days.map(d=>{ const v=venditeDay(d), cs=cardSmartEuroDay(d), scF=scorpFattDay(d), scB=buoniScorpDay(d), ic=icadEuroDay(d), dk=dkvEuroDay(d), bu=buoniEuroDay(d), fatt=cs+ic+dk+bu; return { d, v, cs, scF, scB, ic, dk, bu, fatt, corr:v-fatt }; }); }
 function renderCommercialista(){
   if(!STATE) return; const rows=commRows();
-  const tot=rows.reduce((a,r)=>({v:a.v+r.v,cs:a.cs+r.cs,sc:a.sc+r.sc,ic:a.ic+r.ic,dk:a.dk+r.dk,bu:a.bu+r.bu,fatt:a.fatt+r.fatt,corr:a.corr+r.corr}),{v:0,cs:0,sc:0,ic:0,dk:0,bu:0,fatt:0,corr:0});
-  let h='<div class="tablewrap" style="max-height:74vh"><table class="reg"><thead><tr><th class="datecol" style="text-align:left">DATA</th><th>Vendite €</th><th>Card Smart</th><th title="Sconti/maggiorazioni scorporati — NON nel corrispettivo">Sc./Magg.</th><th>iCad</th><th>DKV</th><th>Buoni</th><th>Tot. fatturato</th><th>Corrispettivo</th></tr></thead><tbody>';
-  rows.forEach(r=>{ h+=`<tr><td class="datecol ${dateClass(r.d)}" style="text-align:left">${fmtDay(r.d)}</td><td>${fmtEur(r.v)}</td><td>${fmtEur(r.cs)}</td><td style="color:var(--muted)">${r.sc?fmtEur(r.sc):'—'}</td><td>${fmtEur(r.ic)}</td><td>${fmtEur(r.dk)}</td><td>${fmtEur(r.bu)}</td><td>${fmtEur(r.fatt)}</td><td style="font-weight:700;color:${r.corr<0?'var(--red)':'var(--text)'}">${fmtEur(r.corr)}</td></tr>`; });
-  h+=`<tr class="base"><td class="datecol" style="text-align:left">TOTALE</td><td>${fmtEur(tot.v)}</td><td>${fmtEur(tot.cs)}</td><td style="color:var(--muted)">${fmtEur(tot.sc)}</td><td>${fmtEur(tot.ic)}</td><td>${fmtEur(tot.dk)}</td><td>${fmtEur(tot.bu)}</td><td>${fmtEur(tot.fatt)}</td><td style="font-weight:800">${fmtEur(tot.corr)}</td></tr>`;
+  const tot=rows.reduce((a,r)=>({v:a.v+r.v,cs:a.cs+r.cs,scF:a.scF+r.scF,scB:a.scB+r.scB,ic:a.ic+r.ic,dk:a.dk+r.dk,bu:a.bu+r.bu,fatt:a.fatt+r.fatt,corr:a.corr+r.corr}),{v:0,cs:0,scF:0,scB:0,ic:0,dk:0,bu:0,fatt:0,corr:0});
+  let h='<div class="tablewrap" style="max-height:74vh"><table class="reg"><thead><tr><th class="datecol" style="text-align:left">DATA</th><th>Vendite €</th><th>Card Smart</th><th>iCad</th><th>DKV</th><th>Buoni</th><th title="Sconti/maggiorazioni FATTURE — NON nel corrispettivo">Sc./Magg. fatt.</th><th title="Sconti/maggiorazioni BUONI — NON nel corrispettivo">Sc./Magg. buoni</th><th>Tot. fatturato</th><th>Corrispettivo</th></tr></thead><tbody>';
+  rows.forEach(r=>{ h+=`<tr><td class="datecol ${dateClass(r.d)}" style="text-align:left">${fmtDay(r.d)}</td><td>${fmtEur(r.v)}</td><td>${fmtEur(r.cs)}</td><td>${fmtEur(r.ic)}</td><td>${fmtEur(r.dk)}</td><td>${fmtEur(r.bu)}</td><td style="color:var(--muted)">${r.scF?fmtEur(r.scF):'—'}</td><td style="color:var(--muted)">${r.scB?fmtEur(r.scB):'—'}</td><td>${fmtEur(r.fatt)}</td><td style="font-weight:700;color:${r.corr<0?'var(--red)':'var(--text)'}">${fmtEur(r.corr)}</td></tr>`; });
+  h+=`<tr class="base"><td class="datecol" style="text-align:left">TOTALE</td><td>${fmtEur(tot.v)}</td><td>${fmtEur(tot.cs)}</td><td>${fmtEur(tot.ic)}</td><td>${fmtEur(tot.dk)}</td><td>${fmtEur(tot.bu)}</td><td style="color:var(--muted)">${fmtEur(tot.scF)}</td><td style="color:var(--muted)">${fmtEur(tot.scB)}</td><td>${fmtEur(tot.fatt)}</td><td style="font-weight:800">${fmtEur(tot.corr)}</td></tr>`;
   h+='</tbody></table></div>';
   document.getElementById('comm-container').innerHTML=h;
 }
 function exportCommercialista(){
   if(!STATE) return; const rows=commRows();
-  const aoa=[['DATA','Vendite','Card Smart','Sc./Magg. (scorporo)','iCad','DKV','Buoni','Tot. fatturato','Corrispettivo']];
-  rows.forEach(r=>aoa.push([fmtDay(r.d), r.v, r.cs, r.sc, r.ic, r.dk, r.bu, r.fatt, r.corr].map((x,i)=>i===0?x:Math.round(x*100)/100)));
-  const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:12},{wch:12},{wch:12},{wch:16},{wch:12},{wch:12},{wch:12},{wch:14},{wch:14}];
+  const aoa=[['DATA','Vendite','Card Smart','iCad','DKV','Buoni','Sc./Magg. fatture','Sc./Magg. buoni','Tot. fatturato','Corrispettivo']];
+  rows.forEach(r=>aoa.push([fmtDay(r.d), r.v, r.cs, r.ic, r.dk, r.bu, r.scF, r.scB, r.fatt, r.corr].map((x,i)=>i===0?x:Math.round(x*100)/100)));
+  const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:15},{wch:15},{wch:14},{wch:14}];
   const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Corrispettivo');
   XLSX.writeFile(wb,`Commercialista_${STATE.meta.period||'export'}.xlsx`);
 }
@@ -758,23 +758,6 @@ function fillBuonoDays(){ const sel=document.getElementById('b-day'); sel.innerH
 let BF_Q='', BF_PROD='ALL', BF_DAY='ALL';
 function renderBuoni(){ if(!STATE) return; const cnt=document.getElementById('buoni-count'); if(cnt) cnt.textContent=BUONI.length?`${BUONI.length} buoni nel mese · ${fmtInt(BUONI.reduce((s,b)=>s+b.litri,0))} L`:'Nessun buono.'; }
 function delAllBuoni(){ if(!BUONI.length) return; if(!confirm(`Eliminare TUTTI i ${BUONI.length} buoni del mese? L'operazione non è reversibile.`)) return; BUONI=[]; CURBUONO=null; saveStore(); recompute(); renderBuoni(); renderRegistro(); renderCommercialista(); refreshScheda(); if(typeof renderAssegnazioni==='function') renderAssegnazioni(); }
-function renderBuoniGrid(){
-  const cont=document.getElementById('buoni-grid'); const b=BUONI.find(x=>x.id===CURBUONO);
-  if(!b){ cont.innerHTML='<div class="empty-state"><span class="ic">🧾</span>Aggiungi un buono per vederne lo spostamento.</div>'; return; }
-  const alloc=(BRESULT[b.id]||{}).alloc||{};
-  let h='<div class="tablewrap"><table class="reg">'+colgroup()+headRow()+'<tbody>';
-  STATE.days.forEach(day=>{ h+=`<tr><td class="datecol ${dateClass(day)}">${fmtDay(day)}</td>`;
-    PUMPS.forEach(p=>{ const v=(alloc[p]&&alloc[p][day])||0; const rv=Math.round(v);
-      let cls=prodClass(p), txt=''; if(rv>0){ cls='plus'; txt='+'+fmtInt(rv); } else if(rv<0){ cls='minus'; txt='−'+fmtInt(-rv); }
-      h+=`<td class="${cls}">${txt}</td>`; });
-    h+='</tr>'; });
-  h+='</tbody></table></div>'; cont.innerHTML=h;
-}
-let BCLI_LABELS={};
-function fillBuonoClienti(){
-  const dl=document.getElementById('b-cliente-list'); if(!dl) return; BCLI_LABELS={};
-  dl.innerHTML=CLIENTI.map(c=>{ const lab=`${c.ragione||c.id} · ${c.tipo==='PRE'?'PRE':'POST'}${c.piva?' · '+c.piva:''} · #${c.id}`; BCLI_LABELS[lab]=c.id; return `<option value="${escapeAttr(lab)}"></option>`; }).join('');
-}
 function getBuonoClienteId(){ return BUONO_CLI||''; }
 function fillBuonoTessere(){
   const sel=document.getElementById('b-tessera'); const c=CLIENTI.find(x=>x.id===getBuonoClienteId());
@@ -907,7 +890,7 @@ let ICAD=null, DKV=null;
 function parseFatt(rows, dataNames, impNames){
   if(!rows.length) throw new Error('File vuoto.');
   const head=rows[0].map(c=>String(c==null?'':c).trim().toLowerCase());
-  const find=(...n)=>{ for(const x of n){ const k=head.findIndex(h=>h===x||h.includes(x)); if(k>=0) return k; } return -1; };
+  const find=(...n)=>{ for(const x of n){ const k=head.findIndex(h=>h===x); if(k>=0) return k; } for(const x of n){ const k=head.findIndex(h=>h.includes(x)); if(k>=0) return k; } return -1; }; // esatto prima, poi sottostringa
   const iData=find(...dataNames), iImp=find(...impNames), iNet=find('netto'); // iNet: DKV ha colonna Netto (=Importo+sconto/magg); iCad no
   if(iData<0||iImp<0) throw new Error('Colonne mancanti (data / importo).');
   const byDay={}, byDayScorp={}; let n=0; const dset=new Set();
@@ -953,7 +936,7 @@ function parseEstesoL(wb){
     const ws=wb.Sheets[sheetName]; if(!ws) return;
     const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null}); if(rows.length<2) return;
     const head=rows[0].map(c=>String(c==null?'':c).trim().toLowerCase());
-    const find=(...n)=>{ for(const x of n){ const k=head.findIndex(h=>h===x||h.includes(x)); if(k>=0) return k; } return -1; };
+    const find=(...n)=>{ for(const x of n){ const k=head.findIndex(h=>h===x); if(k>=0) return k; } for(const x of n){ const k=head.findIndex(h=>h.includes(x)); if(k>=0) return k; } return -1; }; // esatto prima, poi sottostringa
     const iId=find('idcliente'), iRag=find('ragione'), iInd=find('indirizzo'), iCitta=find('citta','città'), iProv=find('provincia'), iPiva=find('partitaiva'), iCf=find('codicefisc'), iTel=find('telefono'), iCell=find('cellulare'), iMail=find('email'), iPec=find('pec'), iNote=find('note'), iModPag=find('modpagamento'), iFidoC=find('fido cliente'), iCodT=find('codicetessera'), iTarga=find('targa'), iFidoT=find('fido tessera'), iPlaf=find('plafond');
     if(iId<0||iCodT<0) return;
     const cat=sheetName.trim(); const tipo=SHEET_TIPO[cat.toLowerCase()]||'POST'; counts[cat]=counts[cat]||0;
@@ -981,7 +964,7 @@ function handleClFile(file){
   const reader=new FileReader();
   reader.onload=e=>{ try{ const wb=XLSX.read(e.target.result,{type:'array'}); const parsed=parseEstesoL(wb);
     if(!parsed.nClienti) throw new Error('Nessun cliente trovato (servono colonne IdCliente e CodiceTessera).');
-    mergeClienti(parsed); renderClienti(); fillBuonoClienti();
+    mergeClienti(parsed); renderClienti();
     const cats=Object.entries(parsed.counts).map(([k,v])=>`${k}: ${v}`).join(' · ');
     res.innerHTML=`<div class="ok-msg">✓ Importato: <b>${file.name}</b></div>
       <div class="grid" style="margin-top:.9rem">
@@ -1275,7 +1258,7 @@ document.getElementById('ric-cliente-btn').addEventListener('click',()=>openCliP
 document.getElementById('ric-add').addEventListener('click',addRicarica);
 
 // anagrafica clienti: indipendente dal file importato
-loadClienti(); renderClienti(); fillBuonoClienti();
+loadClienti(); renderClienti();
 loadRic(); renderRicariche();
 restoreImports();
 </script>

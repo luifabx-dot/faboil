@@ -121,7 +121,7 @@ colonna "Sc./Magg.".
 | Ricerca clienti fluida su telefono | ✅ debounce 140ms + event delegation (1 listener invece di ~700/keystroke) |
 | **POS / contanti (file CTRL CASSE)** | ❌ da fare |
 | **Travasi subordinati a "contanti ≥ 0"** | ❌ da fare (con i contanti): un travaso non deve mai rendere negativo il corrispettivo contanti del giorno — 2° tetto oltre alla regola d'oro fisica |
-| **Colonna scorporo separata per i buoni** | ❌ da fare: oggi "Sc./Magg." somma CS+iCad+DKV+buoni; separare lo scorporo dei buoni in una colonna a parte dalle fatture |
+| Colonna scorporo separata per i buoni | ✅ fatto: due colonne "Sc./Magg. fatt." e "Sc./Magg. buoni" |
 | Ordine prepagati/postpagati su corrispettivo contanti | ❌ parcheggiato |
 
 ## Questioni risolte (revisione 2026-06-24)
@@ -137,13 +137,11 @@ colonna "Sc./Magg.".
    non generato finché non imposti la data. Non influisce sui corrispettivi (il credito non
    entra nel corrispettivo).
 
-## Robustezza (fix difensivi, nessun impatto sui dati attuali)
-- `csNum` tronca importi con migliaia puntate (`"1.030,65"` → 1.03) — dormiente perché gli
-  importi arrivano come numeri. Da irrobustire (rimuovere i `.` se presenti sia `.` che `,`).
-- `itNum` interpreta `"1.948"` stringa come 1948 — dormiente (i prezzi arrivano come numeri).
-- `recompute`: aggiungere clamp `Math.max(0, work[p][d])` dopo i prelievi (residui float).
-- `find(...includes...)` nei parser: preferire match esatto prima del match per sottostringa.
-- Codice morto: `renderBuoniGrid`, `fillBuonoClienti`/`b-cliente-list`, `BCLI_LABELS`.
+## Robustezza — FATTO (verificato: stessi totali parser al centesimo)
+- `itNum`/`csNum` ora robusti: "1.234,56" (mig.+dec.), "1,566", "1.948" gestiti correttamente.
+- `find()` nei parser: match esatto prima del match per sottostringa.
+- Codice morto rimosso: `renderBuoniGrid`, `fillBuonoClienti`/`b-cliente-list`, `BCLI_LABELS`.
+- (Il clamp `Math.max(0,...)` è già nel nuovo `simulaNetto` FASE 2.)
 
 ## File di riferimento (upload di sessione)
 - StoreSmart erogazioni giugno 2026 (registro di partenza, contatori 0 al 31/5).
