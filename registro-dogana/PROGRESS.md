@@ -101,6 +101,7 @@ colonna "Sc./Magg.".
 | Ricerca clienti fluida su telefono | ✅ debounce 140ms + event delegation (1 listener invece di ~700/keystroke) |
 | **POS / contanti (file CTRL CASSE)** | ❌ da fare |
 | **Travasi subordinati a "contanti ≥ 0"** | ❌ da fare (con i contanti): un travaso non deve mai rendere negativo il corrispettivo contanti del giorno — 2° tetto oltre alla regola d'oro fisica |
+| **Colonna scorporo separata per i buoni** | ❌ da fare: oggi "Sc./Magg." somma CS+iCad+DKV+buoni; separare lo scorporo dei buoni in una colonna a parte dalle fatture |
 | Ordine prepagati/postpagati su corrispettivo contanti | ❌ parcheggiato |
 
 ## Questioni risolte (revisione 2026-06-24)
