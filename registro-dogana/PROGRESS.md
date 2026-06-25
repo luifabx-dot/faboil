@@ -221,9 +221,25 @@ colonna "Sc./Magg.".
   nome combacia col POS; Carmine e Cantile (nome invertito) li abbini a mano.
 - Stato in `localStorage` (`faboil_casse`). Verifica jsdom: 10 schede, Casaluce escluso,
   posDay filtrato, convalida OK; regressione POS 5/5.
-- **PENDENTE**: parametrizzazione per **turno (giorno + ora)** — ogni operatore ha turni diversi
-  (anche a cavallo di mezzanotte). Serve conservare l'orario delle transazioni; da definire come
-  l'utente descrive i turni. Il totale periodo per scheda è indipendente dal turno.
+## Controllo casse — FATTO v3: TURNI a finestra oraria (2026-06-25)
+- Il controllo passa **per turno**, non più per giorno. Turno variabile, non noto prima.
+- **parseStoreSmart** ora salva `servitoTx[tessera] = [["YYYY-MM-DDTHH:MM", importo], …]` (solo
+  tessere 7 cifre); **parsePos** salva `posTx[account]=[[dt,eur]]`. Helper `cellDT` legge gli
+  orari (seriale Excel, "01/06/2026 06:04", "1 giu 2026, 06:05"). Stringhe naive locali →
+  confronto lessicografico, niente fuso. **Richiede re-import di StoreSmart e POS.**
+- **Turno** = scheda + **Inizio**/**Fine** (`datetime-local`, anche a cavallo di mezzanotte).
+  `servitoWindow`/`posWindow` filtrano le tx in `[ini, fin)`. Verificato: finestra giorno =
+  aggregato giornaliero; finestra periodo = 133.442 (Notaro); POS idem.
+- DROP/Monete/Sospese/UTA/DKV nel **draft** del turno (`DRAFT`), editabili sul posto (telefono).
+  **Convalida** → archivia il turno in `TURNI[scheda]` (snapshot di servito/pos/tot + `convAt`),
+  bloccato, eliminabile. **Storico turni** per scheda (o globale).
+- **Elenco schede gestore**: Servito/POS di periodo (overview) + N° turni + Σ DROP/Monete/
+  Sospese/UTA/DKV + **Σ TOT turni** (somma dei TOT dei turni convalidati).
+- **Convalida UTA/DKV su totali** (deciso 2): Σ UTA turni vs iCad UTA (`tot − nonUta`),
+  Σ DKV turni vs file DKV; anomalia se Δ>0,50 €.
+- Stato in `localStorage` (`faboil_casse` per nome/account, `faboil_turni` per i turni).
+- Verifica jsdom: orari agganciati, finestre = aggregati, turno notturno, storico, regressione
+  POS 5/5.
 
 ## File di riferimento (upload di sessione)
 - StoreSmart erogazioni giugno 2026 (registro di partenza, contatori 0 al 31/5).

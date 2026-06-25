@@ -362,17 +362,22 @@ table.reg tbody tr.brow:hover td{background:var(--surface2)}
       <p class="muted" style="margin-top:.5rem">Rilevate da StoreSmart (tessera di 7 cifre <b>non</b> in anagrafica clienti). <b>Nome</b> e <b>Account POS</b> li abbini tu. Riga in rosso = scheda non riconosciuta (possibile clandestina).</p>
     </div>
     <div class="card">
-      <div class="card-title">Dettaglio giornaliero</div>
-      <div class="formline" style="gap:.5rem;align-items:flex-end;flex-wrap:wrap">
-        <div class="f"><label>Scheda / operatore</label><select id="cassa-op" class="fld" style="width:17rem"></select></div>
-        <span class="muted" id="cassa-hint"></span>
+      <div class="card-title">Turno</div>
+      <div class="formline" style="gap:.6rem;align-items:flex-end;flex-wrap:wrap">
+        <div class="f"><label>Scheda / operatore</label><select id="cassa-op" class="fld" style="width:16rem"></select></div>
+        <div class="f"><label>Inizio</label><input id="turno-ini" class="fld" type="datetime-local"></div>
+        <div class="f"><label>Fine</label><input id="turno-fin" class="fld" type="datetime-local"></div>
       </div>
-      <p class="muted" style="margin-top:.4rem">DROP, Monete, Sospese, UTA, DKV si inseriscono qui giorno per giorno.</p>
-      <div id="cassa-container" style="margin-top:.5rem"></div>
+      <p class="muted" style="margin-top:.4rem">Imposta inizio e fine del turno (anche a cavallo di mezzanotte). Servito e POS vengono calcolati nella finestra; DROP/Monete/Sospese/UTA/DKV li inserisci tu. Poi <b>Convalida</b> → il turno va nello storico.</p>
+      <div id="turno-calc" style="margin-top:.5rem"></div>
     </div>
     <div class="card">
-      <div class="card-title">Convalida giornaliera UTA / DKV</div>
-      <p class="muted">Confronto fra gli scontrini inseriti (somma di tutte le schede) e le fatture nei file iCad (UTA) e DKV, giorno per giorno. I giorni che non quadrano sono evidenziati.</p>
+      <div class="card-title">Storico turni</div>
+      <div id="turno-storico"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Convalida UTA / DKV (totali)</div>
+      <p class="muted">Somma di UTA e DKV inseriti in tutti i turni convalidati, confrontata col totale delle fatture nei file iCad (UTA) e DKV.</p>
       <div id="cassa-convalida" style="margin-top:.5rem"></div>
     </div>
   </div>
@@ -433,6 +438,14 @@ function fmtInt(n){ return Math.round(n).toLocaleString('it-IT'); }
 function fmt2(n){ return (Math.round(n*100)/100).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function refreshScheda(){ try{ if(CLIENTI&&CLIENTI.length) renderClDetail(); }catch(e){} } // aggiorna il box credito nella scheda cliente
 function grezzo(p,day){ return STATE.daily[p][day]||0; }
+// data+ora "naive" locale come stringa "YYYY-MM-DDTHH:MM" (confrontabile lessicograficamente, usata per i turni)
+function pad2(n){ return String(n).padStart(2,'0'); }
+function serialDT(v){ const ms=Math.round((v-25569)*86400*1000); const d=new Date(ms); return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth()+1)}-${pad2(d.getUTCDate())}T${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`; }
+function cellDT(v){ if(v==null||v==='') return null; if(typeof v==='number') return serialDT(v); const s=String(v).trim();
+  let m=s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})/); if(m) return `${m[1]}-${m[2]}-${m[3]}T${pad2(m[4])}:${m[5]}`;
+  m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})[ ,]+(\d{1,2}):(\d{2})/); if(m) return `${m[3]}-${pad2(m[2])}-${pad2(m[1])}T${pad2(m[4])}:${m[5]}`;
+  m=s.match(/^(\d{1,2})\s+([a-zàèéìòù]{3,})\.?\s+(\d{4})[ ,]+(\d{1,2}):(\d{2})/i); if(m){ const mo=itMonth(m[2]); if(mo) return `${m[3]}-${pad2(mo)}-${pad2(m[1])}T${pad2(m[4])}:${m[5]}`; }
+  const day=cellDay(v); return day?day+'T00:00':null; }
 
 // ---- calendario: rossi (domeniche+festivi nazionali), sabati ----
 function easter(y){ const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451); return {mo:Math.floor((h+l-7*m+114)/31), da:((h+l-7*m+114)%31)+1}; }
@@ -463,6 +476,7 @@ function parseStoreSmart(rows){
   const prezzoDay={}, prezzoTs={}; // prezzo dell'ultima erogazione del giorno per prodotto (per gli ADDEBITI CARTACEI)
   const venditeEur={};             // venditeEur[day][prod] = Σ qta×prezzo per transazione (vendite ESATTE, per il corrispettivo)
   const servitoTess={};            // servitoTess[tessera][day] = Σ Importo € (per il controllo casse: erogato per scheda gestore)
+  const servitoTx={};              // servitoTx[tessera] = [[ "YYYY-MM-DDTHH:MM", importo ], ...] (per i turni a finestra oraria)
   let kept=0,skTot=0,skAdb=0,skUnknown=0; const daySet=new Set(); const prodCount={GASOLIO:0,VERDE:0,GPL:0};
   for(let i=hr+1;i<rows.length;i++){
     const r=rows[i]; if(!r) continue;
@@ -470,7 +484,8 @@ function parseStoreSmart(rows){
     const pompa=String(r[iPompa]||'').trim(); const prod=String(r[iProd]||'').trim().toUpperCase();
     if(!pompa && !prod) continue;
     // servito per scheda (controllo casse): TUTTO l'erogato, anche ADBLUE/pompe non a registro
-    { const sd=cellDay(r[iData]); const st=iTess>=0?String(r[iTess]||'').trim():''; if(sd&&st){ const si=(iImp>=0?itNum(r[iImp]):(iPrezzo>=0?itNum(r[iQta])*itNum(r[iPrezzo]):0)); servitoTess[st]=servitoTess[st]||{}; servitoTess[st][sd]=(servitoTess[st][sd]||0)+si; } }
+    { const sd=cellDay(r[iData]); const st=iTess>=0?String(r[iTess]||'').trim():''; if(sd&&st){ const si=(iImp>=0?itNum(r[iImp]):(iPrezzo>=0?itNum(r[iQta])*itNum(r[iPrezzo]):0)); servitoTess[st]=servitoTess[st]||{}; servitoTess[st][sd]=(servitoTess[st][sd]||0)+si;
+      if(/^\d{7}$/.test(st)){ const sdt=cellDT(r[iData]); if(sdt){ servitoTx[st]=servitoTx[st]||[]; servitoTx[st].push([sdt,si]); } } } } // per i turni (finestra oraria)
     if(prod==='ADBLUE'||pompa==='ADBL7'){ skAdb++; continue; }
     const day=cellDay(r[iData]); if(!day||!pompa) continue;
     if(!PUMPS.includes(pompa)){ skUnknown++; continue; }
@@ -483,7 +498,7 @@ function parseStoreSmart(rows){
       if(iPrezzo>=0){ const prezzo=itNum(r[iPrezzo]); const ts=(typeof r[iData]==='number')?r[iData]:(Date.parse(String(r[iData]))||0); prezzoDay[day]=prezzoDay[day]||{}; prezzoTs[day]=prezzoTs[day]||{}; if(!(pc in prezzoTs[day])||ts>=prezzoTs[day][pc]){ prezzoTs[day][pc]=ts; prezzoDay[day][pc]=prezzo; } } }
   }
   const days=[...daySet].sort();
-  return { days, daily, prezzoDay, venditeEur, servitoTess, meta:{kept,skTot,skAdb,skUnknown,prodCount, period: days.length? days[0].slice(0,7):'', periodo: days.length? `${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—'} };
+  return { days, daily, prezzoDay, venditeEur, servitoTess, servitoTx, meta:{kept,skTot,skAdb,skUnknown,prodCount, period: days.length? days[0].slice(0,7):'', periodo: days.length? `${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—'} };
 }
 
 // ---- parsing Card Smart (fatturato per cliente/tessera, NON per pistola) ----
@@ -984,11 +999,12 @@ function parsePos(rows){
   const find=(...names)=>{ for(const n of names){ const k=head.findIndex(h=>h===n); if(k>=0) return k; } for(const n of names){ const k=head.findIndex(h=>h.includes(n)); if(k>=0) return k; } return -1; };
   const iData=find('data','data transazione','data operazione','data vendita'), iAcc=find('account'), iImp=find('prezzo (lordo)','importo lordo','lordo','importo','totale','total','ammontare','prezzo');
   if(iData<0||iAcc<0||iImp<0) throw new Error(`Colonne mancanti (Data / Account / Importo). Trovate: ${head.filter(Boolean).join(', ')}`);
-  const byAccount={}; const dset=new Set(); let n=0;
-  for(let i=hr+1;i<rows.length;i++){ const r=rows[i]; if(!r) continue; const acc=String(r[iAcc]==null?'':r[iAcc]).trim(); if(!acc) continue; const d=cellDay(r[iData]); if(!d) continue; const eur=csNum(r[iImp]); byAccount[acc]=byAccount[acc]||{}; byAccount[acc][d]=(byAccount[acc][d]||0)+eur; n++; dset.add(d); }
+  const byAccount={}; const posTx={}; const dset=new Set(); let n=0;
+  for(let i=hr+1;i<rows.length;i++){ const r=rows[i]; if(!r) continue; const acc=String(r[iAcc]==null?'':r[iAcc]).trim(); if(!acc) continue; const d=cellDay(r[iData]); if(!d) continue; const eur=csNum(r[iImp]); byAccount[acc]=byAccount[acc]||{}; byAccount[acc][d]=(byAccount[acc][d]||0)+eur; n++; dset.add(d);
+    const dt=cellDT(r[iData]); if(dt){ posTx[acc]=posTx[acc]||[]; posTx[acc].push([dt,eur]); } } // per i turni (finestra oraria)
   const accounts=Object.keys(byAccount).map(a=>({name:a, tot:Object.values(byAccount[a]).reduce((x,y)=>x+y,0)})).sort((a,b)=>b.tot-a.tot);
   const days=[...dset].sort();
-  return { byAccount, accounts, meta:{ n, tot:accounts.reduce((s,a)=>s+a.tot,0), periodo: days.length?`${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—' } };
+  return { byAccount, posTx, accounts, meta:{ n, tot:accounts.reduce((s,a)=>s+a.tot,0), periodo: days.length?`${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—' } };
 }
 // Lusciano = account abbinato a una scheda gestore nel controllo casse; finché non abbini nulla, tutti.
 function posSel(name){ let any=false; for(const k in CASSE){ const a=CASSE[k]&&CASSE[k].account; if(a){ any=true; if(normName(a)===normName(name)) return true; } } return !any; }
@@ -1014,87 +1030,96 @@ function icadNonUtaDay(d){ return (ICAD&&ICAD.byDayNonUta&&ICAD.byDayNonUta[d])|
 function cardSmartScontoPuntiDay(d){ return (CARDSMART&&CARDSMART.byDayScontoPunti&&CARDSMART.byDayScontoPunti[d])||0; }
 function scontoAllaPompaDay(d){ return icadNonUtaDay(d)+cardSmartScontoPuntiDay(d); }
 
-// ---- CONTROLLO CASSE (schede gestore: TOT = Servito − POS − DROP − Monete − Sospese − UTA − DKV) ----
+// ---- CONTROLLO CASSE (per TURNO: TOT = Servito − POS − DROP − Monete − Sospese − UTA − DKV) ----
 // Scheda gestore = tessera (7 cifre) in StoreSmart e NON in anagrafica clienti (estesoL).
-let CASSE={}, CASSA_OP=null; // CASSE[scheda]={nome,account,byDay:{day:{drop,monete,sospese,uta,dkv}}}
+// Turno = scheda + finestra [Inizio, Fine) (anche a cavallo di mezzanotte); convalidato → storico.
+let CASSE={}, CASSA_OP=null; // CASSE[scheda]={nome,account}
+let TURNI={}, TSEQ=1;        // TURNI[scheda]=[{id,ini,fin,drop,monete,sospese,uta,dkv,servito,pos,tot,convAt}]
+let DRAFT={drop:0,monete:0,sospese:0,uta:0,dkv:0}; // turno in lavorazione (non ancora convalidato)
 const MANUF=['drop','monete','sospese','uta','dkv'];
 const SCHEDE_NOTE={ '4273001':'NICOLA VITALE','4273002':'FABIO BLANDINI','4273003':'NICOLA MOTTOLA','4273007':'NICOLA DI GENNARO','4273008':'GIUSEPPE ZAMPELLA','4273009':'ALESSANDRO VERNETTI','4273013':'ANTONINO NOTARO','4273014':'CANTILE','4273015':'RICCARDO CARMINE','4273016':'BRUNO CIPULLO' };
-function loadCassa(){ try{ CASSE=JSON.parse(localStorage.getItem('faboil_casse')||'{}')||{}; }catch(e){ CASSE={}; } }
+function loadCassa(){ try{ CASSE=JSON.parse(localStorage.getItem('faboil_casse')||'{}')||{}; }catch(e){ CASSE={}; } try{ const o=JSON.parse(localStorage.getItem('faboil_turni')||'null'); if(o){ TURNI=o.turni||{}; TSEQ=o.seq||1; } }catch(e){} }
 function saveCassa(){ try{ localStorage.setItem('faboil_casse', JSON.stringify(CASSE)); }catch(e){} }
+function saveTurni(){ try{ localStorage.setItem('faboil_turni', JSON.stringify({turni:TURNI,seq:TSEQ})); }catch(e){} }
 function normName(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,' '); }
+function fmtDT(s){ if(!s) return '—'; const m=String(s).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/); return m?`${m[3]}/${m[2]} ${m[4]}:${m[5]}`:s; }
 function servitoDay(scheda,d){ if(!STATE||!STATE.servitoTess||!scheda) return 0; const t=STATE.servitoTess[scheda]; return (t&&t[d])||0; }
 function posAccountDay(account,d){ if(!POS||!account) return 0; for(const a of POS.accounts){ if(normName(a.name)===normName(account)) return (POS.byAccount[a.name][d])||0; } return 0; }
-function icadUtaDay(d){ if(!ICAD) return 0; return Math.max(0,((ICAD.byDay&&ICAD.byDay[d])||0)-((ICAD.byDayNonUta&&ICAD.byDayNonUta[d])||0)); } // UTA = iCad totale − non-UTA
-function dkvDay(d){ return (DKV&&DKV.byDay&&DKV.byDay[d])||0; }
+function servitoWindow(scheda,ini,fin){ const tx=STATE&&STATE.servitoTx&&STATE.servitoTx[scheda]; if(!tx||!ini||!fin) return 0; let s=0; for(let i=0;i<tx.length;i++){ const t=tx[i][0]; if(t>=ini && t<fin) s+=tx[i][1]; } return s; }
+function posWindow(account,ini,fin){ if(!POS||!POS.posTx||!account||!ini||!fin) return 0; let s=0; for(const a in POS.posTx){ if(normName(a)===normName(account)){ const arr=POS.posTx[a]; for(let i=0;i<arr.length;i++){ const t=arr[i][0]; if(t>=ini&&t<fin) s+=arr[i][1]; } } } return s; }
 function clientiTessSet(){ const s=new Set(); (CLIENTI||[]).forEach(c=>(c.tessere||[]).forEach(t=>{ if(t&&t.id) s.add(String(t.id).trim()); })); return s; }
 function schedeGestore(){ if(!STATE||!STATE.servitoTess) return []; const cli=clientiTessSet();
   return Object.keys(STATE.servitoTess).filter(t=>/^\d{7}$/.test(t) && !cli.has(t)).sort((a,b)=>{ const sa=STATE.days.reduce((x,d)=>x+servitoDay(a,d),0), sb=STATE.days.reduce((x,d)=>x+servitoDay(b,d),0); return sb-sa; }); }
-function casseRec(scheda){ if(!CASSE[scheda]){ const nome=SCHEDE_NOTE[scheda]||''; let account=''; if(nome&&POS){ const m=POS.accounts.find(a=>normName(a.name)===normName(nome)); if(m) account=m.name; } CASSE[scheda]={nome,account,byDay:{}}; } return CASSE[scheda]; }
-function manVal(scheda,d,f){ const r=CASSE[scheda]; return (r&&r.byDay&&r.byDay[d]&&r.byDay[d][f])||0; }
-function setMan(scheda,d,f,v){ const r=casseRec(scheda); r.byDay[d]=r.byDay[d]||{}; r.byDay[d][f]=v; saveCassa(); }
+function casseRec(scheda){ if(!CASSE[scheda]){ const nome=SCHEDE_NOTE[scheda]||''; let account=''; if(nome&&POS){ const m=POS.accounts.find(a=>normName(a.name)===normName(nome)); if(m) account=m.name; } CASSE[scheda]={nome,account}; } return CASSE[scheda]; }
 function editCasse(scheda,field,value){ const r=casseRec(scheda); r[field]=String(value).trim(); saveCassa(); }
-function totSchedaPeriodo(scheda){ const r=CASSE[scheda]||{}; const o={serv:0,pos:0,drop:0,monete:0,sospese:0,uta:0,dkv:0};
-  (STATE?STATE.days:[]).forEach(d=>{ o.serv+=servitoDay(scheda,d); o.pos+=posAccountDay(r.account,d); MANUF.forEach(f=>o[f]+=manVal(scheda,d,f)); });
-  o.tot=o.serv-o.pos-o.drop-o.monete-o.sospese-o.uta-o.dkv; return o; }
+function turniScheda(s){ return TURNI[s]||[]; }
+function turniAgg(s){ const o={drop:0,monete:0,sospese:0,uta:0,dkv:0,tot:0,n:0}; turniScheda(s).forEach(t=>{ MANUF.forEach(f=>o[f]+=t[f]||0); o.tot+=t.tot||0; o.n++; }); return o; }
 function renderOperatori(){ const el=document.getElementById('op-list'), warn=document.getElementById('cassa-warn'); if(!el) return;
   if(warn){ const miss=[]; if(!STATE) miss.push('StoreSmart'); if(!CLIENTI||!CLIENTI.length) miss.push('anagrafica clienti'); if(!POS) miss.push('POS'); if(!ICAD) miss.push('iCad'); if(!DKV) miss.push('DKV');
-    warn.innerHTML=miss.length?`<div class="warn">⚠ Per il controllo completo manca: <b>${miss.join(', ')}</b>. ${(!STATE||!CLIENTI||!CLIENTI.length)?'Servono almeno StoreSmart e anagrafica clienti per rilevare le schede.':''}</div>`:''; }
+    const noTx=STATE&&!STATE.servitoTx; warn.innerHTML=(miss.length?`<div class="warn">⚠ Manca: <b>${miss.join(', ')}</b>. ${(!STATE||!CLIENTI||!CLIENTI.length)?'Servono almeno StoreSmart e anagrafica clienti per rilevare le schede.':''}</div>`:'')+(noTx?`<div class="warn">⚠ Ri-importa <b>StoreSmart</b> e <b>POS</b> per agganciare gli orari (servono ai turni).</div>`:''); }
   if(!STATE||!CLIENTI||!CLIENTI.length){ el.innerHTML='<p class="muted">Carica StoreSmart e l\'anagrafica clienti per rilevare le schede gestore.</p>'; renderConvalida(); return; }
   const schede=schedeGestore();
   if(!schede.length){ el.innerHTML='<p class="muted">Nessuna scheda gestore rilevata.</p>'; renderConvalida(); return; }
   const posOpts=acc=>'<option value="">—</option>'+(POS?POS.accounts.map(a=>`<option value="${escapeAttr(a.name)}"${normName(a.name)===normName(acc)?' selected':''}>${escapeHtml(a.name)}</option>`).join(''):'');
-  let h='<div class="tablewrap"><table class="reg"><thead><tr><th>N. tessera</th><th style="text-align:left">Nome</th><th style="text-align:left">Account POS</th><th>Servito</th><th>POS</th><th>DROP</th><th>Monete</th><th>Sospese</th><th>UTA</th><th>DKV</th><th title="Servito − POS − DROP − Monete − Sospese − UTA − DKV">= TOT</th></tr></thead><tbody>';
-  const sum={serv:0,pos:0,drop:0,monete:0,sospese:0,uta:0,dkv:0,tot:0};
-  schede.forEach(s=>{ const r=casseRec(s); const t=totSchedaPeriodo(s); const clan=!(r.nome||SCHEDE_NOTE[s]);
-    Object.keys(sum).forEach(k=>sum[k]+=t[k]);
+  let h='<div class="tablewrap"><table class="reg"><thead><tr><th>N. tessera</th><th style="text-align:left">Nome</th><th style="text-align:left">Account POS</th><th title="servito di periodo, tutte le transazioni">Servito</th><th>POS</th><th title="turni convalidati">Turni</th><th>DROP</th><th>Monete</th><th>Sospese</th><th>UTA</th><th>DKV</th><th title="somma dei TOT dei turni convalidati">Σ TOT turni</th></tr></thead><tbody>';
+  const sum={serv:0,pos:0,n:0,drop:0,monete:0,sospese:0,uta:0,dkv:0,tot:0};
+  schede.forEach(s=>{ const r=casseRec(s); const clan=!(r.nome||SCHEDE_NOTE[s]);
+    const servPer=STATE.days.reduce((x,d)=>x+servitoDay(s,d),0), posPer=STATE.days.reduce((x,d)=>x+posAccountDay(r.account,d),0); const a=turniAgg(s);
+    sum.serv+=servPer; sum.pos+=posPer; sum.n+=a.n; MANUF.forEach(f=>sum[f]+=a[f]); sum.tot+=a.tot;
     h+=`<tr${clan?' style="background:var(--red-bg,rgba(220,38,38,.08))"':''}>
-      <td style="font-weight:700"><a href="#" class="casse-sel" data-s="${s}" title="dettaglio">${s}</a>${clan?' <span title="non in anagrafica clienti e non riconosciuta" style="color:var(--red)">⚠</span>':''}</td>
+      <td style="font-weight:700"><a href="#" class="casse-sel" data-s="${s}" title="apri turni">${s}</a>${clan?' <span title="non in anagrafica clienti e non riconosciuta" style="color:var(--red)">⚠</span>':''}</td>
       <td style="text-align:left"><input class="fld casse-nome" data-s="${s}" value="${escapeAttr(r.nome||'')}" placeholder="${clan?'clandestina?':'nome'}" style="width:11rem"></td>
       <td style="text-align:left"><select class="fld casse-acc" data-s="${s}" style="width:11rem">${posOpts(r.account)}</select></td>
-      <td>${fmtEur(t.serv)}</td><td>${fmtEur(t.pos)}</td><td>${fmtEur(t.drop)}</td><td>${fmtEur(t.monete)}</td><td>${fmtEur(t.sospese)}</td><td>${fmtEur(t.uta)}</td><td>${fmtEur(t.dkv)}</td>
-      <td style="font-weight:700;color:${Math.abs(t.tot)>0.5?'var(--red)':'var(--text)'}">${fmtEur(t.tot)}</td></tr>`; });
-  h+=`<tr class="base"><td>TOTALE</td><td></td><td></td><td>${fmtEur(sum.serv)}</td><td>${fmtEur(sum.pos)}</td><td>${fmtEur(sum.drop)}</td><td>${fmtEur(sum.monete)}</td><td>${fmtEur(sum.sospese)}</td><td>${fmtEur(sum.uta)}</td><td>${fmtEur(sum.dkv)}</td><td style="font-weight:800;color:${Math.abs(sum.tot)>0.5?'var(--red)':'var(--text)'}">${fmtEur(sum.tot)}</td></tr>`;
+      <td>${fmtEur(servPer)}</td><td>${fmtEur(posPer)}</td><td>${a.n||'—'}</td><td>${fmtEur(a.drop)}</td><td>${fmtEur(a.monete)}</td><td>${fmtEur(a.sospese)}</td><td>${fmtEur(a.uta)}</td><td>${fmtEur(a.dkv)}</td>
+      <td style="font-weight:700;color:${Math.abs(a.tot)>0.5?'var(--red)':'var(--text)'}">${a.n?fmtEur(a.tot):'—'}</td></tr>`; });
+  h+=`<tr class="base"><td>TOTALE</td><td></td><td></td><td>${fmtEur(sum.serv)}</td><td>${fmtEur(sum.pos)}</td><td>${sum.n}</td><td>${fmtEur(sum.drop)}</td><td>${fmtEur(sum.monete)}</td><td>${fmtEur(sum.sospese)}</td><td>${fmtEur(sum.uta)}</td><td>${fmtEur(sum.dkv)}</td><td style="font-weight:800;color:${Math.abs(sum.tot)>0.5?'var(--red)':'var(--text)'}">${fmtEur(sum.tot)}</td></tr>`;
   h+='</tbody></table></div>'; el.innerHTML=h; saveCassa(); renderConvalida(); }
 function fillCassaOp(){ const sel=document.getElementById('cassa-op'); if(!sel) return; const cur=CASSA_OP; const schede=(STATE&&CLIENTI&&CLIENTI.length)?schedeGestore():[];
   sel.innerHTML='<option value="">— scegli scheda —</option>'+schede.map(s=>{ const r=CASSE[s]||{}; return `<option value="${s}">${s}${r.nome?' · '+escapeHtml(r.nome):''}</option>`; }).join('');
-  if(cur && schede.indexOf(cur)>=0) sel.value=cur; else CASSA_OP=null; renderCassa(); }
-function renderCassa(){ const el=document.getElementById('cassa-container'), hint=document.getElementById('cassa-hint'); if(!el) return;
-  if(!STATE){ el.innerHTML='<p class="muted">Carica prima StoreSmart.</p>'; if(hint) hint.textContent=''; return; }
-  const s=CASSA_OP; if(!s){ el.innerHTML='<p class="muted">Scegli una scheda per inserire DROP / Monete / Sospese / UTA / DKV giorno per giorno.</p>'; if(hint) hint.textContent=''; return; }
-  const r=casseRec(s);
-  if(hint) hint.innerHTML=`scheda <b>${s}</b> · ${r.nome?escapeHtml(r.nome):'<span style="color:var(--red)">non riconosciuta</span>'} · account <b>${escapeHtml(r.account||'—')}</b>`;
-  const days=STATE.days; const tot={serv:0,pos:0,drop:0,monete:0,sospese:0,uta:0,dkv:0,ctrl:0};
-  let h='<div class="tablewrap" style="max-height:70vh"><table class="reg"><thead><tr><th class="datecol" style="text-align:left">DATA</th><th>Servito</th><th>POS</th><th>DROP</th><th>Monete</th><th>Sospese</th><th>UTA</th><th>DKV</th><th>= TOT</th></tr></thead><tbody>';
-  days.forEach(d=>{ const serv=servitoDay(s,d), pos=posAccountDay(r.account,d); const m={}; MANUF.forEach(f=>m[f]=manVal(s,d,f)); const ctrl=serv-pos-m.drop-m.monete-m.sospese-m.uta-m.dkv;
-    tot.serv+=serv; tot.pos+=pos; MANUF.forEach(f=>tot[f]+=m[f]); tot.ctrl+=ctrl;
-    const inp=f=>`<input class="fld cassa-in" data-d="${d}" data-f="${f}" type="number" inputmode="decimal" step="0.01" value="${m[f]||''}" style="width:5.4rem;text-align:right">`;
-    h+=`<tr><td class="datecol ${dateClass(d)}" style="text-align:left">${fmtDay(d)}</td><td>${fmtEur(serv)}</td><td>${fmtEur(pos)}</td><td>${inp('drop')}</td><td>${inp('monete')}</td><td>${inp('sospese')}</td><td>${inp('uta')}</td><td>${inp('dkv')}</td>
-      <td class="rowtot" data-d="${d}" style="font-weight:700;color:${Math.abs(ctrl)>0.5?'var(--red)':'var(--text)'}">${fmtEur(ctrl)}</td></tr>`; });
-  h+=`<tr class="base"><td class="datecol" style="text-align:left">TOTALE</td><td>${fmtEur(tot.serv)}</td><td>${fmtEur(tot.pos)}</td><td class="f-drop">${fmtEur(tot.drop)}</td><td class="f-monete">${fmtEur(tot.monete)}</td><td class="f-sospese">${fmtEur(tot.sospese)}</td><td class="f-uta">${fmtEur(tot.uta)}</td><td class="f-dkv">${fmtEur(tot.dkv)}</td><td class="f-tot" style="font-weight:800;color:${Math.abs(tot.ctrl)>0.5?'var(--red)':'var(--text)'}">${fmtEur(tot.ctrl)}</td></tr>`;
+  if(cur && schede.indexOf(cur)>=0) sel.value=cur; else CASSA_OP=null; renderTurno(); }
+function turnoIni(){ const e=document.getElementById('turno-ini'); return e?e.value:''; }
+function turnoFin(){ const e=document.getElementById('turno-fin'); return e?e.value:''; }
+function curTurno(){ const s=CASSA_OP; const r=s?casseRec(s):{}; const ini=turnoIni(), fin=turnoFin(); const hasWin=!!(ini&&fin&&ini<fin);
+  const serv=hasWin?servitoWindow(s,ini,fin):0, pos=hasWin?posWindow(r.account,ini,fin):0; const tot=serv-pos-DRAFT.drop-DRAFT.monete-DRAFT.sospese-DRAFT.uta-DRAFT.dkv; return {s,r,ini,fin,hasWin,serv,pos,tot}; }
+function renderTurno(){ const el=document.getElementById('turno-calc'); if(!el){ return; }
+  if(!STATE){ el.innerHTML='<p class="muted">Carica StoreSmart.</p>'; renderStorico(); return; }
+  const s=CASSA_OP; if(!s){ el.innerHTML='<p class="muted">Scegli una scheda per impostare un turno.</p>'; renderStorico(); return; }
+  const v=curTurno(); const noTx=!STATE.servitoTx;
+  const inp=f=>`<input class="fld turno-in" data-f="${f}" type="number" inputmode="decimal" step="0.01" value="${DRAFT[f]||''}" style="width:6.5rem;text-align:right">`;
+  el.innerHTML=`${noTx?'<div class="warn">⚠ Ri-importa StoreSmart e POS: senza orari il servito a finestra è 0.</div>':''}
+    <table class="reg"><tbody>
+    <tr><td style="text-align:left">Servito (finestra)</td><td style="font-weight:600;text-align:right">${fmtEur(v.serv)}</td><td style="text-align:left">POS (finestra)</td><td style="font-weight:600;text-align:right">${fmtEur(v.pos)}</td></tr>
+    <tr><td style="text-align:left">DROP</td><td style="text-align:right">${inp('drop')}</td><td style="text-align:left">Monete</td><td style="text-align:right">${inp('monete')}</td></tr>
+    <tr><td style="text-align:left">Sospese</td><td style="text-align:right">${inp('sospese')}</td><td style="text-align:left">UTA</td><td style="text-align:right">${inp('uta')}</td></tr>
+    <tr><td style="text-align:left">DKV</td><td style="text-align:right">${inp('dkv')}</td><td style="text-align:left">= TOT</td><td id="turno-tot" style="font-weight:800;text-align:right;color:${Math.abs(v.tot)>0.5?'var(--red)':'var(--text)'}">${fmtEur(v.tot)}</td></tr>
+    </tbody></table>
+    <div style="margin-top:.6rem;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap"><button class="btn" id="turno-conv"${v.hasWin?'':' disabled'}>✓ Convalida turno</button>${v.hasWin?`<span class="muted">${fmtDT(v.ini)} → ${fmtDT(v.fin)}</span>`:'<span class="muted">imposta Inizio e Fine validi</span>'}</div>`;
+  renderStorico(); }
+function updateTurnoTot(){ const c=document.getElementById('turno-tot'); if(!c) return; const v=curTurno(); c.textContent=fmtEur(v.tot); c.style.color=Math.abs(v.tot)>0.5?'var(--red)':'var(--text)'; }
+function convalidaTurno(){ const v=curTurno(); if(!v.s){ alert('Scegli una scheda.'); return; } if(!v.hasWin){ alert('Imposta Inizio e Fine validi (Fine dopo Inizio).'); return; }
+  const t={id:'T'+(TSEQ++), ini:v.ini, fin:v.fin, drop:DRAFT.drop,monete:DRAFT.monete,sospese:DRAFT.sospese,uta:DRAFT.uta,dkv:DRAFT.dkv, servito:v.serv, pos:v.pos, tot:v.tot, convAt:nowISO()};
+  TURNI[v.s]=TURNI[v.s]||[]; TURNI[v.s].push(t); saveTurni();
+  DRAFT={drop:0,monete:0,sospese:0,uta:0,dkv:0}; const ie=document.getElementById('turno-ini'),fe=document.getElementById('turno-fin'); if(ie) ie.value=''; if(fe) fe.value='';
+  renderTurno(); renderOperatori(); }
+function delTurno(s,id){ if(!confirm('Eliminare questo turno dallo storico?')) return; TURNI[s]=(TURNI[s]||[]).filter(t=>t.id!==id); saveTurni(); renderTurno(); renderOperatori(); }
+function renderStorico(){ const el=document.getElementById('turno-storico'); if(!el) return; const s=CASSA_OP;
+  const list=(s?turniScheda(s).map(t=>({t,s})):Object.keys(TURNI).flatMap(k=>turniScheda(k).map(t=>({t,s:k})))).sort((a,b)=>(a.t.ini<b.t.ini?1:-1));
+  if(!list.length){ el.innerHTML='<p class="muted">Nessun turno convalidato'+(s?' per questa scheda':'')+'.</p>'; return; }
+  const showScheda=!s;
+  let h='<div class="tablewrap" style="max-height:60vh"><table class="reg"><thead><tr>'+(showScheda?'<th>Scheda</th>':'')+'<th style="text-align:left">Inizio</th><th style="text-align:left">Fine</th><th>Servito</th><th>POS</th><th>DROP</th><th>Monete</th><th>Sospese</th><th>UTA</th><th>DKV</th><th>TOT</th><th>conv.</th><th></th></tr></thead><tbody>';
+  list.forEach(({t,s:sc})=>{ const r=CASSE[sc]||{};
+    h+=`<tr>${showScheda?`<td>${sc}${r.nome?'<br><span class="muted" style="font-size:.7rem">'+escapeHtml(r.nome)+'</span>':''}</td>`:''}<td style="text-align:left">${fmtDT(t.ini)}</td><td style="text-align:left">${fmtDT(t.fin)}</td><td>${fmtEur(t.servito)}</td><td>${fmtEur(t.pos)}</td><td>${fmtEur(t.drop)}</td><td>${fmtEur(t.monete)}</td><td>${fmtEur(t.sospese)}</td><td>${fmtEur(t.uta)}</td><td>${fmtEur(t.dkv)}</td><td style="font-weight:700;color:${Math.abs(t.tot)>0.5?'var(--red)':'var(--text)'}">${fmtEur(t.tot)}</td><td class="muted" style="font-size:.72rem">${fmtDT((t.convAt||'').slice(0,16))}</td><td><button class="btn ghost turno-del" data-s="${sc}" data-id="${t.id}" title="elimina" style="padding:.15rem .45rem">✕</button></td></tr>`; });
   h+='</tbody></table></div>'; el.innerHTML=h; }
-// aggiornamento SUL POSTO (niente ridisegno degli input: editabile anche da telefono)
-function refreshCassaTotals(changedDay){ const el=document.getElementById('cassa-container'); if(!el||!STATE||!CASSA_OP) return; const s=CASSA_OP, r=casseRec(s);
-  const tot={drop:0,monete:0,sospese:0,uta:0,dkv:0,ctrl:0};
-  STATE.days.forEach(d=>{ const serv=servitoDay(s,d), pos=posAccountDay(r.account,d); const m={}; MANUF.forEach(f=>{ m[f]=manVal(s,d,f); tot[f]+=m[f]; }); const ctrl=serv-pos-m.drop-m.monete-m.sospese-m.uta-m.dkv; tot.ctrl+=ctrl;
-    if(d===changedDay){ const c=el.querySelector(`.rowtot[data-d="${d}"]`); if(c){ c.textContent=fmtEur(ctrl); c.style.color=Math.abs(ctrl)>0.5?'var(--red)':'var(--text)'; } } });
-  ['drop','monete','sospese','uta','dkv'].forEach(f=>{ const c=el.querySelector('.f-'+f); if(c) c.textContent=fmtEur(tot[f]); });
-  const ft=el.querySelector('.f-tot'); if(ft){ ft.textContent=fmtEur(tot.ctrl); ft.style.color=Math.abs(tot.ctrl)>0.5?'var(--red)':'var(--text)'; } }
-function utaInsDay(d){ let s=0; for(const k in CASSE) s+=manVal(k,d,'uta'); return s; }
-function dkvInsDay(d){ let s=0; for(const k in CASSE) s+=manVal(k,d,'dkv'); return s; }
 function renderConvalida(){ const el=document.getElementById('cassa-convalida'); if(!el) return;
-  if(!STATE){ el.innerHTML='<p class="muted">Carica StoreSmart.</p>'; return; }
-  if(!ICAD&&!DKV){ el.innerHTML='<p class="muted">Carica i file iCad e DKV per convalidare gli scontrini UTA/DKV.</p>'; return; }
-  const days=STATE.days; const tot={uIns:0,uFile:0,dIns:0,dFile:0}; let anom=0;
-  let h='<div class="tablewrap" style="max-height:60vh"><table class="reg"><thead><tr><th class="datecol" style="text-align:left">DATA</th><th>UTA inserita</th><th>UTA iCad</th><th>Δ UTA</th><th>DKV inserita</th><th>DKV file</th><th>Δ DKV</th></tr></thead><tbody>';
-  days.forEach(d=>{ const ui=utaInsDay(d), uf=icadUtaDay(d), di=dkvInsDay(d), df=dkvDay(d); const du=ui-uf, dd=di-df; const bad=Math.abs(du)>0.5||Math.abs(dd)>0.5; if(bad) anom++;
-    tot.uIns+=ui; tot.uFile+=uf; tot.dIns+=di; tot.dFile+=df;
-    if(ui===0&&uf===0&&di===0&&df===0) return; // salta i giorni tutti a zero
-    h+=`<tr${bad?' style="background:var(--red-bg,rgba(220,38,38,.08))"':''}><td class="datecol ${dateClass(d)}" style="text-align:left">${fmtDay(d)}</td>
-      <td>${fmtEur(ui)}</td><td>${fmtEur(uf)}</td><td style="color:${Math.abs(du)>0.5?'var(--red)':'var(--muted)'}">${du?fmtEur(du):'—'}</td>
-      <td>${fmtEur(di)}</td><td>${fmtEur(df)}</td><td style="color:${Math.abs(dd)>0.5?'var(--red)':'var(--muted)'}">${dd?fmtEur(dd):'—'}</td></tr>`; });
-  h+=`<tr class="base"><td>TOTALE</td><td>${fmtEur(tot.uIns)}</td><td>${fmtEur(tot.uFile)}</td><td style="color:${Math.abs(tot.uIns-tot.uFile)>0.5?'var(--red)':'inherit'}">${fmtEur(tot.uIns-tot.uFile)}</td><td>${fmtEur(tot.dIns)}</td><td>${fmtEur(tot.dFile)}</td><td style="color:${Math.abs(tot.dIns-tot.dFile)>0.5?'var(--red)':'inherit'}">${fmtEur(tot.dIns-tot.dFile)}</td></tr>`;
-  h+='</tbody></table></div>';
-  h=(anom?`<div class="warn" style="margin-bottom:.5rem">⚠ ${anom} giorni non quadrano (Δ &gt; 0,50 €): scontrini UTA/DKV inseriti diversi dalle fatture nei file.</div>`:`<div class="ok-msg" style="margin-bottom:.5rem">✓ Nessuna anomalia: UTA/DKV inseriti coincidono con i file.</div>`)+h;
+  if(!ICAD&&!DKV){ el.innerHTML='<p class="muted">Carica i file iCad e DKV per convalidare i totali UTA/DKV.</p>'; return; }
+  let utaIns=0,dkvIns=0; for(const k in TURNI) turniScheda(k).forEach(t=>{ utaIns+=t.uta||0; dkvIns+=t.dkv||0; });
+  const utaFile=ICAD?Math.max(0,(ICAD.meta.tot||0)-(ICAD.meta.nonUta||0)):0; const dkvFile=DKV?(DKV.meta.tot||0):0;
+  const du=utaIns-utaFile, dd=dkvIns-dkvFile; const badU=ICAD&&Math.abs(du)>0.5, badD=DKV&&Math.abs(dd)>0.5;
+  let h='<table class="reg"><thead><tr><th></th><th>Inserito (turni)</th><th>File</th><th>Δ</th></tr></thead><tbody>';
+  h+=`<tr><td style="text-align:left">UTA (iCad)</td><td>${fmtEur(utaIns)}</td><td>${ICAD?fmtEur(utaFile):'—'}</td><td style="color:${badU?'var(--red)':'var(--muted)'}">${ICAD?fmtEur(du):'—'}</td></tr>`;
+  h+=`<tr><td style="text-align:left">DKV</td><td>${fmtEur(dkvIns)}</td><td>${DKV?fmtEur(dkvFile):'—'}</td><td style="color:${badD?'var(--red)':'var(--muted)'}">${DKV?fmtEur(dd):'—'}</td></tr>`;
+  h+='</tbody></table>';
+  h+=(badU||badD)?'<div class="warn" style="margin-top:.5rem">⚠ UTA/DKV inseriti nei turni diversi dai totali dei file.</div>':((ICAD||DKV)?'<div class="ok-msg" style="margin-top:.5rem">✓ UTA/DKV inseriti coincidono coi file.</div>':'');
   el.innerHTML=h; }
 
 // ---- import unificato: una sola card, riconoscimento automatico, elenco file ----
@@ -1481,11 +1506,13 @@ document.getElementById('import-result-pos').addEventListener('click',e=>{ const
 document.getElementById('import-list').addEventListener('click',e=>{ const b=e.target.closest('.xsrc'); if(b) removeSrc(b.dataset.k); }); // delegation rimozione
 
 // controllo casse
-document.getElementById('op-list').addEventListener('change',e=>{ const n=e.target.closest('.casse-nome'); if(n){ editCasse(n.dataset.s,'nome',n.target.value); renderOperatori(); fillCassaOp(); return; } const a=e.target.closest('.casse-acc'); if(a){ editCasse(a.dataset.s,'account',a.target.value); renderOperatori(); if(CASSA_OP===a.dataset.s) renderCassa(); } });
-document.getElementById('op-list').addEventListener('click',e=>{ const l=e.target.closest('.casse-sel'); if(l){ e.preventDefault(); CASSA_OP=l.dataset.s; const sel=document.getElementById('cassa-op'); if(sel) sel.value=l.dataset.s; renderCassa(); document.getElementById('page-cassa').querySelector('#cassa-container').scrollIntoView({behavior:'smooth',block:'nearest'}); } });
-document.getElementById('cassa-op').addEventListener('change',e=>{ CASSA_OP=e.target.value||null; renderCassa(); });
-document.getElementById('cassa-container').addEventListener('input',e=>{ const i=e.target.closest('.cassa-in'); if(i && CASSA_OP){ setMan(CASSA_OP,i.dataset.d,i.dataset.f,itNum(i.value)); refreshCassaTotals(i.dataset.d); } }); // sul posto: non distrugge l'input (telefono)
-document.getElementById('cassa-container').addEventListener('change',e=>{ const i=e.target.closest('.cassa-in'); if(i && CASSA_OP){ renderOperatori(); } }); // all'uscita aggiorna elenco + convalida
+document.getElementById('op-list').addEventListener('change',e=>{ const n=e.target.closest('.casse-nome'); if(n){ editCasse(n.dataset.s,'nome',n.target.value); renderOperatori(); fillCassaOp(); return; } const a=e.target.closest('.casse-acc'); if(a){ editCasse(a.dataset.s,'account',a.target.value); renderOperatori(); if(CASSA_OP===a.dataset.s) renderTurno(); } });
+document.getElementById('op-list').addEventListener('click',e=>{ const l=e.target.closest('.casse-sel'); if(l){ e.preventDefault(); CASSA_OP=l.dataset.s; const sel=document.getElementById('cassa-op'); if(sel) sel.value=l.dataset.s; DRAFT={drop:0,monete:0,sospese:0,uta:0,dkv:0}; renderTurno(); document.getElementById('turno-calc').scrollIntoView({behavior:'smooth',block:'nearest'}); } });
+document.getElementById('cassa-op').addEventListener('change',e=>{ CASSA_OP=e.target.value||null; DRAFT={drop:0,monete:0,sospese:0,uta:0,dkv:0}; renderTurno(); });
+['turno-ini','turno-fin'].forEach(id=>document.getElementById(id).addEventListener('change',renderTurno));
+document.getElementById('turno-calc').addEventListener('input',e=>{ const i=e.target.closest('.turno-in'); if(i){ DRAFT[i.dataset.f]=itNum(i.value); updateTurnoTot(); } }); // sul posto (telefono)
+document.getElementById('turno-calc').addEventListener('click',e=>{ if(e.target.closest('#turno-conv')) convalidaTurno(); });
+document.getElementById('turno-storico').addEventListener('click',e=>{ const b=e.target.closest('.turno-del'); if(b) delTurno(b.dataset.s,b.dataset.id); });
 
 document.getElementById('cl-search').addEventListener('input',debounce(()=>{ CLQ=document.getElementById('cl-search').value; renderClList(); },140));
 document.getElementById('cl-list').addEventListener('click',e=>{ const it=e.target.closest('.cl-item'); if(!it) return; CURCLI=it.dataset.id; saveClienti(); renderClList(); renderClDetail(); }); // delegation: 1 listener
