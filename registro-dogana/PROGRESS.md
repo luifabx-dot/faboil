@@ -241,6 +241,20 @@ colonna "Sc./Magg.".
 - Verifica jsdom: orari agganciati, finestre = aggregati, turno notturno, storico, regressione
   POS 5/5.
 
+## Controllo casse — FATTO v4: tutto sulla riga dell'operatore (2026-06-25)
+- Unica superficie: **lista operatori**, ogni riga è il turno in lavorazione (layout "B" scelto
+  dall'utente fra due mockup). Colonne: Tessera · Nome · Account · **Inizio** · **Fine** ·
+  Servito · POS · DROP · Monete · Sospese · UTA · DKV · = TOT · **✓ Conv.**
+- Inizio/Fine sono `datetime-local` sulla riga; Servito/POS si ricalcolano nella finestra
+  (`servitoWindow`/`posWindow`). Campi manuali editabili **sul posto** (no ridisegno: telefono ok).
+- **Clic sul nome** → espande lo **storico** dei turni di quell'operatore sotto la riga
+  (`STORICO_OPEN`); **✎** rinomina (prompt); **✕** elimina le schede aggiunte a mano.
+- **Convalida** sulla riga → archivia il turno in `TURNI[scheda]`, svuota la riga, apre lo storico.
+- Bozze per riga in `DRAFTS` (persistite `faboil_drafts`), così non si perdono al reload.
+- Rimosse la card "Turno" separata, lo storico separato e il vecchio select scheda.
+- Verifica Chromium: editing sul posto, finestra giorno = aggregato (6.066,37 / 3.084,63),
+  convalida + storico inline; regressione POS 5/5.
+
 ## File di riferimento (upload di sessione)
 - StoreSmart erogazioni giugno 2026 (registro di partenza, contatori 0 al 31/5).
 - Card Smart `RifornimentiPerPeriodo.xlsx` (col: Prezzo Unitario, Sconto, Quantita, Importo).
