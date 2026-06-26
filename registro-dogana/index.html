@@ -86,6 +86,15 @@ body{min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--s
 .cassawrap table.reg{table-layout:auto;width:auto;min-width:100%}
 .cassawrap table.reg th,.cassawrap table.reg td{white-space:nowrap;overflow:visible;text-overflow:clip;font-size:.74rem;padding:.42rem .55rem}
 .cassawrap table.reg .fld{font-size:.78rem;padding:.32rem .5rem;width:auto}
+#page-cassa .card{max-width:none}                 /* usa tutta la larghezza disponibile */
+#page-cassa .cassawrap{overflow-x:auto}
+#page-cassa .cassawrap table.reg{width:100%}      /* riempi la card, niente barra se c'è spazio */
+#page-cassa .cassawrap table.reg th,#page-cassa .cassawrap table.reg td{padding:.38rem .28rem;font-size:.72rem}
+#page-cassa .cassawrap .fld{padding:.3rem .35rem;font-size:.74rem}
+#page-cassa .cassawrap .casse-acc{width:100%;min-width:6rem}
+#page-cassa .cassawrap .turno-dt{width:100%;min-width:7.6rem}
+#page-cassa .cassawrap .turno-num{width:100%;min-width:2.8rem;max-width:4.6rem}
+#page-cassa .cassawrap .turno-conv{padding:.3rem .45rem !important}
 .turnogrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:.5rem}
 .turnogrid .tcell{display:flex;justify-content:space-between;align-items:center;gap:.5rem;background:var(--surface2);border:1.5px solid var(--border);border-radius:9px;padding:.45rem .65rem;font-size:.84rem}
 .turnogrid .tcell label,.turnogrid .tcell span{color:var(--muted);font-weight:600}
@@ -1081,13 +1090,13 @@ function renderOperatori(){ const el=document.getElementById('op-list'), warn=do
   const posOpts=acc=>'<option value="">—</option>'+(POS?POS.accounts.map(a=>`<option value="${escapeAttr(a.name)}"${normName(a.name)===normName(acc)?' selected':''}>${escapeHtml(a.name)}</option>`).join(''):'');
   let h='<div class="cassawrap"><table class="reg"><thead><tr><th>Tessera</th><th style="text-align:left">Nome</th><th style="text-align:left">Account</th><th>Inizio</th><th>Fine</th><th>Servito</th><th>POS</th><th>DROP</th><th>Monete</th><th>Sospese</th><th>UTA</th><th>DKV</th><th>= TOT</th><th></th></tr></thead><tbody>';
   schede.forEach(s=>{ const v=rowVals(s), r=v.r, d=v.d; const clan=!(r.nome||SCHEDE_NOTE[s]);
-    const num=f=>`<input class="fld turno-num" data-s="${s}" data-f="${f}" type="number" inputmode="decimal" step="0.01" value="${d[f]||''}" style="width:5rem;text-align:right">`;
+    const num=f=>`<input class="fld turno-num" data-s="${s}" data-f="${f}" type="number" inputmode="decimal" step="0.01" value="${d[f]||''}" style="text-align:right">`;
     h+=`<tr>
       <td style="font-weight:700;color:var(--accent);white-space:nowrap">${s}${clan?' <span title="non riconosciuta" style="color:var(--red)">⚠</span>':''}${r.manual?` <button class="op-del-sch" data-s="${s}" title="elimina scheda" style="border:none;background:none;cursor:pointer;color:var(--red);font-weight:700">✕</button>`:''}</td>
       <td style="text-align:left;white-space:nowrap"><a href="#" class="casse-storico" data-s="${s}" title="storico turni" style="font-weight:600;color:var(--text);border-bottom:1px dotted var(--muted2)">${r.nome?escapeHtml(r.nome):'<span style="color:var(--red)">— clandestina —</span>'}</a> <button class="casse-rename" data-s="${s}" title="rinomina" style="border:none;background:none;cursor:pointer;color:var(--muted)">✎</button></td>
-      <td style="text-align:left"><select class="fld casse-acc" data-s="${s}" style="width:10rem">${posOpts(r.account)}</select></td>
-      <td><input class="fld turno-dt" data-s="${s}" data-f="ini" type="datetime-local" value="${d.ini||''}" style="width:9.8rem"></td>
-      <td><input class="fld turno-dt" data-s="${s}" data-f="fin" type="datetime-local" value="${d.fin||''}" style="width:9.8rem"></td>
+      <td style="text-align:left"><select class="fld casse-acc" data-s="${s}">${posOpts(r.account)}</select></td>
+      <td><input class="fld turno-dt" data-s="${s}" data-f="ini" type="datetime-local" value="${d.ini||''}"></td>
+      <td><input class="fld turno-dt" data-s="${s}" data-f="fin" type="datetime-local" value="${d.fin||''}"></td>
       <td class="cell-srv" data-s="${s}">${v.hasWin?fmtEur(v.serv):'—'}</td>
       <td class="cell-pos" data-s="${s}">${v.hasWin?fmtEur(v.pos):'—'}</td>
       <td>${num('drop')}</td><td>${num('monete')}</td><td>${num('sospese')}</td><td>${num('uta')}</td><td>${num('dkv')}</td>
