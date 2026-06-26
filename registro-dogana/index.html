@@ -369,8 +369,13 @@ table.reg tbody tr.brow:hover td{background:var(--surface2)}
     <div class="card">
       <div class="card-title">Schede gestore</div>
       <div id="cassa-warn"></div>
+      <div class="formline" style="gap:.5rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:.3rem">
+        <div class="f"><label>Nuova scheda</label><input id="op-new-scheda" class="fld" placeholder="es. 4273011" style="width:9rem"></div>
+        <div class="f"><label>Nome</label><input id="op-new-nome" class="fld" placeholder="nome operatore" style="width:13rem"></div>
+        <button class="btn" id="op-new-add">+ Aggiungi scheda</button>
+      </div>
       <div id="op-list" style="margin-top:.4rem"></div>
-      <p class="muted" style="margin-top:.5rem">Rilevate da StoreSmart (tessera di 7 cifre <b>non</b> in anagrafica clienti). <b>Nome</b> e <b>Account POS</b> li abbini tu. Riga in rosso = scheda non riconosciuta (possibile clandestina).</p>
+      <p class="muted" style="margin-top:.5rem">Rilevate da StoreSmart (tessera di 7 cifre <b>non</b> in anagrafica clienti) oppure aggiunte a mano. <b>Nome</b> e <b>Account POS</b> li abbini tu. Riga in rosso = scheda non riconosciuta (possibile clandestina); <b>✎</b> = aggiunta a mano (eliminabile).</p>
     </div>
     <div class="card">
       <div class="card-title">Turno</div>
@@ -1063,29 +1068,40 @@ function schedeGestore(){ if(!STATE||!STATE.servitoTess) return []; const cli=cl
   return Object.keys(STATE.servitoTess).filter(t=>/^\d{7}$/.test(t) && !cli.has(t)).sort((a,b)=>{ const sa=STATE.days.reduce((x,d)=>x+servitoDay(a,d),0), sb=STATE.days.reduce((x,d)=>x+servitoDay(b,d),0); return sb-sa; }); }
 function casseRec(scheda){ if(!CASSE[scheda]){ const nome=SCHEDE_NOTE[scheda]||''; let account=''; if(nome&&POS){ const m=POS.accounts.find(a=>normName(a.name)===normName(nome)); if(m) account=m.name; } CASSE[scheda]={nome,account}; } return CASSE[scheda]; }
 function editCasse(scheda,field,value){ const r=casseRec(scheda); r[field]=String(value).trim(); saveCassa(); }
+// schede manuali (create dall'utente) unite a quelle auto-rilevate da StoreSmart
+function schedeForList(){ const auto=schedeGestore(); const set=new Set(auto); for(const k in CASSE){ if(CASSE[k]&&CASSE[k].manual) set.add(k); }
+  return [...set].sort((a,b)=>{ const sa=STATE?STATE.days.reduce((x,d)=>x+servitoDay(a,d),0):0, sb=STATE?STATE.days.reduce((x,d)=>x+servitoDay(b,d),0):0; return sb-sa; }); }
+function addSchedaManuale(){ const sc=(document.getElementById('op-new-scheda').value||'').trim(); if(!sc){ alert('Inserisci il numero della scheda.'); return; }
+  const nome=(document.getElementById('op-new-nome').value||'').trim(); const r=casseRec(sc); if(nome) r.nome=nome; r.manual=true;
+  if(!r.account && r.nome && POS){ const m=POS.accounts.find(a=>normName(a.name)===normName(r.nome)); if(m) r.account=m.name; }
+  saveCassa(); document.getElementById('op-new-scheda').value=''; document.getElementById('op-new-nome').value='';
+  renderOperatori(); fillCassaOp(); }
+function delSchedaManuale(sc){ const r=CASSE[sc]; if(!r||!r.manual) return; const hasTurni=(TURNI[sc]||[]).length;
+  if(!confirm(`Eliminare la scheda ${sc}${r.nome?' ('+r.nome+')':''}?${hasTurni?' Ha '+hasTurni+' turni nello storico, verranno eliminati.':''}`)) return;
+  delete CASSE[sc]; delete TURNI[sc]; if(CASSA_OP===sc) CASSA_OP=null; saveCassa(); saveTurni(); renderOperatori(); fillCassaOp(); }
 function turniScheda(s){ return TURNI[s]||[]; }
 function turniAgg(s){ const o={drop:0,monete:0,sospese:0,uta:0,dkv:0,tot:0,n:0}; turniScheda(s).forEach(t=>{ MANUF.forEach(f=>o[f]+=t[f]||0); o.tot+=t.tot||0; o.n++; }); return o; }
 function renderOperatori(){ const el=document.getElementById('op-list'), warn=document.getElementById('cassa-warn'); if(!el) return;
   if(warn){ const miss=[]; if(!STATE) miss.push('StoreSmart'); if(!CLIENTI||!CLIENTI.length) miss.push('anagrafica clienti'); if(!POS) miss.push('POS'); if(!ICAD) miss.push('iCad'); if(!DKV) miss.push('DKV');
     const noTx=STATE&&!STATE.servitoTx; warn.innerHTML=(miss.length?`<div class="warn">⚠ Manca: <b>${miss.join(', ')}</b>. ${(!STATE||!CLIENTI||!CLIENTI.length)?'Servono almeno StoreSmart e anagrafica clienti per rilevare le schede.':''}</div>`:'')+(noTx?`<div class="warn">⚠ Ri-importa <b>StoreSmart</b> e <b>POS</b> per agganciare gli orari (servono ai turni).</div>`:''); }
-  if(!STATE||!CLIENTI||!CLIENTI.length){ el.innerHTML='<p class="muted">Carica StoreSmart e l\'anagrafica clienti per rilevare le schede gestore.</p>'; renderConvalida(); return; }
-  const schede=schedeGestore();
-  if(!schede.length){ el.innerHTML='<p class="muted">Nessuna scheda gestore rilevata.</p>'; renderConvalida(); return; }
+  const schede=schedeForList();
+  if(!schede.length){ el.innerHTML=(!STATE||!CLIENTI||!CLIENTI.length)?'<p class="muted">Carica StoreSmart e l\'anagrafica clienti per rilevare le schede gestore, oppure aggiungine una a mano qui sopra.</p>':'<p class="muted">Nessuna scheda gestore. Aggiungine una a mano qui sopra.</p>'; renderConvalida(); return; }
   const posOpts=acc=>'<option value="">—</option>'+(POS?POS.accounts.map(a=>`<option value="${escapeAttr(a.name)}"${normName(a.name)===normName(acc)?' selected':''}>${escapeHtml(a.name)}</option>`).join(''):'');
+  const days=STATE?STATE.days:[];
   let h='<div class="cassawrap"><table class="reg"><thead><tr><th>N. tessera</th><th style="text-align:left">Nome</th><th style="text-align:left">Account POS</th><th title="servito di periodo, tutte le transazioni">Servito</th><th>POS</th><th title="turni convalidati">Turni</th><th>DROP</th><th>Monete</th><th>Sospese</th><th>UTA</th><th>DKV</th><th title="somma dei TOT dei turni convalidati">Σ TOT turni</th></tr></thead><tbody>';
   const sum={serv:0,pos:0,n:0,drop:0,monete:0,sospese:0,uta:0,dkv:0,tot:0};
   schede.forEach(s=>{ const r=casseRec(s); const clan=!(r.nome||SCHEDE_NOTE[s]);
-    const servPer=STATE.days.reduce((x,d)=>x+servitoDay(s,d),0), posPer=STATE.days.reduce((x,d)=>x+posAccountDay(r.account,d),0); const a=turniAgg(s);
+    const servPer=days.reduce((x,d)=>x+servitoDay(s,d),0), posPer=days.reduce((x,d)=>x+posAccountDay(r.account,d),0); const a=turniAgg(s);
     sum.serv+=servPer; sum.pos+=posPer; sum.n+=a.n; MANUF.forEach(f=>sum[f]+=a[f]); sum.tot+=a.tot;
     h+=`<tr${clan?' style="background:var(--red-bg,rgba(220,38,38,.08))"':''}>
-      <td style="font-weight:700"><a href="#" class="casse-sel" data-s="${s}" title="apri turni">${s}</a>${clan?' <span title="non in anagrafica clienti e non riconosciuta" style="color:var(--red)">⚠</span>':''}</td>
+      <td style="font-weight:700"><a href="#" class="casse-sel" data-s="${s}" title="apri turni">${s}</a>${clan?' <span title="non in anagrafica clienti e non riconosciuta" style="color:var(--red)">⚠</span>':''}${r.manual?` <span title="aggiunta a mano">✎</span> <button class="op-del-sch" data-s="${s}" title="elimina scheda" style="border:none;background:none;cursor:pointer;color:var(--red);font-weight:700">✕</button>`:''}</td>
       <td style="text-align:left"><input class="fld casse-nome" data-s="${s}" value="${escapeAttr(r.nome||'')}" placeholder="${clan?'clandestina?':'nome'}" style="width:11rem"></td>
       <td style="text-align:left"><select class="fld casse-acc" data-s="${s}" style="width:11rem">${posOpts(r.account)}</select></td>
       <td>${fmtEur(servPer)}</td><td>${fmtEur(posPer)}</td><td>${a.n||'—'}</td><td>${fmtEur(a.drop)}</td><td>${fmtEur(a.monete)}</td><td>${fmtEur(a.sospese)}</td><td>${fmtEur(a.uta)}</td><td>${fmtEur(a.dkv)}</td>
       <td style="font-weight:700;color:${Math.abs(a.tot)>0.5?'var(--red)':'var(--text)'}">${a.n?fmtEur(a.tot):'—'}</td></tr>`; });
   h+=`<tr class="base"><td>TOTALE</td><td></td><td></td><td>${fmtEur(sum.serv)}</td><td>${fmtEur(sum.pos)}</td><td>${sum.n}</td><td>${fmtEur(sum.drop)}</td><td>${fmtEur(sum.monete)}</td><td>${fmtEur(sum.sospese)}</td><td>${fmtEur(sum.uta)}</td><td>${fmtEur(sum.dkv)}</td><td style="font-weight:800;color:${Math.abs(sum.tot)>0.5?'var(--red)':'var(--text)'}">${fmtEur(sum.tot)}</td></tr>`;
   h+='</tbody></table></div>'; el.innerHTML=h; saveCassa(); renderConvalida(); }
-function fillCassaOp(){ const sel=document.getElementById('cassa-op'); if(!sel) return; const cur=CASSA_OP; const schede=(STATE&&CLIENTI&&CLIENTI.length)?schedeGestore():[];
+function fillCassaOp(){ const sel=document.getElementById('cassa-op'); if(!sel) return; const cur=CASSA_OP; const schede=schedeForList();
   sel.innerHTML='<option value="">— scegli scheda —</option>'+schede.map(s=>{ const r=CASSE[s]||{}; return `<option value="${s}">${s}${r.nome?' · '+escapeHtml(r.nome):''}</option>`; }).join('');
   if(cur && schede.indexOf(cur)>=0) sel.value=cur; else CASSA_OP=null; renderTurno(); }
 function turnoIni(){ const e=document.getElementById('turno-ini'); return e?e.value:''; }
@@ -1522,7 +1538,8 @@ document.getElementById('import-list').addEventListener('click',e=>{ const b=e.t
 
 // controllo casse
 document.getElementById('op-list').addEventListener('change',e=>{ const n=e.target.closest('.casse-nome'); if(n){ editCasse(n.dataset.s,'nome',n.value); renderOperatori(); fillCassaOp(); return; } const a=e.target.closest('.casse-acc'); if(a){ editCasse(a.dataset.s,'account',a.value); renderOperatori(); if(CASSA_OP===a.dataset.s) renderTurno(); } });
-document.getElementById('op-list').addEventListener('click',e=>{ const l=e.target.closest('.casse-sel'); if(l){ e.preventDefault(); CASSA_OP=l.dataset.s; const sel=document.getElementById('cassa-op'); if(sel) sel.value=l.dataset.s; DRAFT={drop:0,monete:0,sospese:0,uta:0,dkv:0}; renderTurno(); document.getElementById('turno-calc').scrollIntoView({behavior:'smooth',block:'nearest'}); } });
+document.getElementById('op-new-add').addEventListener('click',addSchedaManuale);
+document.getElementById('op-list').addEventListener('click',e=>{ const x=e.target.closest('.op-del-sch'); if(x){ e.preventDefault(); delSchedaManuale(x.dataset.s); return; } const l=e.target.closest('.casse-sel'); if(l){ e.preventDefault(); CASSA_OP=l.dataset.s; const sel=document.getElementById('cassa-op'); if(sel) sel.value=l.dataset.s; DRAFT={drop:0,monete:0,sospese:0,uta:0,dkv:0}; renderTurno(); document.getElementById('turno-calc').scrollIntoView({behavior:'smooth',block:'nearest'}); } });
 document.getElementById('cassa-op').addEventListener('change',e=>{ CASSA_OP=e.target.value||null; DRAFT={drop:0,monete:0,sospese:0,uta:0,dkv:0}; renderTurno(); });
 ['turno-ini','turno-fin'].forEach(id=>document.getElementById(id).addEventListener('change',renderTurno));
 document.getElementById('turno-calc').addEventListener('input',e=>{ const i=e.target.closest('.turno-in'); if(i){ DRAFT[i.dataset.f]=itNum(i.value); updateTurnoTot(); } }); // sul posto (telefono)
