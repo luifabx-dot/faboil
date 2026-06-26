@@ -1116,9 +1116,11 @@ function setDraft(s,f,val){ draftOf(s)[f]=val; saveDrafts(); }
 function toggleStorico(s){ if(STORICO_OPEN.has(s)) STORICO_OPEN.delete(s); else STORICO_OPEN.add(s); renderOperatori(); }
 function renameScheda(s){ const cur=(CASSE[s]&&CASSE[s].nome)||''; const n=prompt('Nome operatore per la scheda '+s+':', cur); if(n!=null){ editCasse(s,'nome',n); renderOperatori(); } }
 function convalidaTurnoRow(s){ const v=rowVals(s); if(!v.hasWin){ alert('Imposta Inizio e Fine validi (Fine dopo Inizio).'); return; } const d=v.d;
+  const conf=turniScheda(s).find(t=> d.ini < t.fin && d.fin > t.ini ); // sovrapposizione (anche parziale)
+  if(conf){ alert(`Periodo già coperto: si sovrappone al turno ${fmtDT(conf.ini)} → ${fmtDT(conf.fin)} di questa scheda. Non puoi convalidare due volte lo stesso periodo (o parte).`); return; }
   const t={id:'T'+(TSEQ++), ini:d.ini, fin:d.fin, drop:d.drop||0,monete:d.monete||0,sospese:d.sospese||0,uta:d.uta||0,dkv:d.dkv||0, servito:v.serv, pos:v.pos, tot:v.tot, convAt:nowISO()};
   TURNI[s]=TURNI[s]||[]; TURNI[s].push(t); saveTurni();
-  DRAFTS[s]={ini:'',fin:'',drop:0,monete:0,sospese:0,uta:0,dkv:0}; saveDrafts(); STORICO_OPEN.add(s); renderOperatori(); }
+  DRAFTS[s]={ini:'',fin:'',drop:0,monete:0,sospese:0,uta:0,dkv:0}; saveDrafts(); renderOperatori(); }
 function delTurno(s,id){ if(!confirm('Eliminare questo turno dallo storico?')) return; TURNI[s]=(TURNI[s]||[]).filter(t=>t.id!==id); saveTurni(); renderOperatori(); }
 function storicoHtml(s){ const r=CASSE[s]||{}; const list=turniScheda(s).slice().sort((a,b)=>(a.ini<b.ini?1:-1));
   let h=`<div style="font-weight:700;margin:.2rem 0 .45rem">Storico turni — ${escapeHtml(r.nome||s)} <span class="muted" style="font-weight:400">(${list.length})</span></div>`;
