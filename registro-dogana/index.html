@@ -1,0 +1,1557 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Faboil — Registro Dogana</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#f0f3f7;--surface:#fff;--surface2:#f5f7fa;--surface3:#edf0f5;
+  --border:#e2e6ef;--border2:#c9d0de;--text:#111827;--muted:#64748b;--muted2:#94a3b8;
+  --accent:#e07b00;--accent-bg:rgba(224,123,0,.09);--blue:#2563eb;--blue-bg:rgba(37,99,235,.09);
+  --red:#dc2626;--red-bg:rgba(220,38,38,.08);--green:#15803d;--green-bg:rgba(21,128,61,.08);
+  --gas:#e8efe2;--ver:#e2eaf3;--gpl:#f3e6ec;
+  --mono:'IBM Plex Mono',monospace;--sans:'Syne',sans-serif;--radius:10px;
+  --shadow:0 1px 4px rgba(0,0,0,.07),0 4px 16px rgba(0,0,0,.04);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{font-size:16px}
+body{min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+.topbar{display:flex;align-items:center;padding:.7rem 1.25rem;background:var(--surface);border-bottom:1.5px solid var(--border);gap:1rem;position:sticky;top:0;z-index:30}
+.logo{font-size:1.1rem;font-weight:800;letter-spacing:-.02em;color:var(--accent)}
+.logo em{color:var(--muted);font-style:normal;font-weight:600;font-size:.72rem;margin-left:.4rem}
+.tabs{display:flex;gap:.3rem;margin-left:auto}
+.tab{background:none;border:1.5px solid transparent;font-family:var(--sans);font-size:.82rem;font-weight:700;padding:.4rem .9rem;border-radius:8px;cursor:pointer;color:var(--muted);transition:all .12s}
+.tab:hover{background:var(--surface2)}
+.tab.on{color:var(--accent);background:var(--accent-bg)}
+.tab:disabled{opacity:.4;cursor:not-allowed}
+.content{padding:1.2rem 1.1rem;max-width:100%;margin:0 auto}
+.page{display:none}
+.page.on{display:block;animation:fadeUp .18s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.sh{margin-bottom:1rem}
+.sh h1{font-size:1.45rem;font-weight:800;letter-spacing:-.02em}
+.sh p{font-size:.78rem;color:var(--muted);font-family:var(--mono);margin-top:.25rem}
+.card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:1.2rem 1.3rem;margin-bottom:1rem;box-shadow:var(--shadow);max-width:760px}
+.card-title{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:.8rem}
+.drop{border:2.5px dashed var(--border2);border-radius:14px;padding:2.6rem 1.5rem;text-align:center;cursor:pointer;transition:all .15s;background:var(--surface2)}
+.drop:hover,.drop.drag{border-color:var(--accent);background:var(--accent-bg)}
+.drop .ic{font-size:2.6rem;display:block;margin-bottom:.6rem}
+.drop h3{font-size:1rem;font-weight:700;margin-bottom:.3rem}
+.drop p{font-size:.8rem;color:var(--muted)}
+.drop b{color:var(--accent)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.7rem}
+.stat{background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:.8rem .9rem}
+.stat .k{font-size:.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:.25rem}
+.stat .v{font-size:1.2rem;font-weight:800;font-family:var(--mono);letter-spacing:-.02em}
+.stat .v small{font-size:.7rem;color:var(--muted);font-weight:400}
+.warn{background:var(--red-bg);border:1.5px solid rgba(220,38,38,.25);color:#991b1b;border-radius:var(--radius);padding:.7rem .9rem;font-size:.8rem;margin-top:.7rem}
+.ok-msg{background:var(--green-bg);border:1.5px solid rgba(21,128,61,.25);color:var(--green);border-radius:var(--radius);padding:.7rem .9rem;font-size:.82rem;font-weight:600;margin-top:.7rem;display:flex;align-items:center;gap:.5rem}
+.poschips{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem}
+.poschip{border:1.5px solid var(--border2);background:var(--surface2);color:var(--muted);border-radius:999px;padding:.35rem .7rem;font-size:.78rem;font-weight:600;cursor:pointer;transition:all .12s}
+.poschip.on{border-color:var(--accent);background:var(--accent-bg);color:var(--text)}
+.btn{font-family:var(--sans);font-size:.85rem;font-weight:700;padding:.55rem 1.1rem;border-radius:9px;border:1.5px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;transition:all .12s}
+.btn:hover{filter:brightness(1.07)}
+.btn.ghost{background:none;color:var(--accent)}
+.btn.sm{font-size:.76rem;padding:.4rem .8rem}
+.btn.danger{border-color:var(--red);color:var(--red);background:none}
+.row-actions{display:flex;gap:.7rem;align-items:center;margin-bottom:.8rem;flex-wrap:wrap}
+.muted{color:var(--muted);font-size:.78rem}
+.toggle{display:inline-flex;border:1.5px solid var(--border2);border-radius:8px;overflow:hidden}
+.toggle button{font-family:var(--sans);font-size:.76rem;font-weight:700;padding:.4rem .9rem;border:none;background:var(--surface);color:var(--muted);cursor:pointer}
+.toggle button.on{background:var(--accent);color:#fff}
+.tbar{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:.8rem .9rem;margin-bottom:.9rem;box-shadow:var(--shadow)}
+.chips{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;margin-bottom:.7rem}
+.chip{font-family:var(--sans);font-size:.78rem;font-weight:700;padding:.35rem .8rem;border-radius:20px;border:1.5px solid var(--border2);background:var(--surface2);color:var(--muted);cursor:pointer;white-space:nowrap;transition:all .12s}
+.chip:hover{border-color:var(--accent)}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip.short{border-color:var(--red)}
+.chip .tot{opacity:.7;font-family:var(--mono);font-weight:400;margin-left:.3rem}
+.chip-add{border-style:dashed;color:var(--accent)}
+.tedit{display:flex;gap:.7rem;align-items:center;flex-wrap:wrap}
+.tedit label{font-size:.72rem;font-weight:700;color:var(--muted)}
+.tedit input.name,.fld{font-family:var(--sans);font-size:.86rem;font-weight:600;padding:.4rem .7rem;border:1.5px solid var(--border2);border-radius:8px}
+.tedit input.name{min-width:260px}
+.tedit input.name:focus,.fld:focus{outline:1.5px solid var(--accent);border-color:var(--accent)}
+.tbadge{font-family:var(--mono);font-size:.8rem;font-weight:600;background:var(--accent-bg);color:var(--accent);padding:.3rem .7rem;border-radius:8px}
+.tbadge.short{background:var(--red-bg);color:var(--red)}
+.formline{display:flex;gap:.7rem;align-items:flex-end;flex-wrap:wrap}
+.formline .f{display:flex;flex-direction:column;gap:.25rem}
+.formline label{font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.tablewrap{overflow-x:hidden;overflow-y:auto;border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);max-height:72vh}
+/* controllo casse: tabelle larghe → scorrimento orizzontale e colonne a larghezza naturale */
+.cassawrap{overflow:auto;-webkit-overflow-scrolling:touch;border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);max-height:72vh}
+.cassawrap table.reg{table-layout:auto;width:auto;min-width:100%}
+.cassawrap table.reg th,.cassawrap table.reg td{white-space:nowrap;overflow:visible;text-overflow:clip;font-size:.74rem;padding:.42rem .55rem}
+.cassawrap table.reg .fld{font-size:.78rem;padding:.32rem .5rem;width:auto}
+#page-cassa .card{max-width:none}                 /* usa tutta la larghezza disponibile */
+#page-cassa .cassawrap{overflow-x:auto}
+#page-cassa .cassawrap table.reg{width:100%}      /* riempi la card, niente barra se c'è spazio */
+#page-cassa .cassawrap table.reg th,#page-cassa .cassawrap table.reg td{padding:.38rem .28rem;font-size:.72rem}
+#page-cassa .cassawrap .fld{padding:.3rem .35rem;font-size:.74rem}
+#page-cassa .cassawrap .casse-acc{width:100%;min-width:6rem}
+#page-cassa .cassawrap .turno-dt{width:100%;min-width:7.6rem}
+#page-cassa .cassawrap .turno-num{width:100%;min-width:2.8rem;max-width:4.6rem}
+#page-cassa .cassawrap .turno-conv{padding:.3rem .45rem !important}
+.turnogrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:.5rem}
+.turnogrid .tcell{display:flex;justify-content:space-between;align-items:center;gap:.5rem;background:var(--surface2);border:1.5px solid var(--border);border-radius:9px;padding:.45rem .65rem;font-size:.84rem}
+.turnogrid .tcell label,.turnogrid .tcell span{color:var(--muted);font-weight:600}
+.turnogrid .tcell input{width:6.4rem;text-align:right}
+.turnogrid .tcell.tot{background:var(--accent-bg);border-color:var(--accent)}
+.turnogrid .tcell.tot span{color:var(--text);font-weight:700}
+table.reg{border-collapse:separate;border-spacing:0;font-family:var(--mono);width:100%;table-layout:fixed}
+table.reg th,table.reg td{padding:.28rem .15rem;text-align:right;border-bottom:1px solid var(--border);border-right:1px solid var(--border);font-size:.68rem;overflow:hidden;text-overflow:ellipsis}
+table.reg col.dc{width:74px}
+table.reg thead th{position:sticky;top:0;background:var(--surface3);font-weight:700;text-align:center;z-index:2;border-bottom:1.5px solid var(--border2);font-size:.64rem;padding:.3rem .1rem}
+table.reg th.gas{background:var(--gas)}table.reg th.ver{background:var(--ver)}table.reg th.gpl{background:var(--gpl)}
+table.reg td.gas{background:rgba(232,239,226,.32)}table.reg td.ver{background:rgba(226,234,243,.32)}table.reg td.gpl{background:rgba(243,230,236,.32)}
+table.reg .datecol{position:sticky;left:0;background:var(--surface2);text-align:center;font-weight:700;z-index:1;border-right:1.5px solid var(--border2);font-size:.66rem}
+table.reg thead .datecol{z-index:3;background:var(--surface3)}
+table.reg .datecol.red{color:var(--red)}
+table.reg .datecol.sat{color:var(--blue)}
+table.reg tbody tr:hover td{filter:brightness(.97)}
+table.reg td.zero{color:var(--muted2)}
+table.reg tr.base td{background:#fff8ef;font-weight:700}
+table.reg tr.base .datecol{background:#fdedd6}
+table.reg td.plus{color:var(--green);font-weight:700;background:var(--green-bg)}
+table.reg td.minus{color:var(--red);font-weight:700;background:var(--red-bg)}
+table.reg input{width:100%;border:none;background:transparent;font-family:var(--mono);font-size:.68rem;text-align:right;padding:.12rem .1rem;border-radius:4px;color:var(--text);-moz-appearance:textfield}
+table.reg input::-webkit-outer-spin-button,table.reg input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+table.reg input::placeholder{color:var(--muted2);font-style:italic;opacity:.7}
+table.reg input:focus{outline:1.5px solid var(--accent);background:#fff}
+table.reg input.has{background:var(--accent-bg);font-weight:600;color:var(--accent)}
+table.reg input.other::placeholder{color:#b08;opacity:.55}
+table.reg td.full{background:rgba(220,38,38,.07)}
+table.reg input.bad{outline:1.5px solid var(--red);background:var(--red-bg)}
+table.reg .resid{display:block;font-size:.55rem;color:var(--muted2);text-align:right;line-height:1.05;padding:.05rem .12rem 0;white-space:nowrap}
+table.reg .resid.z{color:var(--red);opacity:.7}
+.legend{display:flex;gap:1rem;margin:.6rem 0 .5rem;font-size:.72rem;color:var(--muted);flex-wrap:wrap;align-items:center}
+.legend span{display:inline-flex;align-items:center;gap:.35rem}
+.dot{width:11px;height:11px;border-radius:3px;display:inline-block}
+.cl-layout{display:flex;gap:1rem;align-items:flex-start}
+.cl-side{width:330px;flex-shrink:0;position:sticky;top:66px}
+.cl-main{flex:1;min-width:0}
+.cl-filters{display:flex;gap:.3rem;margin:.5rem 0}
+.cl-filters button{flex:1;font-family:var(--sans);font-size:.72rem;font-weight:700;padding:.4rem .3rem;border:1.5px solid var(--border2);background:var(--surface);border-radius:7px;cursor:pointer;color:var(--muted)}
+.cl-filters button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.cl-listbox{border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);max-height:68vh;overflow-y:auto;box-shadow:var(--shadow)}
+.cl-item{display:flex;align-items:center;gap:.5rem;padding:.5rem .7rem;border-bottom:1px solid var(--border);cursor:pointer}
+.cl-item:hover{background:var(--surface2)}
+.cl-item.on{background:var(--accent-bg)}
+.cl-item .nm{flex:1;min-width:0;font-weight:700;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cl-item .sub{font-size:.63rem;color:var(--muted);font-family:var(--mono);font-weight:400}
+@media(max-width:840px){.cl-layout{flex-direction:column}.cl-side{width:100%;position:static}}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(17,24,39,.45);z-index:50;align-items:flex-start;justify-content:center;padding:5vh 1rem}
+.modal{background:var(--surface);border:1.5px solid var(--border2);border-radius:14px;box-shadow:0 12px 48px rgba(0,0,0,.25);width:100%;max-width:480px;padding:1rem;display:flex;flex-direction:column;gap:.6rem}
+.modal-head{display:flex;align-items:center;justify-content:space-between;font-size:1rem}
+.cl-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:1rem 1.1rem;margin-bottom:1rem;box-shadow:var(--shadow)}
+.cl-row{display:flex;gap:.9rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:.6rem}
+.f-lbl{font-size:.64rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:.22rem;display:block}
+.tess-card{border:1.5px solid var(--border);border-radius:var(--radius);padding:.8rem .9rem;margin-bottom:.7rem;background:var(--surface2)}
+.tess-card.susp{opacity:.55;background:repeating-linear-gradient(45deg,var(--surface2),var(--surface2) 10px,#f0e4e4 10px,#f0e4e4 20px)}
+.tablewrap.x{overflow-x:auto}
+table.as-table{table-layout:auto;min-width:100%}
+table.as-table .ascol,table.as-table th.ascol{width:160px;min-width:160px}
+table.as-table td input{min-width:34px}
+table.as-table td.ascell{cursor:pointer}
+table.as-table td.ascell:hover{background:var(--accent-bg);outline:1.5px solid var(--accent)}
+table.as-table td.ascell .addc{color:var(--muted2);opacity:.45}
+table.reg tbody tr.brow td{text-align:center}
+table.reg tbody tr.brow.on td{background:var(--accent-bg)!important}
+table.reg tbody tr.brow:hover td{background:var(--surface2)}
+.tess-head{display:flex;align-items:flex-end;gap:.8rem;margin-bottom:.6rem;flex-wrap:wrap;padding-bottom:.5rem;border-bottom:1px solid var(--border)}
+.wdays{display:flex;gap:.25rem}
+.wd{width:30px;height:30px;border-radius:7px;border:1.5px solid var(--border2);background:var(--surface);font-family:var(--sans);font-weight:700;font-size:.74rem;cursor:pointer;color:var(--muted)}
+.wd.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.wd.red{border-color:#f3b4b4}
+.chk{display:inline-flex;align-items:center;gap:.4rem;font-size:.82rem;font-weight:600;cursor:pointer}
+.badge-tipo{font-size:.58rem;font-weight:800;padding:.1rem .4rem;border-radius:6px;margin-left:.35rem;letter-spacing:.03em}
+.badge-tipo.pre{background:var(--blue-bg);color:var(--blue)}
+.badge-tipo.post{background:var(--green-bg);color:var(--green)}
+.fld.sm{width:96px}
+.empty-state{text-align:center;padding:3rem 1rem;color:var(--muted);border:1.5px dashed var(--border2);border-radius:var(--radius)}
+.empty-state .ic{font-size:2.6rem;display:block;margin-bottom:.5rem;opacity:.5}
+
+/* ===== MOBILE / TELEFONO ===== */
+/* tab bar scorrevole quando non ci stanno (tablet stretti e telefoni) */
+@media(max-width:780px){
+  .topbar{flex-wrap:wrap;padding:.6rem .8rem;gap:.5rem}
+  .tabs{margin-left:0;width:100%;overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:thin;padding-bottom:.15rem}
+  .tabs::-webkit-scrollbar{height:4px}
+  .tab{flex:0 0 auto}
+}
+@media(max-width:640px){
+  html{font-size:15px}
+  .content{padding:.7rem .5rem}
+  .sh h1{font-size:1.2rem}
+  .card{padding:.9rem .8rem}
+  /* tabelle: scroll orizzontale con la colonna DATA congelata */
+  .tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table.reg{table-layout:auto;width:auto;min-width:100%}
+  table.reg th,table.reg td{min-width:46px;font-size:.7rem}
+  table.reg .datecol{min-width:62px}
+  table.reg input{font-size:.74rem}
+  /* tocchi più grandi */
+  .btn{padding:.6rem 1rem;font-size:.85rem}
+  .tab{padding:.45rem .8rem;font-size:.84rem}
+  .fld,.tedit input.name{font-size:16px;padding:.5rem .7rem} /* 16px = niente zoom auto su iOS */
+  .chip{padding:.45rem .85rem}
+  .wd{width:34px;height:34px}
+  /* modale a tutta larghezza */
+  .modal-overlay{padding:2vh .5rem}
+  .formline{gap:.5rem}
+}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="logo">Faboil<em>Registro Dogana</em></div>
+  <div class="tabs">
+    <button class="tab on" data-tab="import">Importazioni</button>
+    <button class="tab" data-tab="rettifiche" id="tab-rettifiche" disabled>Trasferimenti</button>
+    <button class="tab" data-tab="buoni" id="tab-buoni" disabled>Buoni</button>
+    <button class="tab" data-tab="assegnazioni" id="tab-assegnazioni" disabled>Assegnazioni</button>
+    <button class="tab" data-tab="clienti" id="tab-clienti">Clienti</button>
+    <button class="tab" data-tab="ricariche" id="tab-ricariche">Ricariche</button>
+    <button class="tab" data-tab="commercialista" id="tab-commercialista" disabled>Commercialista</button>
+    <button class="tab" data-tab="cassa" id="tab-cassa">Controllo casse</button>
+    <button class="tab" data-tab="registro" id="tab-registro" disabled>Registro</button>
+  </div>
+</div>
+
+<div class="content">
+  <!-- IMPORTAZIONI -->
+  <div class="page on" id="page-import">
+    <div class="sh"><h1>Importazioni</h1><p>trascina un file: lo riconosco da solo</p></div>
+    <div class="card">
+      <div class="card-title">Importa un file</div>
+      <div class="drop" id="drop-any">
+        <span class="ic">📥</span>
+        <h3>Trascina qui un file</h3>
+        <p>oppure <b>clicca per sceglierlo</b> — StoreSmart · Card Smart · iCad · DKV · POS · Clienti (.xlsx)</p>
+      </div>
+      <input type="file" id="file-any" accept=".xlsx,.xls" hidden>
+      <div id="import-feedback"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">File caricati</div>
+      <div id="import-list"></div>
+      <div id="import-result-pos" style="margin-top:.8rem"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Backup / Ripristino</div>
+      <div class="formline">
+        <button class="btn" id="bk-export">⬇ Esporta backup</button>
+        <button class="btn ghost" id="bk-import-btn">⬆ Ripristina backup</button>
+        <input type="file" id="bk-import" accept=".json" hidden>
+      </div>
+      <p class="muted" style="margin-top:.6rem">Salva tutto (StoreSmart, Card Smart, ricariche, clienti, trasferimenti, buoni) in un unico file <code>.json</code>. Utile per spostare i dati o per inviarli in analisi.</p>
+      <div id="bk-result"></div>
+    </div>
+  </div>
+
+  <!-- TRASFERIMENTI -->
+  <div class="page" id="page-rettifiche">
+    <div class="sh"><h1>Trasferimenti interni</h1><p>litri rimessi indietro per pistola/giorno (prodotto entrato senza DAS)</p></div>
+    <div class="row-actions"><span class="muted">Regola d'oro: su ogni cella la somma dei travasi non può superare il valore del registro (coi buoni) di quel giorno.</span></div>
+    <div class="tbar" id="rett-bar"></div>
+    <div class="row-actions"><div class="toggle" id="rett-prod-toggle">
+      <button data-p="GASOLIO" class="on">Gasolio</button><button data-p="VERDE">Verde</button><button data-p="GPL">GPL</button>
+    </div><span class="muted">— scegli il prodotto da modificare; le colonne mostrate sono solo le sue pistole.</span></div>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--gas)"></i> Gasolio</span><span><i class="dot" style="background:var(--ver)"></i> Verde</span><span><i class="dot" style="background:var(--gpl)"></i> GPL</span>
+      <span class="muted">— stai modificando il travaso selezionato. Tooltip cella = grezzo · usato da altri · max.</span>
+    </div>
+    <div id="rett-container"></div>
+  </div>
+
+  <!-- BUONI -->
+  <div class="page" id="page-buoni">
+    <div class="sh"><h1>Buoni cartacei</h1><p>addebiti clienti — sposta le vendite verso il giorno del buono (automatico)</p></div>
+    <div class="card" id="buono-form">
+      <div class="card-title">Nuovo buono</div>
+      <div class="formline">
+        <div class="f"><label>Cliente</label><button type="button" class="fld" id="b-cliente-btn" style="min-width:260px;text-align:left;cursor:pointer">— scegli cliente —</button></div>
+        <div class="f"><label>Tessera</label><select class="fld" id="b-tessera"><option value="">—</option></select></div>
+        <div class="f"><label>Prodotto</label><select class="fld" id="b-prod"><option value="GASOLIO">Gasolio</option><option value="VERDE">Verde</option><option value="GPL">GPL</option></select></div>
+        <div class="f"><label>Data buono</label><select class="fld" id="b-day"></select></div>
+        <div class="f"><label>Litri</label><input class="fld" id="b-litri" type="number" min="0" step="0.01" style="width:100px" placeholder="litri"></div>
+        <div class="f"><label>Prezzo €/L</label><input class="fld" id="b-prezzo" type="number" min="0" step="0.001" style="width:96px"></div>
+        <div class="f"><label>Sconto €/L</label><input class="fld" id="b-sconto" type="number" step="0.001" style="width:96px"></div>
+        <div class="f"><label>Totale €</label><input class="fld" id="b-totale" type="number" min="0" step="0.01" style="width:110px" placeholder="totale"></div>
+        <button class="btn" id="b-add">Aggiungi buono</button>
+      </div>
+      <p class="muted" style="margin-top:.6rem">Priorità prelievo: domeniche/festivi → sabati → giorni normali; dentro la fascia in modo proporzionale, lasciando sempre almeno 100 L su ogni giorno. La regola d'oro non viene mai infranta.</p>
+    </div>
+    <div class="card" id="gen-form">
+      <div class="card-title">Genera buoni automaticamente</div>
+      <div class="formline">
+        <div class="f"><label>Ambito</label><div class="toggle" id="g-scope"><button data-s="ALL" class="on">Tutti</button><button data-s="ONE">Singolo</button><button data-s="GROUP">Gruppo</button></div></div>
+        <div class="f" id="g-one-wrap" style="display:none"><label>Cliente</label><button type="button" class="fld" id="g-cliente-btn" style="min-width:240px;text-align:left;cursor:pointer">— scegli cliente —</button></div>
+        <div class="f"><label>&nbsp;</label><label class="chk"><input type="checkbox" id="g-regen"> Rigenera (sostituisci)</label></div>
+        <button class="btn" id="g-add">Genera</button>
+      </div>
+      <div id="g-group-wrap" style="display:none;margin-top:.6rem">
+        <button class="btn sm ghost" id="g-group-add">+ Aggiungi cliente al gruppo</button>
+        <div class="chips" id="g-group-chips" style="margin-top:.5rem"></div>
+      </div>
+      <p class="muted" style="margin-top:.6rem">Per ogni cliente genera fino al suo <b>Litri max/mese</b>, distribuito sulle sue <b>tessere attive</b> (capienza + giorni ammessi, festivi esclusi se impostato) come rifornimenti vicini al pieno e variati. Le tessere <b>sospese</b> sono saltate.</p>
+    </div>
+    <div class="row-actions" style="margin-top:.3rem">
+      <span class="muted" id="buoni-count" style="margin-right:auto"></span>
+      <button class="btn sm danger" id="b-delall">Elimina tutti i buoni del mese</button>
+    </div>
+    <p class="muted">I rifornimenti si vedono e si modificano nella sezione <b>Assegnazioni</b>.</p>
+  </div>
+
+  <!-- ASSEGNAZIONI -->
+  <div class="page" id="page-assegnazioni">
+    <div class="sh"><h1>Assegnazioni buoni</h1><p>come sono piazzate le erogazioni, per giorno — clic su una cella per modificare/eliminare</p></div>
+    <div class="row-actions">
+      <button type="button" class="btn ghost" id="as-cliente-btn">— scegli cliente —</button>
+      <select id="as-prod" class="fld"><option value="ALL">Tutti i prodotti</option><option value="GASOLIO">Gasolio</option><option value="VERDE">Verde</option><option value="GPL">GPL</option></select>
+      <select id="as-day" class="fld"><option value="ALL">Tutti i giorni</option></select>
+      <span class="muted" id="as-info"></span>
+    </div>
+    <div class="legend">
+      <span class="muted">— griglia <b>tessera × giorno</b>: litri assegnati. Clic su una cella per modificare, <b>0</b> per eliminare. Date rosse=festivi, blu=sabati. Cella rossa = capienza insufficiente.</span>
+    </div>
+    <div id="as-container"></div>
+  </div>
+
+  <!-- CLIENTI -->
+  <div class="page" id="page-clienti">
+    <div class="sh"><h1>Clienti</h1><p>anagrafica per i buoni cartacei — clienti, tessere/veicoli e parametri di consumo</p></div>
+    <div class="cl-layout">
+      <div class="cl-side">
+        <input id="cl-search" class="fld" placeholder="Cerca: nome, ID, tessera, targa…" style="width:100%">
+        <div class="cl-filters" id="cl-filters"></div>
+        <div class="cl-listbox" id="cl-list"></div>
+      </div>
+      <div class="cl-main" id="cl-detail"></div>
+    </div>
+  </div>
+
+  <!-- MODALE SCELTA CLIENTE (buoni) -->
+  <div class="modal-overlay" id="cli-picker">
+    <div class="modal">
+      <div class="modal-head"><b>Scegli cliente</b><div style="display:flex;gap:.5rem"><button class="btn sm ghost" id="cp-clear">Nessuno</button><button class="btn sm ghost" id="cp-close">✕</button></div></div>
+      <input id="cp-search" class="fld" placeholder="Cerca: nome, ID, tessera, targa, P.IVA…" style="width:100%">
+      <div class="cl-filters" id="cp-filters"></div>
+      <div class="cl-listbox" id="cp-list" style="max-height:55vh"></div>
+    </div>
+  </div>
+
+  <!-- RICARICHE -->
+  <div class="page" id="page-ricariche">
+    <div class="sh"><h1>Ricariche prepagati</h1><p>registra una ricarica per un cliente prepagato con generazione automatica — emette ricevuta</p></div>
+    <div class="card" id="ric-form">
+      <div class="card-title">Nuova ricarica</div>
+      <div class="formline">
+        <div class="f"><label>Cliente (PRE + ⚙)</label><button type="button" class="fld" id="ric-cliente-btn" style="min-width:260px;text-align:left;cursor:pointer">— scegli cliente —</button></div>
+        <div class="f"><label>Data</label><input class="fld" id="ric-data" type="date"></div>
+        <div class="f"><label>Importo €</label><input class="fld" id="ric-importo" type="number" min="0" step="0.01" style="width:120px" placeholder="0,00"></div>
+        <button class="btn" id="ric-add">Registra ricarica</button>
+      </div>
+      <p class="muted" style="margin-top:.6rem">Solo clienti <b>prepagati</b> con <b>⚙ generazione automatica</b>. La ricarica aumenta il credito disponibile.</p>
+      <div id="ric-add-result"></div>
+    </div>
+    <div class="row-actions"><span class="muted" id="ric-count"></span></div>
+    <div id="ric-storico"></div>
+  </div>
+
+  <!-- COMMERCIALISTA -->
+  <div class="page" id="page-commercialista">
+    <div class="sh"><h1>Foglio commercialista</h1><p>corrispettivo = vendite − fatturato (per giorno)</p></div>
+    <div class="row-actions">
+      <button class="btn" id="comm-export">⬇ Esporta Excel</button>
+      <span class="muted">Fatturato = Card Smart + iCad + DKV + buoni. <b>Manca solo il POS/contanti</b> (da definire).</span>
+    </div>
+    <div id="comm-container"></div>
+  </div>
+
+  <!-- CONTROLLO CASSE -->
+  <div class="page" id="page-cassa">
+    <div class="sh"><h1>Controllo casse</h1><p>schede gestore (StoreSmart, non clienti) · <b>TOT = Servito − POS − DROP − Monete − Sospese − UTA − DKV</b> (≈0 quadra)</p></div>
+    <div class="card">
+      <div class="card-title">Operatori — turno</div>
+      <div id="cassa-warn"></div>
+      <div class="formline" style="gap:.5rem;align-items:flex-end;flex-wrap:wrap;margin-bottom:.3rem">
+        <div class="f"><label>Nuova scheda</label><input id="op-new-scheda" class="fld" placeholder="es. 4273011" style="width:9rem"></div>
+        <div class="f"><label>Nome</label><input id="op-new-nome" class="fld" placeholder="nome operatore" style="width:13rem"></div>
+        <button class="btn" id="op-new-add">+ Aggiungi scheda</button>
+      </div>
+      <p class="muted" style="margin-bottom:.4rem">Sulla riga di ogni operatore imposti <b>Inizio/Fine</b> del turno, editi <b>DROP/Monete/Sospese/UTA/DKV</b> e <b>✓ Convalidi</b>. Clic sul <b>nome</b> → storico dei suoi turni. Riga rossa = scheda non riconosciuta; <b>✎</b> rinomina; <b>✕</b> elimina (schede aggiunte a mano).</p>
+      <div id="op-list"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Convalida UTA / DKV (totali)</div>
+      <p class="muted">Somma di UTA e DKV inseriti in tutti i turni convalidati, confrontata col totale delle fatture nei file iCad (UTA) e DKV.</p>
+      <div id="cassa-convalida" style="margin-top:.5rem"></div>
+    </div>
+  </div>
+
+  <!-- REGISTRO -->
+  <div class="page" id="page-registro">
+    <div class="sh"><h1>Registro di scarico</h1><p id="reg-sub">letture progressive contatori (litri)</p></div>
+    <div class="row-actions">
+      <div class="toggle" id="reg-toggle">
+        <button data-mode="netto" class="on">Netto (con rettifiche)</button>
+        <button data-mode="grezzo">Grezzo (StoreSmart)</button>
+      </div>
+      <button class="btn" id="export-btn">⬇ Esporta Excel</button>
+      <span class="muted" id="reg-info"></span>
+    </div>
+    <div class="row-actions" style="background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:.6rem .8rem">
+      <span style="font-weight:700;font-size:.85rem">🔒 Cristallizza registro fino al</span>
+      <input type="date" id="cristal-date" class="fld" style="width:170px">
+      <button class="btn sm" id="cristal-set">Blocca</button>
+      <button class="btn sm danger" id="cristal-clear" style="display:none">Sblocca</button>
+      <span class="muted" id="cristal-info"></span>
+    </div>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--gas)"></i> Gasolio</span><span><i class="dot" style="background:var(--ver)"></i> Verde</span><span><i class="dot" style="background:var(--gpl)"></i> GPL</span>
+      <span class="muted">— ogni cella è la lettura cumulata; lo scarico del giorno è la differenza riga su riga.</span>
+    </div>
+    <div id="reg-container"></div>
+  </div>
+</div>
+
+<script>
+const PUMPS = ['G1_1','G1_2','G2_1','G2_2','G3_1','G3_2','G4_1','G4_2','G5_1','G5_2','G6_1','G6_2',
+               'V1_3','V2_3','V3_3','V4_3','V5_3','V6_3','GPL1','GPL2','GPL3','GPL4','GPL5','GPL6'];
+function prodOf(p){ if(!p) return null; if(p.startsWith('GPL')) return 'GPL'; if(p[0]==='V') return 'VERDE'; if(p[0]==='G') return 'GASOLIO'; return null; }
+function prodClass(p){ const x=prodOf(p); return x==='GASOLIO'?'gas':x==='VERDE'?'ver':'gpl'; }
+
+let STATE=null;
+let CARDSMART=null;  // { byDayProd:{day:{prod:litri}}, meta }
+let TRANSFERS=[], CURRENT=null, SEQ=1;
+let BUONI=[], CURBUONO=null, BSEQ=1;
+let TPROD='GASOLIO'; // prodotto visualizzato nella pagina Trasferimenti
+let NETTO={};        // pump->day->scarico netto finale (>=0 garantito)
+let REGBUONI={};     // pump->day->registro coi buoni (senza travasi): tetto dei travasi
+let BRESULT={};      // buonoId -> {placed, short, alloc:{pump:{day:signed}}}
+let REGMODE='netto';
+let CRISTAL='';      // data cristallizzazione (registro cartaceo scritto): giorni <= CRISTAL congelati
+let CRISTALNET={};   // snapshot del netto dei giorni congelati: pump->day->valore (immutabile)
+const EPS=1e-6;
+function isCristal(day){ return CRISTAL && day<=CRISTAL; } // giorno congelato (registro cartaceo già scritto)
+const FLOOR_LT=100; // pavimento: su ogni giorno-sorgente resta sempre almeno 100 L di prodotto
+
+function itNum(v){ if(v==null||v==='') return 0; if(typeof v==='number') return v; let s=String(v).trim().replace(/[^0-9.,-]/g,''); if(s.includes(',')&&s.includes('.')) s=s.replace(/\./g,'').replace(',','.'); else if(s.includes(',')) s=s.replace(',','.'); return parseFloat(s)||0; } // gestisce "1.234,56" (mig.+dec.), "1,566", "1.948"
+function serialToDate(s){ return new Date(Math.round((s-25569)*86400*1000)); }
+function itMonth(s){ const k=String(s).trim().toLowerCase().slice(0,3); const map={gen:1,feb:2,mar:3,apr:4,mag:5,giu:6,lug:7,ago:8,set:9,ott:10,nov:11,dic:12}; return map[k]||0; }
+function cellDay(v){ if(v==null||v==='') return null; if(typeof v==='number'){ return serialToDate(v).toISOString().slice(0,10); } const s=String(v).trim(); let m=s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return `${m[1]}-${m[2]}-${m[3]}`; m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/); if(m) return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`; m=s.match(/^(\d{1,2})\s+([a-zàèéìòù]{3,})\.?\s+(\d{4})/i); if(m){ const mo=itMonth(m[2]); if(mo) return `${m[3]}-${String(mo).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`; } return null; } // "1 giu 2026, 00:00" (resoconto POS)
+function fmtDay(key){ const[y,m,d]=key.split('-'); return `${d}/${m}/${y}`; }
+function fmtInt(n){ return Math.round(n).toLocaleString('it-IT'); }
+function fmt2(n){ return (Math.round(n*100)/100).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function refreshScheda(){ try{ if(CLIENTI&&CLIENTI.length) renderClDetail(); }catch(e){} } // aggiorna il box credito nella scheda cliente
+function grezzo(p,day){ return STATE.daily[p][day]||0; }
+// data+ora "naive" locale come stringa "YYYY-MM-DDTHH:MM" (confrontabile lessicograficamente, usata per i turni)
+function pad2(n){ return String(n).padStart(2,'0'); }
+function serialDT(v){ const ms=Math.round((v-25569)*86400*1000); const d=new Date(ms); return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth()+1)}-${pad2(d.getUTCDate())}T${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`; }
+function cellDT(v){ if(v==null||v==='') return null; if(typeof v==='number') return serialDT(v); const s=String(v).trim();
+  let m=s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})/); if(m) return `${m[1]}-${m[2]}-${m[3]}T${pad2(m[4])}:${m[5]}`;
+  m=s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})[ ,]+(\d{1,2}):(\d{2})/); if(m) return `${m[3]}-${pad2(m[2])}-${pad2(m[1])}T${pad2(m[4])}:${m[5]}`;
+  m=s.match(/^(\d{1,2})\s+([a-zàèéìòù]{3,})\.?\s+(\d{4})[ ,]+(\d{1,2}):(\d{2})/i); if(m){ const mo=itMonth(m[2]); if(mo) return `${m[3]}-${pad2(mo)}-${pad2(m[1])}T${pad2(m[4])}:${m[5]}`; }
+  const day=cellDay(v); return day?day+'T00:00':null; }
+
+// ---- calendario: rossi (domeniche+festivi nazionali), sabati ----
+function easter(y){ const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451); return {mo:Math.floor((h+l-7*m+114)/31), da:((h+l-7*m+114)%31)+1}; }
+function isRed(key){ const[y,mm,dd]=key.split('-').map(Number); const dt=new Date(Date.UTC(y,mm-1,dd)); if(dt.getUTCDay()===0) return true; const md=`${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`; if(['01-01','01-06','04-25','05-01','06-02','08-15','11-01','12-08','12-25','12-26'].includes(md)) return true; const e=easter(y); const pm=new Date(Date.UTC(y,e.mo-1,e.da)+86400000); if(pm.getUTCMonth()===mm-1 && pm.getUTCDate()===dd) return true; return false; }
+function isSat(key){ const[y,mm,dd]=key.split('-').map(Number); return new Date(Date.UTC(y,mm-1,dd)).getUTCDay()===6; }
+function dayCat(key){ return isRed(key)?0:(isSat(key)?1:2); } // 0 rosso, 1 sabato, 2 normale
+function dateClass(key){ return isRed(key)?'red':(isSat(key)?'sat':''); }
+
+// ---- trasferimenti ----
+function curTransfer(){ return TRANSFERS.find(t=>t.id===CURRENT)||null; }
+function cellOf(t,p,day){ return (t.cells[p]&&t.cells[p][day])||0; }
+function trasfTotalAt(p,day){ let s=0; TRANSFERS.forEach(t=>s+=cellOf(t,p,day)); return s; }
+function otherTotalAt(p,day){ let s=0; TRANSFERS.forEach(t=>{ if(t.id!==CURRENT) s+=cellOf(t,p,day); }); return s; }
+function transferTotal(t){ let s=0; for(const p in t.cells) for(const d in t.cells[p]) s+=t.cells[p][d]; return s; }
+function transferTotalProd(t,prod){ let s=0; for(const p in t.cells){ if(prodOf(p)===prod) for(const d in t.cells[p]) s+=t.cells[p][d]; } return s; }
+function transferLabel(t){ const parts=[]; ['GASOLIO','VERDE','GPL'].forEach(pr=>{ const v=transferTotalProd(t,pr); if(v>0) parts.push(`${prodShort(pr)} ${fmtInt(v)}`); }); return parts.length?parts.join(' · '):'0'; }
+function gmt(p,day){ return Math.max(0, grezzo(p,day) - trasfTotalAt(p,day)); } // grezzo meno trasferimenti
+
+// ---- parsing StoreSmart ----
+function parseStoreSmart(rows){
+  let hr=-1; for(let i=0;i<Math.min(rows.length,40);i++){ if(rows[i] && rows[i].some(c=>String(c).trim().toLowerCase()==='pompa')){ hr=i; break; } }
+  if(hr<0) throw new Error("Intestazione non trovata: manca la colonna 'Pompa'. È un report StoreSmart?");
+  const head=rows[hr].map(c=>String(c==null?'':c).trim().toLowerCase());
+  const find=(...names)=>{ for(const n of names){ const k=head.findIndex(h=>h===n); if(k>=0) return k; } for(const n of names){ const k=head.findIndex(h=>h.includes(n)); if(k>=0) return k; } return -1; }; // esatto prima, poi sottostringa
+  const iPag=find('tipo pagamento','pagamento'), iData=find('data rifornimento','data'), iPompa=find('pompa'), iProd=find('prodotto'), iQta=find('quantità','quantita'), iPrezzo=find('prezzo'), iImp=find('importo'), iTess=find('tessera');
+  if([iData,iPompa,iProd,iQta].some(x=>x<0)) throw new Error('Colonne mancanti (servono Data, Pompa, Prodotto, Quantità).');
+  const daily={}; PUMPS.forEach(p=>daily[p]={});
+  const prezzoDay={}, prezzoTs={}; // prezzo dell'ultima erogazione del giorno per prodotto (per gli ADDEBITI CARTACEI)
+  const venditeEur={};             // venditeEur[day][prod] = Σ qta×prezzo per transazione (vendite ESATTE, per il corrispettivo)
+  const servitoTess={};            // servitoTess[tessera][day] = Σ Importo € (per il controllo casse: erogato per scheda gestore)
+  const servitoTx={};              // servitoTx[tessera] = [[ "YYYY-MM-DDTHH:MM", importo ], ...] (per i turni a finestra oraria)
+  let kept=0,skTot=0,skAdb=0,skUnknown=0; const daySet=new Set(); const prodCount={GASOLIO:0,VERDE:0,GPL:0};
+  for(let i=hr+1;i<rows.length;i++){
+    const r=rows[i]; if(!r) continue;
+    const pag=iPag>=0?String(r[iPag]||''):''; if(pag.toLowerCase().includes('totale')){ skTot++; continue; }
+    const pompa=String(r[iPompa]||'').trim(); const prod=String(r[iProd]||'').trim().toUpperCase();
+    if(!pompa && !prod) continue;
+    // servito per scheda (controllo casse): TUTTO l'erogato, anche ADBLUE/pompe non a registro
+    { const sd=cellDay(r[iData]); const st=iTess>=0?String(r[iTess]||'').trim():''; if(sd&&st){ const si=(iImp>=0?itNum(r[iImp]):(iPrezzo>=0?itNum(r[iQta])*itNum(r[iPrezzo]):0)); servitoTess[st]=servitoTess[st]||{}; servitoTess[st][sd]=(servitoTess[st][sd]||0)+si;
+      if(/^\d{7}$/.test(st)){ const sdt=cellDT(r[iData]); if(sdt){ servitoTx[st]=servitoTx[st]||[]; servitoTx[st].push([sdt,si]); } } } } // per i turni (finestra oraria)
+    if(prod==='ADBLUE'||pompa==='ADBL7'){ skAdb++; continue; }
+    const day=cellDay(r[iData]); if(!day||!pompa) continue;
+    if(!PUMPS.includes(pompa)){ skUnknown++; continue; }
+    const q=itNum(r[iQta]); daily[pompa][day]=(daily[pompa][day]||0)+q; daySet.add(day); kept++;
+    const pc=prodOf(pompa); if(pc) prodCount[pc]+=q;
+    const importo=(iImp>=0||iPrezzo>=0) ? (iImp>=0?itNum(r[iImp]):q*itNum(r[iPrezzo])) : 0; // Importo € (lordo) della transazione
+    if(pc && (iImp>=0||iPrezzo>=0)){
+      // vendite esatte: usa l'Importo € di StoreSmart (già arrotondato a transazione); fallback qta×prezzo
+      venditeEur[day]=venditeEur[day]||{}; venditeEur[day][pc]=(venditeEur[day][pc]||0)+importo;
+      if(iPrezzo>=0){ const prezzo=itNum(r[iPrezzo]); const ts=(typeof r[iData]==='number')?r[iData]:(Date.parse(String(r[iData]))||0); prezzoDay[day]=prezzoDay[day]||{}; prezzoTs[day]=prezzoTs[day]||{}; if(!(pc in prezzoTs[day])||ts>=prezzoTs[day][pc]){ prezzoTs[day][pc]=ts; prezzoDay[day][pc]=prezzo; } } }
+  }
+  const days=[...daySet].sort();
+  return { days, daily, prezzoDay, venditeEur, servitoTess, servitoTx, meta:{kept,skTot,skAdb,skUnknown,prodCount, period: days.length? days[0].slice(0,7):'', periodo: days.length? `${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—'} };
+}
+
+// ---- parsing Card Smart (fatturato per cliente/tessera, NON per pistola) ----
+function csNum(v){ return itNum(v); } // stessa logica robusta (numeri italiani con migliaia/decimali)
+function normCSProd(p){ const u=String(p||'').trim().toUpperCase(); if(u==='DIESEL') return 'GASOLIO'; if(u==='BENZINA') return 'VERDE'; if(u==='GPL') return 'GPL'; return null; }
+function parseCardSmart(rows){
+  let hr=-1; for(let i=0;i<Math.min(rows.length,30);i++){ if(rows[i] && rows[i].some(c=>String(c).trim().toLowerCase()==='prodotto')){ hr=i; break; } }
+  if(hr<0) throw new Error("Intestazione non trovata: manca 'Prodotto'. È un file Card Smart (RifornimentiPerPeriodo)?");
+  const head=rows[hr].map(c=>String(c==null?'':c).trim().toLowerCase());
+  const find=(...names)=>{ for(const n of names){ const k=head.findIndex(h=>h===n); if(k>=0) return k; } for(const n of names){ const k=head.findIndex(h=>h.includes(n)); if(k>=0) return k; } return -1; }; // esatto prima, poi sottostringa
+  const iErog=find('data erogazione','erogazione'), iReg=find('data registrazione','registrazione'), iProd=find('prodotto'), iQta=find('quantita','quantità'), iImp=find('importo'), iTess=find('codice tessera','tessera'), iPrz=find('prezzo unitario','prezzo'), iTip=find('tipologia cliente','tipologia');
+  if([iProd,iQta].some(x=>x<0)) throw new Error('Colonne mancanti (servono Prodotto e Quantità).');
+  const byDayProd={}; const byTessera={}; const byDayBase={}; const byDayImp={}; const byDayScontoPunti={}; const litri={GASOLIO:0,VERDE:0,GPL:0}; const imp={GASOLIO:0,VERDE:0,GPL:0};
+  let kept=0,skTot=0,skExtra=0,lastTip=''; const daySet=new Set();
+  for(let i=hr+1;i<rows.length;i++){
+    const r=rows[i]; if(!r) continue;
+    if(iTip>=0){ const t=String(r[iTip]||'').trim(); if(t) lastTip=t; } // celle unite: tieni l'ultima tipologia
+    if(r.some(c=>String(c).toLowerCase().includes('totale'))){ skTot++; continue; }
+    const prodRaw=r[iProd]; if(prodRaw==null||prodRaw==='') continue;
+    const prod=normCSProd(prodRaw); if(!prod){ skExtra++; continue; } // ADBLUE / Metano esclusi
+    const day=cellDay(iErog>=0?r[iErog]:r[iReg]); if(!day) continue;
+    const q=csNum(r[iQta]); const importo=iImp>=0?csNum(r[iImp]):0; const prezzo=iPrz>=0?csNum(r[iPrz]):0; const base=q*prezzo; // base = qta x prezzo (LORDO, senza sconto/magg)
+    byDayProd[day]=byDayProd[day]||{}; byDayProd[day][prod]=(byDayProd[day][prod]||0)+q;
+    byDayBase[day]=(byDayBase[day]||0)+base; byDayImp[day]=(byDayImp[day]||0)+importo; // corrispettivo = base; scorporo = importo - base
+    const tipL=lastTip.toLowerCase(); if(tipL.includes('sconto')||tipL.includes('punti')) byDayScontoPunti[day]=(byDayScontoPunti[day]||0)+importo; // POS-su-fatture (pagate alla pompa)
+    litri[prod]+=q; imp[prod]+=importo; kept++; daySet.add(day);
+    const tess=iTess>=0?String(r[iTess]||'').trim():''; if(tess){ byTessera[tess]=byTessera[tess]||{}; byTessera[tess][day]=(byTessera[tess][day]||0)+importo; }
+  }
+  const days=[...daySet].sort();
+  return { byDayProd, byTessera, byDayBase, byDayImp, byDayScontoPunti, meta:{kept,skTot,skExtra,litri,imp, periodo: days.length?`${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—'} };
+}
+function handleCSFile(file){
+  const res=document.getElementById('import-result-cs'); res.innerHTML='<p class="muted" style="margin-top:1rem">Lettura in corso…</p>';
+  const reader=new FileReader();
+  reader.onload=e=>{ try{
+    const wb=XLSX.read(e.target.result,{type:'array'});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:null});
+    CARDSMART=parseCardSmart(rows); saveCS(); renderCSResult(file.name);
+  }catch(err){ res.innerHTML=`<div class="warn">⚠ ${err.message}</div>`; } };
+  reader.readAsArrayBuffer(file);
+}
+function renderCSResult(fname){
+  const m=CARDSMART.meta;
+  // sottoinsieme del mese del registro StoreSmart, se caricato
+  let subset='';
+  if(STATE){ const per=STATE.meta.period; const sl={GASOLIO:0,VERDE:0,GPL:0}; for(const d in CARDSMART.byDayProd){ if(d.slice(0,7)===per){ for(const pr in CARDSMART.byDayProd[d]) sl[pr]+=CARDSMART.byDayProd[d][pr]; } }
+    subset=`<p class="muted" style="margin-top:.6rem">Di cui nel mese del registro (${per}): Gasolio <b>${fmtInt(sl.GASOLIO)}</b> · Verde <b>${fmtInt(sl.VERDE)}</b> · GPL <b>${fmtInt(sl.GPL)}</b> L (per Data Erogazione).</p>`; }
+  document.getElementById('import-result-cs').innerHTML=`
+    <div class="ok-msg">✓ Importato: <b>${fname}</b></div>
+    <div class="grid" style="margin-top:.9rem">
+      <div class="stat"><div class="k">Periodo (erogazione)</div><div class="v" style="font-size:.92rem">${m.periodo}</div></div>
+      <div class="stat"><div class="k">Righe fatturate</div><div class="v">${m.kept.toLocaleString('it-IT')}</div></div>
+      <div class="stat"><div class="k">Gasolio fatt.</div><div class="v">${fmtInt(m.litri.GASOLIO)} <small>L</small></div></div>
+      <div class="stat"><div class="k">Verde fatt.</div><div class="v">${fmtInt(m.litri.VERDE)} <small>L</small></div></div>
+      <div class="stat"><div class="k">GPL fatt.</div><div class="v">${fmtInt(m.litri.GPL)} <small>L</small></div></div>
+    </div>
+    <p class="muted" style="margin-top:.7rem">Scartate ${m.skTot} righe "Totale", ${m.skExtra} righe ADBLUE/Metano (non carburanti dei 3 prodotti).</p>${subset}`;
+}
+
+// ---- calcolo NETTO: BUONI (su singola pistola) poi TRASFERIMENTI (regola d'oro garantita) ----
+// simulaNetto: motore puro su (buoni, transfers). Segnala violazioni regola d'oro.
+// Ordine: 1) i buoni spostano vendite sul grezzo, una pistola alla volta (più margine per prima);
+//         2) i travasi sottraggono dal registro coi buoni (il loro tetto è il netto post-buoni).
+function simulaNetto(buoni, transfers){
+  // FASE 1 — buoni sul grezzo. I giorni CONGELATI usano lo snapshot (immutabile).
+  const work={}; PUMPS.forEach(p=>{ work[p]={}; STATE.days.forEach(d=>{ work[p][d]= isCristal(d) ? ((CRISTALNET[p]&&CRISTALNET[p][d]!=null)?CRISTALNET[p][d]:grezzo(p,d)) : grezzo(p,d); }); });
+  const tierDays=tier=>STATE.days.filter(d=>dayCat(d)===tier && !isCristal(d)); // sorgenti: SOLO giorni liberi
+  const bres={};
+  for(const b of buoni){
+    const X=b.day; const pumps=PUMPS.filter(p=>prodOf(p)===b.prodotto);
+    if(!pumps.length){ bres[b.id]={placed:0,short:b.litri,alloc:{}}; continue; }
+    if(isCristal(X)){ bres[b.id]={placed:b.litri,short:0,alloc:{},cash:true}; continue; } // buono su giorno congelato: solo cassa, niente litri
+    const alloc={}; let remaining=b.litri;
+    const margin=p=>STATE.days.reduce((s,d)=> isCristal(d)?s : s+Math.max(0,work[p][d]-FLOOR_LT),0); // quanto può cedere una pistola (solo giorni liberi)
+    const ordered=pumps.slice().sort((a,c)=>margin(c)-margin(a)); // più margine per prima
+    for(const p of ordered){
+      if(remaining<=EPS) break;
+      // sposta da 'days' (≠X, liberi) verso X, proporzionale all'estraibile, pavimento 100
+      const drain=days=>{ if(remaining<=EPS) return; const ext={}; let tot=0; days.forEach(d=>{ const e=Math.max(0,work[p][d]-FLOOR_LT); ext[d]=e; tot+=e; }); if(tot<=EPS) return;
+        const amount=Math.min(remaining,tot);
+        days.forEach(d=>{ if(ext[d]>EPS){ const take=amount*ext[d]/tot; work[p][d]-=take; work[p][X]+=take; alloc[p]=alloc[p]||{}; alloc[p][d]=(alloc[p][d]||0)-take; alloc[p][X]=(alloc[p][X]||0)+take; } });
+        remaining-=amount; };
+      drain(tierDays(0).filter(d=>d!==X)); // festivi (liberi)
+      drain(tierDays(1).filter(d=>d!==X)); // sabati (liberi)
+      if(remaining>EPS){ const cap=Math.max(0,grezzo(p,X)-FLOOR_LT); const take=Math.min(remaining,cap); remaining-=take; } // il giorno stesso: vendite proprie di X (nessun movimento)
+      drain(tierDays(2).filter(d=>d!==X)); // altri normali liberi
+    }
+    bres[b.id]={ placed:b.litri-Math.max(0,remaining), short:Math.max(0,remaining), alloc };
+  }
+  // registro coi buoni (senza travasi): è il tetto dei travasi per cella
+  const regBuoni={}; PUMPS.forEach(p=>{ regBuoni[p]={}; STATE.days.forEach(d=>regBuoni[p][d]=work[p][d]); });
+  // FASE 2 — travasi: sottraggono dal registro coi buoni (solo giorni LIBERI; i congelati sono nello snapshot)
+  let transferViol=false;
+  PUMPS.forEach(p=>STATE.days.forEach(d=>{
+    if(isCristal(d)) return; // congelato: niente nuovi travasi
+    let tr=0; transfers.forEach(t=>{ tr+=(t.cells[p]&&t.cells[p][d])||0; });
+    const v=work[p][d]-tr; if(v<-EPS) transferViol=true; work[p][d]=Math.max(0,v);
+  }));
+  let buonoShort=false; const shortByProd={GASOLIO:0,VERDE:0,GPL:0};
+  for(const b of buoni){ const r=bres[b.id]; if(r && r.short>EPS){ buonoShort=true; shortByProd[b.prodotto]=(shortByProd[b.prodotto]||0)+r.short; } }
+  return { work, regBuoni, bres, transferViol, buonoShort, shortByProd, feasible: !transferViol && !buonoShort };
+}
+function recompute(){ const r=simulaNetto(BUONI, TRANSFERS); NETTO=r.work; REGBUONI=r.regBuoni; BRESULT=r.bres; }
+// cristallizza il registro fino a 'date' (incluso): fotografa il netto corrente dei giorni <= date
+function setCristal(date){
+  if(!date){ CRISTAL=''; CRISTALNET={}; }
+  else { recompute(); CRISTALNET={}; PUMPS.forEach(p=>{ CRISTALNET[p]={}; STATE.days.forEach(d=>{ if(d<=date) CRISTALNET[p][d]=(NETTO[p]&&NETTO[p][d]!=null)?NETTO[p][d]:grezzo(p,d); }); }); CRISTAL=date; }
+  saveStore(); recompute();
+  renderRegistro(); renderRettifiche(); renderBuoni(); renderCommercialista(); try{ if(typeof renderAssegnazioni==='function') renderAssegnazioni(); }catch(e){}
+  syncCristalUI();
+}
+function syncCristalUI(){ const di=document.getElementById('cristal-date'), cl=document.getElementById('cristal-clear'), inf=document.getElementById('cristal-info'); if(!di) return; di.value=CRISTAL||''; if(cl) cl.style.display=CRISTAL?'':'none'; if(inf) inf.textContent=CRISTAL?`congelato fino al ${fmtDay(CRISTAL)}`:'nessuna cristallizzazione'; }
+// alloc per giorno (somma pompe) di un buono, dal risultato calcolato
+function buonoDayAlloc(b){ const r=BRESULT[b.id]; const out={}; if(!r) return out; for(const p in r.alloc) for(const d in r.alloc[p]) out[d]=(out[d]||0)+r.alloc[p][d]; return out; }
+function prodNettoDay(prod,d){ return PUMPS.filter(p=>prodOf(p)===prod).reduce((s,p)=>s+(NETTO[p][d]||0),0); }
+
+// ---- (Assegnazioni) ----
+let ASS_CLI='', AS_PROD='ALL', AS_DAY='ALL';
+function selectAssCli(id){ ASS_CLI=id||''; const c=CLIENTI.find(x=>x.id===id); document.getElementById('as-cliente-btn').textContent=c?`${c.ragione||c.id} · ${c.tipo==='PRE'?'PRE':'POST'}`:'— scegli cliente —'; fillAssDayFilter(); renderAssegnazioni(); closeCliPicker(); }
+function fillAssDayFilter(){ const sel=document.getElementById('as-day'); if(!sel||!STATE) return; const cur=sel.value; sel.innerHTML='<option value="ALL">Tutti i giorni</option>'+STATE.days.map(d=>`<option value="${d}">${fmtDay(d)}</option>`).join(''); sel.value=cur||'ALL'; }
+function renderAssegnazioni(){
+  const cont=document.getElementById('as-container'); if(!STATE){ cont.innerHTML='<div class="empty-state">Importa lo StoreSmart.</div>'; return; }
+  const c=CLIENTI.find(x=>x.id===ASS_CLI);
+  if(!c){ cont.innerHTML='<div class="empty-state"><span class="ic">📋</span>Scegli un cliente per vedere le sue erogazioni assegnate.</div>'; document.getElementById('as-info').textContent=''; return; }
+  let buoni=BUONI.filter(b=>b.clienteId===c.id);
+  if(AS_PROD!=='ALL') buoni=buoni.filter(b=>b.prodotto===AS_PROD);
+  document.getElementById('as-info').textContent=`${buoni.length} erogazioni · ${fmtInt(buoni.reduce((s,b)=>s+b.litri,0))} L`;
+  if(!buoni.length){ cont.innerHTML='<div class="empty-state"><span class="ic">🧾</span>Nessuna erogazione per questo cliente (con i filtri scelti).</div>'; return; }
+  const tessere=[...new Set(buoni.map(b=>b.tessera||'—'))];
+  const cell={}, eur={}, shortc={}; tessere.forEach(t=>{cell[t]={};eur[t]={};shortc[t]={};});
+  buoni.forEach(b=>{ const t=b.tessera||'—', r=BRESULT[b.id]||{}; cell[t][b.day]=(cell[t][b.day]||0)+b.litri; eur[t][b.day]=(eur[t][b.day]||0)+(b.totale||0); if(r.short>EPS) shortc[t][b.day]=true; });
+  const days = AS_DAY==='ALL'? STATE.days : STATE.days.filter(d=>d===AS_DAY);
+  let h='<div class="tablewrap x"><table class="reg as-table"><colgroup><col class="ascol">'+days.map(()=>'<col>').join('')+'</colgroup>';
+  h+='<thead><tr><th class="datecol ascol" style="text-align:left">TESSERA</th>'+days.map(d=>`<th class="${dateClass(d)}">${fmtDay(d).slice(0,5)}</th>`).join('')+'</tr></thead><tbody>';
+  tessere.forEach(t=>{ const tn=c.tessere.find(x=>x.id===t); const lab=t+(tn&&tn.targa?' · '+tn.targa:'')+(tn&&tn.descrizione?' · '+tn.descrizione:'');
+    h+=`<tr><td class="datecol ascol" style="text-align:left;font-size:.64rem">${escapeHtml(lab)}</td>`;
+    days.forEach(d=>{ const lit=Math.round((cell[t][d]||0)*100)/100; const bad=shortc[t][d];
+      h+=`<td class="ascell ${lit>0?'has':''} ${bad?'bad':''}" data-at="${escapeAttr(t)}" data-ad="${d}" title="${bad?'capienza insufficiente — ':''}clic per modificare/eliminare">${lit>0?fmt2(lit):'<span class="addc">+</span>'}${lit>0?`<span class="resid">${fmtEur(eur[t][d]||0)}</span>`:''}</td>`; });
+    h+='</tr>'; });
+  h+='</tbody></table></div>';
+  cont.innerHTML=h;
+  cont.querySelectorAll('td.ascell').forEach(td=>td.addEventListener('click',onAsCellClick));
+}
+function onAsCellClick(e){
+  const td=e.currentTarget, t=td.dataset.at, d=td.dataset.ad; const c=CLIENTI.find(x=>x.id===ASS_CLI); if(!c) return;
+  const cur=BUONI.filter(b=>b.clienteId===c.id && (b.tessera||'—')===t && b.day===d && (AS_PROD==='ALL'||b.prodotto===AS_PROD)).reduce((s,b)=>s+b.litri,0);
+  const ans=prompt(`Litri assegnati — tessera ${t}, ${fmtDay(d)}\n(0 o vuoto = elimina l'erogazione)`, cur?String(Math.round(cur*100)/100):'');
+  if(ans===null) return;
+  let val=parseFloat(String(ans).replace(',','.')); if(isNaN(val)||val<0) val=0; val=Math.round(val*100)/100;
+  const existing=BUONI.filter(b=>b.clienteId===c.id && (b.tessera||'—')===t && b.day===d && (AS_PROD==='ALL'||b.prodotto===AS_PROD));
+  // costruisco lo stato candidato (senza toccare BUONI), poi verifico la regola d'oro
+  let cand, isNew=false, prodChk=null;
+  if(val<=0){ const del=new Set(existing); cand=BUONI.filter(b=>!del.has(b)); }
+  else if(existing.length){ const keep=existing[0]; const prezzo=priceOfDay(keep.prodotto,d)||keep.prezzo||0; const drop=new Set(existing.slice(1)); prodChk=keep.prodotto;
+    cand=BUONI.filter(b=>!drop.has(b)).map(b=> b===keep ? {...b, litri:val, totale:Math.round(val*(prezzo-(keep.sconto||0))*100)/100} : b); }
+  else { const tess=c.tessere.find(x=>x.id===t); const prod=(AS_PROD!=='ALL')?AS_PROD:(tess?tess.prodotto:'GASOLIO'); const prezzo=priceOfDay(prod,d)||(tess&&tess.prezzo)||0; const sconto=(tess&&tess.sconto)||0; prodChk=prod;
+    cand=BUONI.concat([{ id:BSEQ, clienteId:c.id, clienteNome:c.ragione, tessera:t==='—'?'':t, prodotto:prod, day:d, litri:val, prezzo, sconto, totale:Math.round(val*(prezzo-sconto)*100)/100, gen:false }]); isNew=true; }
+  // GUARDIA REGOLA D'ORO (solo quando si aggiunge/aumenta; eliminare è sempre permesso)
+  if(val>0){ const sim=simulaNetto(cand, TRANSFERS); if(!sim.feasible){ const miss=sim.shortByProd[prodChk]||Object.values(sim.shortByProd).reduce((a,x)=>a+x,0); alert(`⛔ Impossibile: romperebbe la regola d'oro.\nMancano ${fmtInt(miss)} L di ${prodName(prodChk)} nei giorni disponibili.\nRiduci il valore.`); return; }
+    const dv=corrViolato(cand, sim.work); if(dv){ alert(`⛔ Impossibile: il corrispettivo del ${fmtDay(dv)} andrebbe NEGATIVO (2ª regola d'oro).\nRiduci il valore.`); return; } }
+  BUONI=cand; if(isNew) BSEQ++;
+  saveStore(); recompute(); renderAssegnazioni(); renderRegistro(); renderBuoni(); renderCommercialista(); refreshScheda();
+}
+
+// ---- foglio commercialista (corrispettivo = vendite - fatturato) ----
+// Vendite ESATTE: Σ qta×prezzo per transazione (da venditeEur). Fallback per backup vecchi: litri×prezzo di fine giornata.
+function venditeEurProd(d,P){ // Importo grezzo del prodotto (esatto se c'è venditeEur, altrimenti litri×prezzo)
+  if(STATE && STATE.venditeEur && STATE.venditeEur[d] && STATE.venditeEur[d][P]!=null) return STATE.venditeEur[d][P];
+  return PUMPS.filter(p=>prodOf(p)===P).reduce((a,p)=>a+grezzo(p,d),0)*priceOfDay(P,d); }
+function venditeGrezzeDay(d){ return ['GASOLIO','VERDE','GPL'].reduce((s,P)=>s+venditeEurProd(d,P),0); }
+// Vendite NETTE: Importo grezzo scalato per (litri netti / litri grezzi) → travasi e buoni muovono le vendite.
+function venditeDay(d){ let s=0; ['GASOLIO','VERDE','GPL'].forEach(P=>{ const pumps=PUMPS.filter(p=>prodOf(p)===P);
+    const gz=pumps.reduce((a,p)=>a+grezzo(p,d),0);
+    const nt=pumps.reduce((a,p)=>a+((NETTO[p]&&NETTO[p][d]!=null)?NETTO[p][d]:grezzo(p,d)),0);
+    s += gz>EPS ? venditeEurProd(d,P)*(nt/gz) : 0; }); return s; }
+// Card Smart per corrispettivo: il Prezzo Unitario è già LORDO (= prezzo pompa StoreSmart),
+// verificato sui dati (giugno: 1.948/1.887/0.769 identici a StoreSmart). Nessun ×1.22.
+// base = Σ(Qta×Prezzo) lordo SENZA sconto/magg → corrispettivo. Sconto/magg SCORPORATI e mostrati a parte.
+function cardSmartEuroDay(d){ if(!CARDSMART) return 0; if(CARDSMART.byDayBase) return (CARDSMART.byDayBase[d]||0); if(CARDSMART.byTessera){ let s=0; for(const t in CARDSMART.byTessera){ const v=CARDSMART.byTessera[t][d]; if(v) s+=v; } return s; } return 0; }
+function cardSmartScorporoDay(d){ if(!CARDSMART||!CARDSMART.byDayBase||!CARDSMART.byDayImp) return 0; const base=CARDSMART.byDayBase[d]||0, imp=CARDSMART.byDayImp[d]||0; return imp-base; } // Importo − base = sconto/magg (lordo): + maggiorazione, − sconto
+// Buoni nel corrispettivo: base PIENA = litri×prezzo (come le fatture); lo sconto/magg è scorporato.
+// Guardia: buono manuale senza prezzo (prezzo=0) → base = totale, nessuno scorporo fantasma.
+function buonoBase(b){ return (b.prezzo>0) ? b.litri*b.prezzo : (b.totale||0); }
+function buoniEuroDay(d){ return BUONI.filter(b=>b.day===d).reduce((s,b)=>s+buonoBase(b),0); }
+function buoniScorpDay(d){ return BUONI.filter(b=>b.day===d).reduce((s,b)=>s+((b.totale||0)-buonoBase(b)),0); } // totale−base: +magg / −sconto
+function icadEuroDay(d){ return (ICAD&&ICAD.byDay[d])||0; }
+function dkvEuroDay(d){ return (DKV&&DKV.byDay[d])||0; }
+function fattScorpDay(F,d){ return (F&&F.byDayScorp&&F.byDayScorp[d])||0; } // scorporo iCad/DKV (iCad=0, nessuna colonna sconto)
+function scorpFattDay(d){ return cardSmartScorporoDay(d)+fattScorpDay(ICAD,d)+fattScorpDay(DKV,d); } // scorporo FATTURE (CS+iCad+DKV)
+function commRows(){ return STATE.days.map(d=>{ const vg=venditeGrezzeDay(d), v=venditeDay(d), cs=cardSmartEuroDay(d), scF=scorpFattDay(d), scB=buoniScorpDay(d), ic=icadEuroDay(d), dk=dkvEuroDay(d), bu=buoniEuroDay(d), fatt=cs+ic+dk+bu, corr=v-fatt, pos=posDay(d), scp=scontoAllaPompaDay(d), cont=corr-pos+scp; return { d, vg, v, cs, scF, scB, ic, dk, bu, fatt, corr, pos, scp, cont }; }); }
+// 2ª REGOLA D'ORO: dato un netto candidato (work) e i buoni candidati, ritorna il 1° giorno col
+// corrispettivo (vendite nette − fatturato) < 0, oppure null. (Senza POS il contante = corrispettivo.)
+function corrViolato(buoni, work){
+  for(const d of STATE.days){
+    let v=0; ['GASOLIO','VERDE','GPL'].forEach(P=>{ const pumps=PUMPS.filter(p=>prodOf(p)===P); const gz=pumps.reduce((a,p)=>a+grezzo(p,d),0); const nt=pumps.reduce((a,p)=>a+((work[p]&&work[p][d]!=null)?work[p][d]:grezzo(p,d)),0); v+= gz>EPS?venditeEurProd(d,P)*(nt/gz):0; });
+    const fatt=cardSmartEuroDay(d)+icadEuroDay(d)+dkvEuroDay(d)+buoni.filter(b=>b.day===d).reduce((s,b)=>s+buonoBase(b),0);
+    const corr=v-fatt; const cont = POS ? (corr - posDay(d) + scontoAllaPompaDay(d)) : corr; // con POS: contante reale; senza POS: corr (più stretto)
+    if(cont < -0.005) return d;
+  }
+  return null;
+}
+function renderCommercialista(){
+  if(!STATE) return; const rows=commRows();
+  const tot=rows.reduce((a,r)=>({vg:a.vg+r.vg,v:a.v+r.v,cs:a.cs+r.cs,scF:a.scF+r.scF,scB:a.scB+r.scB,ic:a.ic+r.ic,dk:a.dk+r.dk,bu:a.bu+r.bu,fatt:a.fatt+r.fatt,corr:a.corr+r.corr,pos:a.pos+r.pos,scp:a.scp+r.scp,cont:a.cont+r.cont}),{vg:0,v:0,cs:0,scF:0,scB:0,ic:0,dk:0,bu:0,fatt:0,corr:0,pos:0,scp:0,cont:0});
+  let h='<div class="tablewrap" style="max-height:74vh"><table class="reg"><thead><tr><th class="datecol" style="text-align:left">DATA</th><th title="Vendite grezze StoreSmart (prima di travasi/buoni)">Vendite grezze</th><th title="Vendite nette = seguono il registro (travasi e buoni le muovono)">Vendite nette</th><th>Card Smart</th><th>iCad</th><th>DKV</th><th>Buoni</th><th title="Sconti/maggiorazioni FATTURE — NON nel corrispettivo">Sc./Magg. fatt.</th><th title="Sconti/maggiorazioni BUONI — NON nel corrispettivo">Sc./Magg. buoni</th><th>Tot. fatturato</th><th>Corrispettivo</th><th title="Incassato POS (file resoconto, account di Lusciano) — sola lettura">POS</th><th title="POS-su-fatture pagate alla pompa: iCad non-UTA + Card Smart Sconto/Punti — riaccreditato ai contanti">Sc. pompa</th><th title="Contanti = Corrispettivo − POS + Sc. pompa">Contanti</th></tr></thead><tbody>';
+  rows.forEach(r=>{ h+=`<tr><td class="datecol ${dateClass(r.d)}" style="text-align:left">${fmtDay(r.d)}</td><td style="color:var(--muted)">${fmtEur(r.vg)}</td><td style="font-weight:600">${fmtEur(r.v)}</td><td>${fmtEur(r.cs)}</td><td>${fmtEur(r.ic)}</td><td>${fmtEur(r.dk)}</td><td>${fmtEur(r.bu)}</td><td style="color:var(--muted)">${r.scF?fmtEur(r.scF):'—'}</td><td style="color:var(--muted)">${r.scB?fmtEur(r.scB):'—'}</td><td>${fmtEur(r.fatt)}</td><td style="font-weight:700;color:${r.corr<0?'var(--red)':'var(--text)'}">${fmtEur(r.corr)}</td><td style="color:var(--muted)">${r.pos?fmtEur(r.pos):'—'}</td><td style="color:var(--muted)">${r.scp?fmtEur(r.scp):'—'}</td><td style="font-weight:700;color:${r.cont<-0.005?'var(--red)':'var(--text)'}">${fmtEur(r.cont)}</td></tr>`; });
+  h+=`<tr class="base"><td class="datecol" style="text-align:left">TOTALE</td><td style="color:var(--muted)">${fmtEur(tot.vg)}</td><td>${fmtEur(tot.v)}</td><td>${fmtEur(tot.cs)}</td><td>${fmtEur(tot.ic)}</td><td>${fmtEur(tot.dk)}</td><td>${fmtEur(tot.bu)}</td><td style="color:var(--muted)">${fmtEur(tot.scF)}</td><td style="color:var(--muted)">${fmtEur(tot.scB)}</td><td>${fmtEur(tot.fatt)}</td><td style="font-weight:800">${fmtEur(tot.corr)}</td><td style="color:var(--muted)">${fmtEur(tot.pos)}</td><td style="color:var(--muted)">${fmtEur(tot.scp)}</td><td style="font-weight:800">${fmtEur(tot.cont)}</td></tr>`;
+  h+='</tbody></table></div>';
+  document.getElementById('comm-container').innerHTML=h;
+}
+function exportCommercialista(){
+  if(!STATE) return; const rows=commRows();
+  const aoa=[['DATA','Vendite grezze','Vendite nette','Card Smart','iCad','DKV','Buoni','Sc./Magg. fatture','Sc./Magg. buoni','Tot. fatturato','Corrispettivo','POS','Sc. pompa','Contanti']];
+  rows.forEach(r=>aoa.push([fmtDay(r.d), r.vg, r.v, r.cs, r.ic, r.dk, r.bu, r.scF, r.scB, r.fatt, r.corr, r.pos, r.scp, r.cont].map((x,i)=>i===0?x:Math.round(x*100)/100)));
+  const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:12},{wch:13},{wch:13},{wch:12},{wch:12},{wch:12},{wch:12},{wch:15},{wch:15},{wch:14},{wch:14},{wch:12},{wch:12},{wch:14}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Corrispettivo');
+  XLSX.writeFile(wb,`Commercialista_${STATE.meta.period||'export'}.xlsx`);
+}
+
+// ---- letture progressive ----
+function readingAt(mode){
+  const out={}; const cum={}; PUMPS.forEach(p=>cum[p]=0);
+  STATE.days.forEach(day=>{ out[day]={}; PUMPS.forEach(p=>{ const s=mode==='grezzo'?grezzo(p,day):NETTO[p][day]; cum[p]+=s; out[day][p]=Math.round(cum[p]); }); });
+  return out;
+}
+
+// ---- import ----
+function handleFile(file){
+  const res=document.getElementById('import-result'); res.innerHTML='<p class="muted" style="margin-top:1rem">Lettura in corso…</p>';
+  const reader=new FileReader();
+  reader.onload=e=>{ try{
+    const wb=XLSX.read(e.target.result,{type:'array'});
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:null});
+    STATE=parseStoreSmart(rows);
+    saveSS();
+    loadStore(); recompute();
+    renderImportResult(file.name);
+    ['tab-registro','tab-rettifiche','tab-buoni','tab-assegnazioni','tab-commercialista'].forEach(id=>document.getElementById(id).disabled=false);
+    fillBuonoDays(); renderRettifiche(); renderBuoni(); renderAssegnazioni(); renderRegistro(); renderCommercialista(); syncCristalUI();
+  }catch(err){ res.innerHTML=`<div class="warn">⚠ ${err.message}</div>`; } };
+  reader.readAsArrayBuffer(file);
+}
+function renderImportResult(fname){
+  const m=STATE.meta; const warns=[]; if(m.skUnknown) warns.push(`${m.skUnknown} righe con pistola non riconosciuta (ignorate).`);
+  document.getElementById('import-result').innerHTML=`
+    <div class="ok-msg">✓ Importato: <b>${fname}</b></div>
+    <div class="grid" style="margin-top:.9rem">
+      <div class="stat"><div class="k">Periodo</div><div class="v" style="font-size:.92rem">${m.periodo}</div></div>
+      <div class="stat"><div class="k">Giorni</div><div class="v">${STATE.days.length}</div></div>
+      <div class="stat"><div class="k">Erogazioni valide</div><div class="v">${m.kept.toLocaleString('it-IT')}</div></div>
+      <div class="stat"><div class="k">Gasolio</div><div class="v">${fmtInt(m.prodCount.GASOLIO)} <small>L</small></div></div>
+      <div class="stat"><div class="k">Verde</div><div class="v">${fmtInt(m.prodCount.VERDE)} <small>L</small></div></div>
+      <div class="stat"><div class="k">GPL</div><div class="v">${fmtInt(m.prodCount.GPL)} <small>L</small></div></div>
+    </div>
+    <p class="muted" style="margin-top:.7rem">Scartate ${m.skTot} righe "Totale", ${m.skAdb} righe ADBLUE.${warns.length?' '+warns.join(' '):''}</p>
+    <div style="margin-top:1rem;display:flex;gap:.6rem"><button class="btn" onclick="goTab('rettifiche')">Trasferimenti →</button><button class="btn ghost" onclick="goTab('buoni')">Buoni →</button><button class="btn ghost" onclick="goTab('registro')">Registro →</button></div>`;
+}
+
+// ---- tabella helper ----
+function colgroup(pumps=PUMPS){ let c='<colgroup><col class="dc">'; pumps.forEach(()=>c+='<col>'); return c+'</colgroup>'; }
+function headRow(pumps=PUMPS){ let h='<thead><tr><th class="datecol">DATA</th>'; pumps.forEach(p=>h+=`<th class="${prodClass(p)}">${p}</th>`); return h+'</tr></thead>'; }
+function prodName(pr){ return pr==='GASOLIO'?'Gasolio':pr==='VERDE'?'Verde':'GPL'; }
+function prodShort(pr){ return pr==='GASOLIO'?'Gas':pr==='VERDE'?'Ver':'GPL'; }
+
+// ---- registro ----
+function renderRegistro(){
+  if(!STATE) return; const R=readingAt(REGMODE);
+  document.getElementById('reg-sub').textContent=`PV-2993 · ${STATE.meta.periodo} · baseline contatori = 0`;
+  document.getElementById('reg-info').textContent=`${STATE.days.length} giorni · vista ${REGMODE.toUpperCase()}${CRISTAL?` · 🔒 cristallizzato fino al ${fmtDay(CRISTAL)}`:''}`;
+  let h='<div class="tablewrap"><table class="reg">'+colgroup()+headRow()+'<tbody>';
+  h+=`<tr class="base"><td class="datecol">${baselineLabel()}</td>`; PUMPS.forEach(()=>h+='<td>0</td>'); h+='</tr>';
+  STATE.days.forEach(day=>{ const froz=isCristal(day); h+=`<tr${froz?' style="background:var(--surface3)"':''}><td class="datecol ${dateClass(day)}" title="${froz?'cristallizzato (registro cartaceo scritto)':''}">${froz?'🔒':''}${fmtDay(day)}</td>`;
+    PUMPS.forEach(p=>{ const v=R[day][p]; h+=`<td class="${prodClass(p)} ${v===0?'zero':''}">${fmtInt(v)}</td>`; }); h+='</tr>'; });
+  h+='</tbody></table></div>'; document.getElementById('reg-container').innerHTML=h;
+}
+function baselineLabel(){ if(!STATE.days.length) return '—'; const[y,m,d]=STATE.days[0].split('-').map(Number); const dt=new Date(Date.UTC(y,m-1,d)); dt.setUTCDate(dt.getUTCDate()-1); return `${String(dt.getUTCDate()).padStart(2,'0')}/${String(dt.getUTCMonth()+1).padStart(2,'0')}/${dt.getUTCFullYear()}`; }
+
+// ---- TRASFERIMENTI ----
+function renderRettifiche(){ if(!STATE) return; renderTransferBar(); renderRettGrid(); }
+function renderTransferBar(){
+  const bar=document.getElementById('rett-bar'); let chips='<div class="chips">';
+  TRANSFERS.forEach(t=>chips+=`<button class="chip ${t.id===CURRENT?'on':''}" data-id="${t.id}">${escapeHtml(t.nome)}<span class="tot">${transferLabel(t)}</span></button>`);
+  chips+=`<button class="chip chip-add" id="t-add">+ Nuovo trasferimento</button></div>`;
+  const t=curTransfer();
+  bar.innerHTML=chips+(t?`<div class="tedit"><label>Nome travaso</label><input class="name" id="t-name" value="${escapeAttr(t.nome)}" placeholder="es. Travaso Casaluce gasolio"><span class="tbadge" id="t-badge">${prodName(TPROD)}: ${fmtInt(transferTotalProd(t,TPROD))} L</span><button class="btn sm danger" id="t-del">Elimina travaso</button></div>`:`<p class="muted">Nessun trasferimento. Creane uno per iniziare.</p>`);
+  bar.querySelectorAll('.chip[data-id]').forEach(c=>c.addEventListener('click',()=>{ CURRENT=parseInt(c.dataset.id,10); renderRettifiche(); }));
+  document.getElementById('t-add').addEventListener('click',addTransfer);
+  if(t){ document.getElementById('t-name').addEventListener('input',e=>{ t.nome=e.target.value; saveStore(); renderChipsOnly(); }); document.getElementById('t-del').addEventListener('click',()=>delTransfer(t.id)); }
+}
+function renderChipsOnly(){ TRANSFERS.forEach(t=>{ const c=document.querySelector(`#rett-bar .chip[data-id="${t.id}"]`); if(c) c.innerHTML=`${escapeHtml(t.nome)}<span class="tot">${transferLabel(t)}</span>`; }); }
+function renderRettGrid(){
+  const cont=document.getElementById('rett-container'); const t=curTransfer();
+  if(!t){ cont.innerHTML='<div class="empty-state"><span class="ic">🚚</span>Crea un trasferimento interno per inserire le rettifiche.</div>'; return; }
+  const pumps=PUMPS.filter(p=>prodOf(p)===TPROD);
+  let h='<div class="tablewrap"><table class="reg">'+colgroup(pumps)+headRow(pumps)+'<tbody>';
+  STATE.days.forEach(day=>{ const froz=isCristal(day); h+=`<tr><td class="datecol ${dateClass(day)}">${froz?'🔒 ':''}${fmtDay(day)}</td>`;
+    pumps.forEach(p=>{ const base=Math.round(regBuoniVal(p,day)); const other=otherTotalAt(p,day); const v=cellOf(t,p,day); const max=Math.max(0,base-other); const full=max===0&&base>0; const resid=Math.max(0,max-v);
+      if(froz){ h+=`<td class="${prodClass(p)}" style="opacity:.5" title="${fmtDay(day)} cristallizzato — niente travasi"><input type="number" value="${v||''}" disabled style="cursor:not-allowed"></td>`; return; }
+      h+=`<td class="${prodClass(p)} ${full?'full':''}"><input type="number" min="0" max="${max}" step="1" value="${v||''}" data-p="${p}" data-d="${day}" title="registro coi buoni ${fmtInt(base)} · altri travasi ${fmtInt(other)} · max ${fmtInt(max)}" class="${v>0?'has':''}"><span class="resid ${resid===0?'z':''}" data-r="${p}|${day}">↓${fmtInt(resid)}</span></td>`; });
+    h+='</tr>'; });
+  h+='</tbody></table></div>'; cont.innerHTML=h;
+  cont.querySelectorAll('input').forEach(inp=>inp.addEventListener('input',onRettInput));
+}
+function regBuoniVal(p,day){ return (REGBUONI[p]&&REGBUONI[p][day]!=null)?REGBUONI[p][day]:grezzo(p,day); } // registro coi buoni (tetto travaso)
+function onRettInput(e){
+  const t=curTransfer(); if(!t) return;
+  const inp=e.target, p=inp.dataset.p, day=inp.dataset.d;
+  if(isCristal(day)){ return; } // giorno cristallizzato: niente travasi
+  const base=Math.round(regBuoniVal(p,day)), max=Math.max(0,base-otherTotalAt(p,day));
+  let val=parseInt(inp.value,10); if(isNaN(val)||val<0) val=0;
+  if(val>max){ val=max; inp.value=max||''; inp.classList.add('bad'); setTimeout(()=>inp.classList.remove('bad'),600); }
+  const prev=(t.cells[p]&&t.cells[p][day])||0;
+  if(!t.cells[p]) t.cells[p]={}; if(val>0) t.cells[p][day]=val; else delete t.cells[p][day];
+  // GUARDIA 2ª REGOLA D'ORO: il travaso non deve rendere negativo il corrispettivo
+  if(val>prev){ const sim=simulaNetto(BUONI, TRANSFERS); const dv=corrViolato(BUONI, sim.work);
+    if(dv){ if(prev>0) t.cells[p][day]=prev; else delete t.cells[p][day]; inp.value=prev||''; inp.classList.add('bad'); setTimeout(()=>inp.classList.remove('bad'),900);
+      alert(`⛔ Questo travaso renderebbe NEGATIVO il corrispettivo del ${fmtDay(dv)} (2ª regola d'oro).\nRiducilo.`); return; } }
+  inp.classList.toggle('has',val>0);
+  const resid=Math.max(0,max-val); const rs=inp.parentElement.querySelector('.resid'); if(rs){ rs.textContent='↓'+fmtInt(resid); rs.classList.toggle('z',resid===0); }
+  saveStore(); renderChipsOnly(); const b=document.getElementById('t-badge'); if(b) b.textContent=`${prodName(TPROD)}: ${fmtInt(transferTotalProd(t,TPROD))} L`;
+  recompute(); renderRegistro(); renderCommercialista();
+}
+function addTransfer(){ const t={id:SEQ++, nome:'Trasferimento '+(TRANSFERS.length+1), cells:{}}; TRANSFERS.push(t); CURRENT=t.id; saveStore(); renderRettifiche(); }
+function delTransfer(id){ const t=TRANSFERS.find(x=>x.id===id); if(t&&transferTotal(t)>0 && !confirm(`Eliminare "${t.nome}" (${transferLabel(t)})?`)) return; TRANSFERS=TRANSFERS.filter(x=>x.id!==id); CURRENT=TRANSFERS.length?TRANSFERS[0].id:null; saveStore(); recompute(); renderRettifiche(); renderRegistro(); renderCommercialista(); }
+
+// ---- BUONI ----
+function fillBuonoDays(){ const sel=document.getElementById('b-day'); sel.innerHTML=STATE.days.map(d=>`<option value="${d}">${fmtDay(d)}</option>`).join(''); }
+let BF_Q='', BF_PROD='ALL', BF_DAY='ALL';
+function renderBuoni(){ if(!STATE) return; const cnt=document.getElementById('buoni-count'); if(cnt) cnt.textContent=BUONI.length?`${BUONI.length} buoni nel mese · ${fmtInt(BUONI.reduce((s,b)=>s+b.litri,0))} L`:'Nessun buono.'; }
+function delAllBuoni(){ if(!BUONI.length) return; if(!confirm(`Eliminare TUTTI i ${BUONI.length} buoni del mese? L'operazione non è reversibile.`)) return; BUONI=[]; CURBUONO=null; saveStore(); recompute(); renderBuoni(); renderRegistro(); renderCommercialista(); refreshScheda(); if(typeof renderAssegnazioni==='function') renderAssegnazioni(); }
+function getBuonoClienteId(){ return BUONO_CLI||''; }
+function fillBuonoTessere(){
+  const sel=document.getElementById('b-tessera'); const c=CLIENTI.find(x=>x.id===getBuonoClienteId());
+  if(!c){ sel.innerHTML='<option value="">—</option>'; return; }
+  sel.innerHTML='<option value="">—</option>'+c.tessere.map(t=>`<option value="${escapeAttr(t.id)}">${escapeHtml(t.id+(t.targa?' · '+t.targa:'')+(t.descrizione?' · '+t.descrizione:''))}</option>`).join('');
+}
+function priceOfDay(prod,day){ return (STATE && STATE.prezzoDay && STATE.prezzoDay[day] && STATE.prezzoDay[day][prod]) || 0; }
+function updateBuonoPrezzo(){ const prod=document.getElementById('b-prod').value, day=document.getElementById('b-day').value; const p=priceOfDay(prod,day); if(p){ document.getElementById('b-prezzo').value=p; } syncFromLitri(); }
+function buonoEffPrezzo(){ return (parseFloat(document.getElementById('b-prezzo').value)||0) - (parseFloat(document.getElementById('b-sconto').value)||0); }
+function syncFromLitri(){ const eff=buonoEffPrezzo(); const l=parseFloat(document.getElementById('b-litri').value); if(eff>0 && !isNaN(l)) document.getElementById('b-totale').value=(Math.round(l*eff*100)/100); }
+function syncFromTotale(){ const eff=buonoEffPrezzo(); const tot=parseFloat(document.getElementById('b-totale').value); if(eff>0 && !isNaN(tot)) document.getElementById('b-litri').value=(Math.round(tot/eff*100)/100); }
+function onTesseraPick(){
+  const c=CLIENTI.find(x=>x.id===getBuonoClienteId()); const t=c&&c.tessere.find(x=>x.id===document.getElementById('b-tessera').value);
+  if(t){ if(t.prodotto) document.getElementById('b-prod').value=t.prodotto; if(t.sconto) document.getElementById('b-sconto').value=t.sconto; updateBuonoPrezzo(); }
+}
+// ---- (6) generazione automatica buoni ----
+let GEN_SCOPE='ALL', GEN_GROUP=[];
+function giorniIdx(dayKey){ const[y,m,d]=dayKey.split('-').map(Number); const wd=new Date(Date.UTC(y,m-1,d)).getUTCDay(); return (wd+6)%7; } // 0=Lun..6=Dom
+function genAllowedDays(t){ return STATE.days.filter(d=>{ if(!t.giorni[giorniIdx(d)]) return false; if(t.escludiFestivi && isRed(d)) return false; return true; }); }
+function genForTessera(c,t,target,budget){ // budget: {euro} (tetto credito condiviso) oppure null
+  const cap=t.capienza||0; if(cap<=0||target<=0) return [];
+  const days=genAllowedDays(t); if(!days.length) return [];
+  const lo=cap*0.9, avg=(cap+lo)/2; const n=Math.min(days.length, Math.max(1, Math.round(target/avg)));
+  // giorni sparsi a caso (no ammucchiamento sul primo giorno)
+  const pool=days.slice(); for(let i=pool.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); const tmp=pool[i]; pool[i]=pool[j]; pool[j]=tmp; }
+  const chosen=pool.slice(0,n).sort();
+  const out=[]; let sum=0;
+  for(let k=0;k<n;k++){ const day=chosen[k]; let r=Math.round((lo+Math.random()*(cap-lo))*100)/100; if(Number.isInteger(r)) r+=(Math.floor(Math.random()*98)+1)/100; // mai tondo
+    if(sum+r>target) r=Math.round((target-sum)*100)/100; if(r<=0) break; // non superare il target (litri)
+    const prezzo=priceOfDay(t.prodotto,day)||t.prezzo||0, sconto=t.sconto||0, eff=prezzo-sconto;
+    if(budget){ if(budget.euro<=0.005) break; let tot=Math.round(r*eff*100)/100;
+      if(tot>budget.euro){ if(eff<=0) break; r=Math.round(budget.euro/eff*100)/100; if(Number.isInteger(r)) r=Math.max(0.01,r-0.01); if(r<=0) break; } }
+    sum+=r; const tot=Math.round(r*eff*100)/100; if(budget) budget.euro-=tot;
+    out.push({ id:BSEQ++, clienteId:c.id, clienteNome:c.ragione, tessera:t.id, prodotto:t.prodotto, day, litri:r, prezzo, sconto, totale:tot, gen:true }); }
+  return out;
+}
+function genClientiTarget(){
+  if(GEN_SCOPE==='ONE'){ const c=CLIENTI.find(x=>x.id===GEN_CLI); return c?[c]:[]; }
+  if(GEN_SCOPE==='GROUP'){ return GEN_GROUP.map(id=>CLIENTI.find(c=>c.id===id)).filter(Boolean); }
+  return CLIENTI; // ALL
+}
+// water-filling: distribuisce 'available' fra items per peso (%), cap = demand di ciascuno
+function waterfill(items, available){
+  const alloc={}; items.forEach(i=>alloc[i.key]=0);
+  let remaining=available; let pool=items.filter(i=>i.demand>0 && i.weight>0); let guard=0;
+  while(remaining>0.0001 && pool.length && guard++<2000){
+    const totW=pool.reduce((s,i)=>s+i.weight,0); if(totW<=0) break;
+    let dist=0; const capped=[];
+    for(const i of pool){ const want=i.demand-alloc[i.key]; let give=remaining*i.weight/totW; if(give>=want-1e-9){ give=want; capped.push(i.key); } alloc[i.key]+=give; dist+=give; }
+    remaining-=dist;
+    if(!capped.length) break; // nessuno ha raggiunto il tetto: distribuito tutto
+    const cs=new Set(capped); pool=pool.filter(i=>!cs.has(i.key) && alloc[i.key]<i.demand-1e-9);
+  }
+  return alloc;
+}
+function generateBuoni(){
+  if(!STATE){ alert('Importa prima lo StoreSmart.'); return; }
+  const sel=genClientiTarget(); if(!sel.length){ alert('Seleziona almeno un cliente.'); return; }
+  const clienti=sel.filter(c=>c.genAuto);
+  if(!clienti.length){ alert('Nessuno dei clienti scelti ha la "Generazione automatica" attiva. Attivala nella scheda cliente.'); return; }
+  const regen=document.getElementById('g-regen').checked; const ids=new Set(clienti.map(c=>c.id));
+  if(regen) BUONI=BUONI.filter(b=>!(b.gen && ids.has(b.clienteId)));
+  const already=new Set(BUONI.filter(b=>b.gen).map(b=>b.clienteId));
+  let todo=regen?clienti:clienti.filter(c=>!already.has(c.id));
+  const skipped=clienti.length-todo.length;
+  let nIncompleto=0; todo=todo.filter(c=>{ if(clienteAutoIncompleto(c)){ nIncompleto++; return false; } return true; });
+  if(!todo.length){ alert(`Niente da generare.${skipped?` Saltati ${skipped} già generati.`:''}${nIncompleto?` ⚠ ${nIncompleto} con parametri mancanti.`:''}`); return; }
+  // disponibile per prodotto (litri realmente erogati nel mese)
+  const prodScar={GASOLIO:0,VERDE:0,GPL:0}; PUMPS.forEach(p=>{ const pc=prodOf(p); STATE.days.forEach(d=>prodScar[pc]+=grezzo(p,d)); });
+  // info clienti: tessere attive per prodotto e quota desiderata per tessera
+  const info={}; todo.forEach(c=>{ const act=c.tessere.filter(t=>!t.sospesa && (t.capienza||0)>0); const byProd={}; act.forEach(t=>{ (byProd[t.prodotto]=byProd[t.prodotto]||[]).push(t); }); info[c.id]={act,byProd,share:act.length?(c.consumoMese||0)/act.length:0}; });
+  // per prodotto: se la domanda supera il disponibile, raziona per percentuale (water-filling)
+  const allocCP={}; const rationed=[];
+  ['GASOLIO','VERDE','GPL'].forEach(P=>{
+    const items=[]; todo.forEach(c=>{ const tess=(info[c.id].byProd[P]||[]); if(!tess.length) return; const demand=info[c.id].share*tess.length; if(demand<=0) return; items.push({key:c.id,demand,weight:(c.perc||0)}); });
+    if(!items.length) return;
+    const totDemand=items.reduce((s,i)=>s+i.demand,0), avail=prodScar[P]||0;
+    let alloc; if(totDemand<=avail){ alloc={}; items.forEach(i=>alloc[i.key]=i.demand); } else { alloc=waterfill(items,avail); rationed.push(P); }
+    items.forEach(i=>{ (allocCP[i.key]=allocCP[i.key]||{})[P]=alloc[i.key]||0; });
+  });
+  // genera per tessera in base all'allocato, con tetto credito (prepagati)
+  const newB=[]; let nCli=0, nCredito=0;
+  todo.forEach(c=>{ const ap=allocCP[c.id]||{}; let budget=null; if(c.tipo==='PRE'){ const cr=clienteCredito(c).credito; if(cr<=0.005){ nCredito++; return; } budget={euro:cr}; }
+    let got=false;
+    Object.keys(ap).forEach(P=>{ const tess=info[c.id].byProd[P]||[]; const per=tess.length?ap[P]/tess.length:0; if(per<=0) return; tess.forEach(t=>{ const nb=genForTessera(c,t,per,budget); if(nb.length){ newB.push(...nb); got=true; } }); });
+    if(got) nCli++;
+  });
+  const extra=(skipped?` Saltati ${skipped} già generati.`:'')+(nIncompleto?` ⚠ ${nIncompleto} con parametri mancanti.`:'')+(nCredito?` 💳 ${nCredito} prepagati a credito esaurito.`:'')+(rationed.length?` ⚖️ Prodotto scarso (${rationed.join(', ')}): litri distribuiti per percentuale.`:'');
+  if(!newB.length){ alert(`Niente da generare.${extra}`); return; }
+  BUONI.push(...newB); CURBUONO=newB[newB.length-1].id;
+  saveStore(); recompute(); renderBuoni(); renderRegistro(); renderCommercialista(); refreshScheda();
+  const litri=newB.reduce((s,b)=>s+b.litri,0);
+  alert(`Generati ${newB.length} buoni per ${nCli} clienti, ${fmtInt(litri)} L.${extra}`);
+}
+function renderGenScope(){
+  document.getElementById('g-one-wrap').style.display=GEN_SCOPE==='ONE'?'':'none';
+  document.getElementById('g-group-wrap').style.display=GEN_SCOPE==='GROUP'?'':'none';
+  if(GEN_SCOPE==='GROUP') renderGenGroup();
+}
+function renderGenGroup(){ const el=document.getElementById('g-group-chips'); el.innerHTML=GEN_GROUP.map(id=>{ const c=CLIENTI.find(x=>x.id===id); return `<button class="chip on" data-rid="${escapeAttr(id)}">${escapeHtml(c?c.ragione:id)} ✕</button>`; }).join('')||'<span class="muted">Nessun cliente nel gruppo.</span>';
+  el.querySelectorAll('[data-rid]').forEach(b=>b.addEventListener('click',()=>{ GEN_GROUP=GEN_GROUP.filter(x=>x!==b.dataset.rid); renderGenGroup(); })); }
+function addBuono(){
+  const cliId=getBuonoClienteId(), tess=document.getElementById('b-tessera').value;
+  const prod=document.getElementById('b-prod').value, day=document.getElementById('b-day').value;
+  const litri=parseFloat(document.getElementById('b-litri').value);
+  if(!day || isNaN(litri) || litri<=0){ alert('Inserisci almeno data e litri (> 0).'); return; }
+  const cli=CLIENTI.find(x=>x.id===cliId);
+  const b={ id:BSEQ, clienteId:cliId||'', clienteNome: cli?cli.ragione:'', tessera:tess||'', prodotto:prod, day, litri,
+    prezzo:parseFloat(document.getElementById('b-prezzo').value)||0, sconto:parseFloat(document.getElementById('b-sconto').value)||0, totale:parseFloat(document.getElementById('b-totale').value)||0 };
+  // GUARDIA 1ª REGOLA D'ORO: il buono deve poter essere piazzato per intero
+  const sim=simulaNetto(BUONI.concat([b]), TRANSFERS);
+  if(!sim.feasible){ const miss=sim.shortByProd[prod]||0; alert(`⛔ Impossibile: il buono romperebbe la regola d'oro.\nMancano ${fmtInt(miss)} L di ${prodName(prod)} nei giorni disponibili per spostare le vendite.\nRiduci i litri o scegli un altro giorno.`); return; }
+  // GUARDIA 2ª REGOLA D'ORO: il corrispettivo non deve andare negativo
+  const dv=corrViolato(BUONI.concat([b]), sim.work);
+  if(dv){ alert(`⛔ Impossibile: il corrispettivo del ${fmtDay(dv)} andrebbe NEGATIVO (2ª regola d'oro).\nRiduci i litri o scegli un altro giorno.`); return; }
+  BSEQ++; BUONI.push(b); CURBUONO=b.id;
+  ['b-litri','b-totale'].forEach(id=>document.getElementById(id).value='');
+  saveStore(); recompute(); renderBuoni(); renderRegistro(); renderCommercialista(); refreshScheda();
+}
+function delBuono(id){ const b=BUONI.find(x=>x.id===id); if(b && !confirm(`Eliminare il buono ${b.prodotto} ${fmtDay(b.day)} di ${fmtInt(b.litri)} L?`)) return; BUONI=BUONI.filter(x=>x.id!==id); CURBUONO=BUONI.length?BUONI[0].id:null; saveStore(); recompute(); renderBuoni(); renderRegistro(); renderCommercialista(); refreshScheda(); if(typeof renderAssegnazioni==='function') renderAssegnazioni(); }
+
+// ---- persistenza ----
+function storeKey(){ return 'faboil_reg_'+(STATE?STATE.meta.period:''); }
+function saveStore(){ try{ localStorage.setItem(storeKey(), JSON.stringify({seq:SEQ,current:CURRENT,transfers:TRANSFERS,bseq:BSEQ,curbuono:CURBUONO,buoni:BUONI,cristal:CRISTAL,cristalnet:CRISTALNET})); }catch(e){} }
+function loadStore(){ TRANSFERS=[];CURRENT=null;SEQ=1;BUONI=[];CURBUONO=null;BSEQ=1;CRISTAL='';CRISTALNET={}; try{ const s=localStorage.getItem(storeKey()); if(s){ const o=JSON.parse(s); TRANSFERS=o.transfers||[]; SEQ=o.seq||(TRANSFERS.length+1); CURRENT=o.current!=null?o.current:(TRANSFERS[0]&&TRANSFERS[0].id); BUONI=o.buoni||[]; BSEQ=o.bseq||(BUONI.length+1); CURBUONO=o.curbuono!=null?o.curbuono:(BUONI[0]&&BUONI[0].id); CRISTAL=o.cristal||''; CRISTALNET=o.cristalnet||{}; } }catch(e){} }
+
+// ---- persistenza file importati (StoreSmart / Card Smart) ----
+function saveSS(){ try{ localStorage.setItem('faboil_ss', JSON.stringify(STATE)); }catch(e){} }
+function saveCS(){ try{ localStorage.setItem('faboil_cs', JSON.stringify(CARDSMART)); }catch(e){} }
+
+// ---- iCad / DKV (fatturazione) ----
+let ICAD=null, DKV=null;
+function parseFatt(rows, dataNames, impNames, clienteNames){
+  if(!rows.length) throw new Error('File vuoto.');
+  const head=rows[0].map(c=>String(c==null?'':c).trim().toLowerCase());
+  const find=(...n)=>{ for(const x of n){ const k=head.findIndex(h=>h===x); if(k>=0) return k; } for(const x of n){ const k=head.findIndex(h=>h.includes(x)); if(k>=0) return k; } return -1; }; // esatto prima, poi sottostringa
+  const iData=find(...dataNames), iImp=find(...impNames), iNet=find('netto'); // iNet: DKV ha colonna Netto (=Importo+sconto/magg); iCad no
+  if(iData<0||iImp<0) throw new Error('Colonne mancanti (data / importo).');
+  const wantUta=!!clienteNames; const iCli=wantUta?find(...clienteNames):-1; // iCad: scorporo UTA (incassate a parte, non POS)
+  const byDay={}, byDayScorp={}, byDayNonUta={}; let n=0, nUta=0; const dset=new Set();
+  for(let i=1;i<rows.length;i++){ const r=rows[i]; if(!r) continue; const d=cellDay(r[iData]); if(!d) continue; const base=csNum(r[iImp]); byDay[d]=(byDay[d]||0)+base; if(iNet>=0){ byDayScorp[d]=(byDayScorp[d]||0)+(csNum(r[iNet])-base); } // scorporo = Netto-Importo (+magg/-sconto)
+    if(wantUta){ const isUta = iCli>=0 ? /\buta\b/i.test(String(r[iCli]||'')) : r.some(c=>/\buta\b/i.test(String(c||''))); if(isUta) nUta++; else byDayNonUta[d]=(byDayNonUta[d]||0)+base; } // non-UTA = incassate alla pompa con POS
+    n++; dset.add(d); }
+  const days=[...dset].sort();
+  return { byDay, byDayScorp, byDayNonUta, meta:{ n, nUta, tot:Object.values(byDay).reduce((a,b)=>a+b,0), nonUta:Object.values(byDayNonUta).reduce((a,b)=>a+b,0), scorp:Object.values(byDayScorp).reduce((a,b)=>a+b,0), periodo: days.length?`${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—' } };
+}
+function handleFattFile(file, kind){
+  const id=kind==='ICAD'?'import-result-icad':'import-result-dkv';
+  const res=document.getElementById(id); res.innerHTML='<p class="muted" style="margin-top:1rem">Lettura in corso…</p>';
+  const reader=new FileReader();
+  reader.onload=e=>{ try{ const wb=XLSX.read(e.target.result,{type:'array'}); const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:null});
+    let parsed; if(kind==='ICAD'){ parsed=parseFatt(rows,['data transazione','data'],['importo transazione','importo fattura','importo'],['cliente','ragione sociale','ragione','denominazione','intestatario']); ICAD=parsed; localStorage.setItem('faboil_icad',JSON.stringify(ICAD)); }
+    else { parsed=parseFatt(rows,['data'],['importo']); DKV=parsed; localStorage.setItem('faboil_dkv',JSON.stringify(DKV)); }
+    const utaInfo = kind==='ICAD' ? ` · di cui non-UTA (alla pompa) <b>${fmtEur(parsed.meta.nonUta)}</b>${parsed.meta.nUta?` · ${parsed.meta.nUta} righe UTA escluse`:''}` : '';
+    res.innerHTML=`<div class="ok-msg">✓ Importato: <b>${file.name}</b></div><p class="muted" style="margin-top:.5rem">Periodo ${parsed.meta.periodo} · ${parsed.meta.n} righe · ${fmtEur(parsed.meta.tot)} fatturati${utaInfo}.</p>`;
+    renderCommercialista();
+  }catch(err){ res.innerHTML=`<div class="warn">⚠ ${err.message}</div>`; } };
+  reader.readAsArrayBuffer(file);
+}
+// ---- POS (resoconto vendite: incassato POS per operatore/account) ----
+// Sola lettura: il POS è un dato di fatto, non si modifica a mano.
+// Il file mescola Lusciano + Casaluce: l'utente sceglie quali account sono di Lusciano.
+let POS=null, POSLUS=null; // POS: {byAccount, accounts, meta}; POSLUS: array nomi account di Lusciano (null = tutti)
+function parsePos(rows){
+  let hr=-1; for(let i=0;i<Math.min(rows.length,40);i++){ const r=rows[i]; if(r && r.some(c=>String(c==null?'':c).trim().toLowerCase()==='account')){ hr=i; break; } }
+  if(hr<0) throw new Error("Intestazione non trovata: manca 'Account'. È il file resoconto vendite POS?");
+  const head=rows[hr].map(c=>String(c==null?'':c).trim().toLowerCase());
+  const find=(...names)=>{ for(const n of names){ const k=head.findIndex(h=>h===n); if(k>=0) return k; } for(const n of names){ const k=head.findIndex(h=>h.includes(n)); if(k>=0) return k; } return -1; };
+  const iData=find('data','data transazione','data operazione','data vendita'), iAcc=find('account'), iImp=find('prezzo (lordo)','importo lordo','lordo','importo','totale','total','ammontare','prezzo');
+  if(iData<0||iAcc<0||iImp<0) throw new Error(`Colonne mancanti (Data / Account / Importo). Trovate: ${head.filter(Boolean).join(', ')}`);
+  const byAccount={}; const posTx={}; const dset=new Set(); let n=0;
+  for(let i=hr+1;i<rows.length;i++){ const r=rows[i]; if(!r) continue; const acc=String(r[iAcc]==null?'':r[iAcc]).trim(); if(!acc) continue; const d=cellDay(r[iData]); if(!d) continue; const eur=csNum(r[iImp]); byAccount[acc]=byAccount[acc]||{}; byAccount[acc][d]=(byAccount[acc][d]||0)+eur; n++; dset.add(d);
+    const dt=cellDT(r[iData]); if(dt){ posTx[acc]=posTx[acc]||[]; posTx[acc].push([dt,eur]); } } // per i turni (finestra oraria)
+  const accounts=Object.keys(byAccount).map(a=>({name:a, tot:Object.values(byAccount[a]).reduce((x,y)=>x+y,0)})).sort((a,b)=>b.tot-a.tot);
+  const days=[...dset].sort();
+  return { byAccount, posTx, accounts, meta:{ n, tot:accounts.reduce((s,a)=>s+a.tot,0), periodo: days.length?`${fmtDay(days[0])} → ${fmtDay(days[days.length-1])}`:'—' } };
+}
+// Lusciano = account abbinato a una scheda gestore nel controllo casse; finché non abbini nulla, tutti.
+function posSel(name){ let any=false; for(const k in CASSE){ const a=CASSE[k]&&CASSE[k].account; if(a){ any=true; if(normName(a)===normName(name)) return true; } } return !any; }
+function posDay(d){ if(!POS) return 0; let s=0; for(const a of POS.accounts){ if(posSel(a.name)) s+=(POS.byAccount[a.name][d]||0); } return s; }
+function savePos(){ if(POS) localStorage.setItem('faboil_pos',JSON.stringify(POS)); if(POSLUS) localStorage.setItem('faboil_poslus',JSON.stringify(POSLUS)); }
+function togglePosAcc(name){ if(!POS) return; if(!POSLUS) POSLUS=POS.accounts.map(a=>a.name); const i=POSLUS.indexOf(name); if(i>=0) POSLUS.splice(i,1); else POSLUS.push(name); savePos(); renderPosResult(); renderCommercialista(); }
+function handlePosFile(file){
+  const res=document.getElementById('import-result-pos'); res.innerHTML='<p class="muted" style="margin-top:1rem">Lettura in corso…</p>';
+  const reader=new FileReader();
+  reader.onload=e=>{ try{ const wb=XLSX.read(e.target.result,{type:'array'}); const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:null});
+    POS=parsePos(rows); POSLUS=POS.accounts.map(a=>a.name); savePos(); renderPosResult(file.name); renderCommercialista();
+  }catch(err){ res.innerHTML=`<div class="warn">⚠ ${err.message}</div>`; } };
+  reader.readAsArrayBuffer(file);
+}
+function renderPosResult(fname){
+  if(!POS){ return; } const m=POS.meta;
+  const head = fname ? `<div class="ok-msg">✓ Importato: <b>${escapeHtml(fname)}</b></div>` : `<div class="ok-msg">✓ POS ripristinato</div>`;
+  document.getElementById('import-result-pos').innerHTML=`${head}
+    <p class="muted" style="margin-top:.5rem">Periodo ${m.periodo} · ${m.n} transazioni · totale file ${fmtEur(m.tot)} · ${POS.accounts.length} account. Gli account si abbinano alle schede gestore in <b>Controllo casse</b> (Casaluce escluso da sé).</p>`;
+}
+// sconto-alla-pompa (POS-su-fatture): iCad non-UTA + Card Smart tipologia Sconto/Punti. NON abbassa i contanti.
+function icadNonUtaDay(d){ return (ICAD&&ICAD.byDayNonUta&&ICAD.byDayNonUta[d])||0; }
+function cardSmartScontoPuntiDay(d){ return (CARDSMART&&CARDSMART.byDayScontoPunti&&CARDSMART.byDayScontoPunti[d])||0; }
+function scontoAllaPompaDay(d){ return icadNonUtaDay(d)+cardSmartScontoPuntiDay(d); }
+
+// ---- CONTROLLO CASSE (per TURNO: TOT = Servito − POS − DROP − Monete − Sospese − UTA − DKV) ----
+// Scheda gestore = tessera (7 cifre) in StoreSmart e NON in anagrafica clienti (estesoL).
+// Turno = scheda + finestra [Inizio, Fine) (anche a cavallo di mezzanotte); convalidato → storico.
+let CASSE={};                // CASSE[scheda]={nome,account,manual?}
+let TURNI={}, TSEQ=1;        // TURNI[scheda]=[{id,ini,fin,drop,monete,sospese,uta,dkv,servito,pos,tot,convAt}]
+let DRAFTS={};               // DRAFTS[scheda]={ini,fin,drop,monete,sospese,uta,dkv} — turno in lavorazione per riga
+const STORICO_OPEN=new Set();// schede con lo storico espanso
+const MANUF=['drop','monete','sospese','uta','dkv'];
+const SCHEDE_NOTE={ '4273001':'NICOLA VITALE','4273002':'FABIO BLANDINI','4273003':'NICOLA MOTTOLA','4273007':'NICOLA DI GENNARO','4273008':'GIUSEPPE ZAMPELLA','4273009':'ALESSANDRO VERNETTI','4273013':'ANTONINO NOTARO','4273014':'CANTILE','4273015':'RICCARDO CARMINE','4273016':'BRUNO CIPULLO' };
+function loadCassa(){ try{ CASSE=JSON.parse(localStorage.getItem('faboil_casse')||'{}')||{}; }catch(e){ CASSE={}; } try{ const o=JSON.parse(localStorage.getItem('faboil_turni')||'null'); if(o){ TURNI=o.turni||{}; TSEQ=o.seq||1; } }catch(e){} try{ DRAFTS=JSON.parse(localStorage.getItem('faboil_drafts')||'{}')||{}; }catch(e){ DRAFTS={}; } }
+function saveCassa(){ try{ localStorage.setItem('faboil_casse', JSON.stringify(CASSE)); }catch(e){} }
+function saveTurni(){ try{ localStorage.setItem('faboil_turni', JSON.stringify({turni:TURNI,seq:TSEQ})); }catch(e){} }
+function saveDrafts(){ try{ localStorage.setItem('faboil_drafts', JSON.stringify(DRAFTS)); }catch(e){} }
+function draftOf(s){ if(!DRAFTS[s]) DRAFTS[s]={ini:'',fin:'',drop:0,monete:0,sospese:0,uta:0,dkv:0}; return DRAFTS[s]; }
+function normName(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,' '); }
+function fmtDT(s){ if(!s) return '—'; const m=String(s).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/); return m?`${m[3]}/${m[2]} ${m[4]}:${m[5]}`:s; }
+function servitoDay(scheda,d){ if(!STATE||!STATE.servitoTess||!scheda) return 0; const t=STATE.servitoTess[scheda]; return (t&&t[d])||0; }
+function posAccountDay(account,d){ if(!POS||!account) return 0; for(const a of POS.accounts){ if(normName(a.name)===normName(account)) return (POS.byAccount[a.name][d])||0; } return 0; }
+function servitoWindow(scheda,ini,fin){ const tx=STATE&&STATE.servitoTx&&STATE.servitoTx[scheda]; if(!tx||!ini||!fin) return 0; let s=0; for(let i=0;i<tx.length;i++){ const t=tx[i][0]; if(t>=ini && t<fin) s+=tx[i][1]; } return s; }
+function posWindow(account,ini,fin){ if(!POS||!POS.posTx||!account||!ini||!fin) return 0; let s=0; for(const a in POS.posTx){ if(normName(a)===normName(account)){ const arr=POS.posTx[a]; for(let i=0;i<arr.length;i++){ const t=arr[i][0]; if(t>=ini&&t<fin) s+=arr[i][1]; } } } return s; }
+function clientiTessSet(){ const s=new Set(); (CLIENTI||[]).forEach(c=>(c.tessere||[]).forEach(t=>{ if(t&&t.id) s.add(String(t.id).trim()); })); return s; }
+function schedeGestore(){ if(!STATE||!STATE.servitoTess) return []; const cli=clientiTessSet();
+  return Object.keys(STATE.servitoTess).filter(t=>/^\d{7}$/.test(t) && !cli.has(t)).sort((a,b)=>{ const sa=STATE.days.reduce((x,d)=>x+servitoDay(a,d),0), sb=STATE.days.reduce((x,d)=>x+servitoDay(b,d),0); return sb-sa; }); }
+function casseRec(scheda){ if(!CASSE[scheda]){ const nome=SCHEDE_NOTE[scheda]||''; let account=''; if(nome&&POS){ const m=POS.accounts.find(a=>normName(a.name)===normName(nome)); if(m) account=m.name; } CASSE[scheda]={nome,account}; } return CASSE[scheda]; }
+function editCasse(scheda,field,value){ const r=casseRec(scheda); r[field]=String(value).trim(); saveCassa(); }
+// schede manuali (create dall'utente) unite a quelle auto-rilevate da StoreSmart
+function schedeForList(){ const auto=schedeGestore(); const set=new Set(auto); for(const k in CASSE){ if(CASSE[k]&&CASSE[k].manual) set.add(k); }
+  return [...set].sort((a,b)=>{ const sa=STATE?STATE.days.reduce((x,d)=>x+servitoDay(a,d),0):0, sb=STATE?STATE.days.reduce((x,d)=>x+servitoDay(b,d),0):0; return sb-sa; }); }
+function addSchedaManuale(){ const sc=(document.getElementById('op-new-scheda').value||'').trim(); if(!sc){ alert('Inserisci il numero della scheda.'); return; }
+  const nome=(document.getElementById('op-new-nome').value||'').trim(); const r=casseRec(sc); if(nome) r.nome=nome; r.manual=true;
+  if(!r.account && r.nome && POS){ const m=POS.accounts.find(a=>normName(a.name)===normName(r.nome)); if(m) r.account=m.name; }
+  saveCassa(); document.getElementById('op-new-scheda').value=''; document.getElementById('op-new-nome').value='';
+  renderOperatori(); }
+function delSchedaManuale(sc){ const r=CASSE[sc]; if(!r||!r.manual) return; const hasTurni=(TURNI[sc]||[]).length;
+  if(!confirm(`Eliminare la scheda ${sc}${r.nome?' ('+r.nome+')':''}?${hasTurni?' Ha '+hasTurni+' turni nello storico, verranno eliminati.':''}`)) return;
+  delete CASSE[sc]; delete TURNI[sc]; delete DRAFTS[sc]; STORICO_OPEN.delete(sc); saveCassa(); saveTurni(); saveDrafts(); renderOperatori(); }
+function turniScheda(s){ return TURNI[s]||[]; }
+function turniAgg(s){ const o={drop:0,monete:0,sospese:0,uta:0,dkv:0,tot:0,n:0}; turniScheda(s).forEach(t=>{ MANUF.forEach(f=>o[f]+=t[f]||0); o.tot+=t.tot||0; o.n++; }); return o; }
+function rowVals(s){ const r=casseRec(s), d=draftOf(s); const hasWin=!!(d.ini&&d.fin&&d.ini<d.fin);
+  const serv=hasWin?servitoWindow(s,d.ini,d.fin):0, pos=hasWin?posWindow(r.account,d.ini,d.fin):0;
+  const tot=serv-pos-(d.drop||0)-(d.monete||0)-(d.sospese||0)-(d.uta||0)-(d.dkv||0); return {r,d,hasWin,serv,pos,tot}; }
+function renderOperatori(){ const el=document.getElementById('op-list'), warn=document.getElementById('cassa-warn'); if(!el) return;
+  if(warn){ const miss=[]; if(!STATE) miss.push('StoreSmart'); if(!CLIENTI||!CLIENTI.length) miss.push('anagrafica clienti'); if(!POS) miss.push('POS'); if(!ICAD) miss.push('iCad'); if(!DKV) miss.push('DKV');
+    const noTx=STATE&&!STATE.servitoTx; warn.innerHTML=(miss.length?`<div class="warn">⚠ Manca: <b>${miss.join(', ')}</b>. ${(!STATE||!CLIENTI||!CLIENTI.length)?'Servono almeno StoreSmart e anagrafica clienti per rilevare le schede.':''}</div>`:'')+(noTx?`<div class="warn">⚠ Ri-importa <b>StoreSmart</b> e <b>POS</b> per agganciare gli orari (servono ai turni).</div>`:''); }
+  const schede=schedeForList();
+  if(!schede.length){ el.innerHTML=(!STATE||!CLIENTI||!CLIENTI.length)?'<p class="muted">Carica StoreSmart e l\'anagrafica clienti per rilevare le schede gestore, oppure aggiungine una a mano qui sopra.</p>':'<p class="muted">Nessuna scheda gestore. Aggiungine una a mano qui sopra.</p>'; renderConvalida(); return; }
+  const posOpts=acc=>'<option value="">—</option>'+(POS?POS.accounts.map(a=>`<option value="${escapeAttr(a.name)}"${normName(a.name)===normName(acc)?' selected':''}>${escapeHtml(a.name)}</option>`).join(''):'');
+  let h='<div class="cassawrap"><table class="reg"><thead><tr><th>Tessera</th><th style="text-align:left">Nome</th><th style="text-align:left">Account</th><th>Inizio</th><th>Fine</th><th>Servito</th><th>POS</th><th>DROP</th><th>Monete</th><th>Sospese</th><th>UTA</th><th>DKV</th><th>= TOT</th><th></th></tr></thead><tbody>';
+  schede.forEach(s=>{ const v=rowVals(s), r=v.r, d=v.d; const clan=!(r.nome||SCHEDE_NOTE[s]);
+    const num=f=>`<input class="fld turno-num" data-s="${s}" data-f="${f}" type="number" inputmode="decimal" step="0.01" value="${d[f]||''}" style="text-align:right">`;
+    h+=`<tr>
+      <td style="font-weight:700;color:var(--accent);white-space:nowrap">${s}${clan?' <span title="non riconosciuta" style="color:var(--red)">⚠</span>':''}${r.manual?` <button class="op-del-sch" data-s="${s}" title="elimina scheda" style="border:none;background:none;cursor:pointer;color:var(--red);font-weight:700">✕</button>`:''}</td>
+      <td style="text-align:left;white-space:nowrap"><a href="#" class="casse-storico" data-s="${s}" title="storico turni" style="font-weight:600;color:var(--text);border-bottom:1px dotted var(--muted2)">${r.nome?escapeHtml(r.nome):'<span style="color:var(--red)">— clandestina —</span>'}</a> <button class="casse-rename" data-s="${s}" title="rinomina" style="border:none;background:none;cursor:pointer;color:var(--muted)">✎</button></td>
+      <td style="text-align:left"><select class="fld casse-acc" data-s="${s}">${posOpts(r.account)}</select></td>
+      <td><input class="fld turno-dt" data-s="${s}" data-f="ini" type="datetime-local" value="${d.ini||''}"></td>
+      <td><input class="fld turno-dt" data-s="${s}" data-f="fin" type="datetime-local" value="${d.fin||''}"></td>
+      <td class="cell-srv" data-s="${s}">${v.hasWin?fmtEur(v.serv):'—'}</td>
+      <td class="cell-pos" data-s="${s}">${v.hasWin?fmtEur(v.pos):'—'}</td>
+      <td>${num('drop')}</td><td>${num('monete')}</td><td>${num('sospese')}</td><td>${num('uta')}</td><td>${num('dkv')}</td>
+      <td class="cell-tot" data-s="${s}" style="font-weight:800;color:${Math.abs(v.tot)>0.5?'var(--red)':'var(--text)'}">${v.hasWin?fmtEur(v.tot):'—'}</td>
+      <td><button class="btn turno-conv" data-s="${s}"${v.hasWin?'':' disabled'} style="padding:.32rem .6rem;font-size:.74rem;white-space:nowrap">✓ Conv.</button></td>
+    </tr>`;
+    if(STORICO_OPEN.has(s)) h+=`<tr><td colspan="14" style="text-align:left;background:var(--surface2);padding:.5rem .7rem">${storicoHtml(s)}</td></tr>`;
+  });
+  h+='</tbody></table></div>'; el.innerHTML=h; saveCassa(); renderConvalida(); }
+function refreshRow(s){ const el=document.getElementById('op-list'); if(!el) return; const v=rowVals(s);
+  const srv=el.querySelector(`.cell-srv[data-s="${s}"]`), pos=el.querySelector(`.cell-pos[data-s="${s}"]`), tot=el.querySelector(`.cell-tot[data-s="${s}"]`), btn=el.querySelector(`.turno-conv[data-s="${s}"]`);
+  if(srv) srv.textContent=v.hasWin?fmtEur(v.serv):'—';
+  if(pos) pos.textContent=v.hasWin?fmtEur(v.pos):'—';
+  if(tot){ tot.textContent=v.hasWin?fmtEur(v.tot):'—'; tot.style.color=Math.abs(v.tot)>0.5?'var(--red)':'var(--text)'; }
+  if(btn) btn.disabled=!v.hasWin; }
+function setDraft(s,f,val){ draftOf(s)[f]=val; saveDrafts(); }
+function toggleStorico(s){ if(STORICO_OPEN.has(s)) STORICO_OPEN.delete(s); else STORICO_OPEN.add(s); renderOperatori(); }
+function renameScheda(s){ const cur=(CASSE[s]&&CASSE[s].nome)||''; const n=prompt('Nome operatore per la scheda '+s+':', cur); if(n!=null){ editCasse(s,'nome',n); renderOperatori(); } }
+function convalidaTurnoRow(s){ const v=rowVals(s); if(!v.hasWin){ alert('Imposta Inizio e Fine validi (Fine dopo Inizio).'); return; } const d=v.d;
+  const conf=turniScheda(s).find(t=> d.ini < t.fin && d.fin > t.ini ); // sovrapposizione (anche parziale)
+  if(conf){ alert(`Periodo già coperto: si sovrappone al turno ${fmtDT(conf.ini)} → ${fmtDT(conf.fin)} di questa scheda. Non puoi convalidare due volte lo stesso periodo (o parte).`); return; }
+  const t={id:'T'+(TSEQ++), ini:d.ini, fin:d.fin, drop:d.drop||0,monete:d.monete||0,sospese:d.sospese||0,uta:d.uta||0,dkv:d.dkv||0, servito:v.serv, pos:v.pos, tot:v.tot, convAt:nowISO()};
+  TURNI[s]=TURNI[s]||[]; TURNI[s].push(t); saveTurni();
+  DRAFTS[s]={ini:'',fin:'',drop:0,monete:0,sospese:0,uta:0,dkv:0}; saveDrafts(); renderOperatori(); }
+function delTurno(s,id){ if(!confirm('Eliminare questo turno dallo storico?')) return; TURNI[s]=(TURNI[s]||[]).filter(t=>t.id!==id); saveTurni(); renderOperatori(); }
+function storicoHtml(s){ const r=CASSE[s]||{}; const list=turniScheda(s).slice().sort((a,b)=>(a.ini<b.ini?1:-1));
+  let h=`<div style="font-weight:700;margin:.2rem 0 .45rem">Storico turni — ${escapeHtml(r.nome||s)} <span class="muted" style="font-weight:400">(${list.length})</span></div>`;
+  if(!list.length) return h+'<p class="muted" style="margin:.2rem 0">Nessun turno convalidato.</p>';
+  h+='<div class="cassawrap" style="max-height:42vh"><table class="reg"><thead><tr><th style="text-align:left">Inizio</th><th style="text-align:left">Fine</th><th>Servito</th><th>POS</th><th>DROP</th><th>Monete</th><th>Sospese</th><th>UTA</th><th>DKV</th><th>TOT</th><th>conv.</th><th></th></tr></thead><tbody>';
+  list.forEach(t=>{ h+=`<tr><td style="text-align:left">${fmtDT(t.ini)}</td><td style="text-align:left">${fmtDT(t.fin)}</td><td>${fmtEur(t.servito)}</td><td>${fmtEur(t.pos)}</td><td>${fmtEur(t.drop)}</td><td>${fmtEur(t.monete)}</td><td>${fmtEur(t.sospese)}</td><td>${fmtEur(t.uta)}</td><td>${fmtEur(t.dkv)}</td><td style="font-weight:700;color:${Math.abs(t.tot)>0.5?'var(--red)':'var(--text)'}">${fmtEur(t.tot)}</td><td class="muted" style="font-size:.72rem">${fmtDT((t.convAt||'').slice(0,16))}</td><td><button class="btn ghost turno-del" data-s="${s}" data-id="${t.id}" title="elimina" style="padding:.15rem .45rem">✕</button></td></tr>`; });
+  h+='</tbody></table></div>'; return h; }
+function renderConvalida(){ const el=document.getElementById('cassa-convalida'); if(!el) return;
+  if(!ICAD&&!DKV){ el.innerHTML='<p class="muted">Carica i file iCad e DKV per convalidare i totali UTA/DKV.</p>'; return; }
+  let utaIns=0,dkvIns=0; for(const k in TURNI) turniScheda(k).forEach(t=>{ utaIns+=t.uta||0; dkvIns+=t.dkv||0; });
+  const utaFile=ICAD?Math.max(0,(ICAD.meta.tot||0)-(ICAD.meta.nonUta||0)):0; const dkvFile=DKV?(DKV.meta.tot||0):0;
+  const du=utaIns-utaFile, dd=dkvIns-dkvFile; const badU=ICAD&&Math.abs(du)>0.5, badD=DKV&&Math.abs(dd)>0.5;
+  let h='<table class="reg"><thead><tr><th></th><th>Inserito (turni)</th><th>File</th><th>Δ</th></tr></thead><tbody>';
+  h+=`<tr><td style="text-align:left">UTA (iCad)</td><td>${fmtEur(utaIns)}</td><td>${ICAD?fmtEur(utaFile):'—'}</td><td style="color:${badU?'var(--red)':'var(--muted)'}">${ICAD?fmtEur(du):'—'}</td></tr>`;
+  h+=`<tr><td style="text-align:left">DKV</td><td>${fmtEur(dkvIns)}</td><td>${DKV?fmtEur(dkvFile):'—'}</td><td style="color:${badD?'var(--red)':'var(--muted)'}">${DKV?fmtEur(dd):'—'}</td></tr>`;
+  h+='</tbody></table>';
+  h+=(badU||badD)?'<div class="warn" style="margin-top:.5rem">⚠ UTA/DKV inseriti nei turni diversi dai totali dei file.</div>':((ICAD||DKV)?'<div class="ok-msg" style="margin-top:.5rem">✓ UTA/DKV inseriti coincidono coi file.</div>':'');
+  el.innerHTML=h; }
+
+// ---- import unificato: una sola card, riconoscimento automatico, elenco file ----
+let SRCMETA={}; // {ss:{name,periodo,at,extra}, cs, icad, dkv, pos, cl}
+const SRC_LABEL={ss:'Registro StoreSmart', cs:'Card Smart (fatturato)', icad:'iCad (fatture)', dkv:'DKV', pos:'POS (incassato)', cl:'Clienti'};
+const SRC_ORDER=['ss','cs','icad','dkv','pos','cl'];
+function loadSrcMeta(){ try{ SRCMETA=JSON.parse(localStorage.getItem('faboil_srcmeta')||'{}')||{}; }catch(e){ SRCMETA={}; } }
+function saveSrcMeta(){ try{ localStorage.setItem('faboil_srcmeta', JSON.stringify(SRCMETA)); }catch(e){} }
+function nowISO(){ try{ return new Date().toISOString(); }catch(e){ return ''; } }
+function setSrc(key,name,periodo,extra){ SRCMETA[key]={name:name||'(ripristinato)', periodo:periodo||'', at:nowISO(), extra:extra||''}; saveSrcMeta(); renderImportList(); }
+function fmtAt(iso){ if(!iso) return '—'; try{ const d=new Date(iso); const p=n=>String(n).padStart(2,'0'); return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`; }catch(e){ return '—'; } }
+function renderImportList(){
+  const el=document.getElementById('import-list'); if(!el) return;
+  const keys=SRC_ORDER.filter(k=>SRCMETA[k]);
+  if(!keys.length){ el.innerHTML='<p class="muted">Nessun file caricato. Trascina qui sopra StoreSmart, Card Smart, iCad, DKV, POS o Clienti.</p>'; return; }
+  let h='<div class="tablewrap"><table class="reg"><thead><tr><th style="text-align:left">Tipo</th><th style="text-align:left">File</th><th style="text-align:left">Caricato il</th><th style="text-align:left">Copre fino a</th><th></th></tr></thead><tbody>';
+  keys.forEach(k=>{ const m=SRCMETA[k]; const cov=m.periodo||m.extra||'—'; const extra=(m.periodo&&m.extra)?` · ${m.extra}`:'';
+    h+=`<tr><td style="text-align:left;font-weight:600">${SRC_LABEL[k]}</td><td style="text-align:left;color:var(--muted)">${escapeHtml(m.name||'—')}</td><td style="text-align:left;color:var(--muted)">${fmtAt(m.at)}</td><td style="text-align:left">${escapeHtml(cov)}${extra}</td><td><button class="btn ghost xsrc" data-k="${k}" title="Rimuovi" style="padding:.2rem .5rem">✕</button></td></tr>`; });
+  h+='</tbody></table></div>';
+  el.innerHTML=h;
+}
+function removeSrc(k){
+  if(!confirm(`Rimuovere ${SRC_LABEL[k]}? (i dati restano finché non ricarichi)`)) return;
+  const map={ss:['faboil_ss'],cs:['faboil_cs'],icad:['faboil_icad'],dkv:['faboil_dkv'],pos:['faboil_pos','faboil_poslus'],cl:['faboil_clienti']};
+  (map[k]||[]).forEach(x=>localStorage.removeItem(x));
+  if(k==='ss') STATE=null; else if(k==='cs') CARDSMART=null; else if(k==='icad') ICAD=null; else if(k==='dkv') DKV=null;
+  else if(k==='pos'){ POS=null; POSLUS=null; const r=document.getElementById('import-result-pos'); if(r) r.innerHTML=''; }
+  else if(k==='cl'){ CLIENTI=[]; CURCLI=null; }
+  delete SRCMETA[k]; saveSrcMeta(); renderImportList(); try{ renderCommercialista(); }catch(e){}
+}
+function detectType(wb){
+  const sheets=wb.SheetNames.map(s=>String(s).toLowerCase());
+  const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:null});
+  const cells=new Set(); for(let i=0;i<Math.min(rows.length,30);i++){ const r=rows[i]; if(!r) continue; for(const c of r){ const s=String(c==null?'':c).trim().toLowerCase(); if(s) cells.add(s); } }
+  const has=(...xs)=>xs.every(x=>cells.has(x));
+  if(has('account','prezzo (lordo)')) return 'pos';
+  if(has('data transazione','importo transazione')) return 'icad';
+  if(cells.has('netto') && cells.has('cliente') && (cells.has('n° trans.')||cells.has('tot. sconto/magg.')||cells.has('sconto/magg.'))) return 'dkv';
+  if(cells.has('prodotto') && (cells.has('codice tessera')||cells.has('tipologia cliente')||cells.has('prezzo unitario'))) return 'cardsmart';
+  if(cells.has('pompa') && (cells.has('data rifornimento')||cells.has('importo €'))) return 'storesmart';
+  if(has('idcliente','ragione') || ['fine mese','prepagati','scontati','punti'].some(s=>sheets.includes(s))) return 'clienti';
+  return null;
+}
+function handleAnyFile(file){
+  const res=document.getElementById('import-feedback'); res.innerHTML=`<p class="muted" style="margin-top:.7rem">Lettura di ${escapeHtml(file.name)}…</p>`;
+  const reader=new FileReader();
+  reader.onload=e=>{ try{
+    const wb=XLSX.read(e.target.result,{type:'array'});
+    const t=detectType(wb);
+    if(!t){ res.innerHTML='<div class="warn">⚠ Non riconosco questo file. Attesi: StoreSmart, Card Smart, iCad, DKV, POS o Clienti (.xlsx).</div>'; return; }
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:null});
+    let msg='';
+    if(t==='storesmart'){ STATE=parseStoreSmart(rows); saveSS(); loadStore(); recompute();
+      ['tab-registro','tab-rettifiche','tab-buoni','tab-assegnazioni','tab-commercialista'].forEach(id=>document.getElementById(id).disabled=false);
+      fillBuonoDays(); renderRettifiche(); renderBuoni(); renderAssegnazioni(); renderRegistro(); renderCommercialista(); syncCristalUI();
+      setSrc('ss',file.name,STATE.meta.periodo,`${STATE.days.length} giorni`); msg='Registro StoreSmart'; }
+    else if(t==='cardsmart'){ CARDSMART=parseCardSmart(rows); saveCS(); renderCommercialista(); setSrc('cs',file.name,CARDSMART.meta.periodo); msg='Card Smart'; }
+    else if(t==='icad'){ ICAD=parseFatt(rows,['data transazione','data'],['importo transazione','importo fattura','importo'],['cliente','ragione sociale','ragione','denominazione','intestatario']); localStorage.setItem('faboil_icad',JSON.stringify(ICAD)); renderCommercialista(); setSrc('icad',file.name,ICAD.meta.periodo,`non-UTA ${fmtEur(ICAD.meta.nonUta)}`); msg='iCad'; }
+    else if(t==='dkv'){ DKV=parseFatt(rows,['data'],['importo']); localStorage.setItem('faboil_dkv',JSON.stringify(DKV)); renderCommercialista(); setSrc('dkv',file.name,DKV.meta.periodo); msg='DKV'; }
+    else if(t==='pos'){ POS=parsePos(rows); POSLUS=POS.accounts.map(a=>a.name); savePos(); renderPosResult(file.name); renderCommercialista(); setSrc('pos',file.name,POS.meta.periodo,`file ${fmtEur(POS.meta.tot)}`); msg='POS'; }
+    else if(t==='clienti'){ const parsed=parseEstesoL(wb); if(!parsed.nClienti) throw new Error('Nessun cliente trovato (servono IdCliente e CodiceTessera).'); mergeClienti(parsed); renderClienti(); setSrc('cl',file.name,'',`${parsed.nClienti} clienti · ${parsed.nTessere} tessere`); msg='Clienti'; }
+    res.innerHTML=`<div class="ok-msg">✓ ${msg} caricato: <b>${escapeHtml(file.name)}</b></div>`;
+  }catch(err){ res.innerHTML=`<div class="warn">⚠ ${escapeHtml(err.message)}</div>`; } };
+  reader.readAsArrayBuffer(file);
+}
+function restoreImports(){
+  loadSrcMeta();
+  try{ const s=localStorage.getItem('faboil_ss'); if(s){ STATE=JSON.parse(s); loadStore(); recompute();
+    ['tab-registro','tab-rettifiche','tab-buoni','tab-assegnazioni','tab-commercialista'].forEach(id=>document.getElementById(id).disabled=false);
+    fillBuonoDays(); renderRettifiche(); renderBuoni(); renderAssegnazioni(); renderRegistro(); renderCommercialista(); syncCristalUI();
+    if(!SRCMETA.ss) SRCMETA.ss={name:'(ripristinato)',periodo:STATE.meta.periodo,at:'',extra:`${STATE.days.length} giorni`};
+  } }catch(e){}
+  try{ const c=localStorage.getItem('faboil_cs'); if(c){ CARDSMART=JSON.parse(c); if(!SRCMETA.cs) SRCMETA.cs={name:'(ripristinato)',periodo:CARDSMART.meta.periodo,at:'',extra:''}; } }catch(e){}
+  try{ const x=localStorage.getItem('faboil_icad'); if(x){ ICAD=JSON.parse(x); if(!SRCMETA.icad) SRCMETA.icad={name:'(ripristinato)',periodo:ICAD.meta.periodo,at:'',extra:ICAD.meta.nonUta!=null?`non-UTA ${fmtEur(ICAD.meta.nonUta)}`:''}; } }catch(e){}
+  try{ const x=localStorage.getItem('faboil_dkv'); if(x){ DKV=JSON.parse(x); if(!SRCMETA.dkv) SRCMETA.dkv={name:'(ripristinato)',periodo:DKV.meta.periodo,at:'',extra:''}; } }catch(e){}
+  try{ const x=localStorage.getItem('faboil_pos'); if(x){ POS=JSON.parse(x); const l=localStorage.getItem('faboil_poslus'); POSLUS=l?JSON.parse(l):POS.accounts.map(a=>a.name); renderPosResult(); if(!SRCMETA.pos) SRCMETA.pos={name:'(ripristinato)',periodo:POS.meta.periodo,at:'',extra:`file ${fmtEur(POS.meta.tot)}`}; } }catch(e){}
+  try{ const x=localStorage.getItem('faboil_clienti'); if(x && !SRCMETA.cl){ const o=JSON.parse(x); const arr=Array.isArray(o)?o:(o&&o.clienti)||[]; if(arr.length) SRCMETA.cl={name:'(ripristinato)',periodo:'',at:'',extra:`${arr.length} clienti`}; } }catch(e){}
+  saveSrcMeta(); renderImportList();
+}
+
+// ---- ANAGRAFICA CLIENTI / TESSERE (popolata da import estesoL) ----
+let CLIENTI=[], CURCLI=null;
+const WD=['L','M','M','G','V','S','D'], WDFULL=['Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato','Domenica'];
+const SHEET_TIPO={'fine mese':'POST','prepagati':'PRE','scontati':'POST','punti':'POST'};
+function curCli(){ return CLIENTI.find(c=>c.id===CURCLI)||null; }
+
+function parseEstesoL(wb){
+  const str=v=>v==null?'':String(v).trim();
+  const byId={}; const counts={};
+  (wb.SheetNames||[]).forEach(sheetName=>{
+    const ws=wb.Sheets[sheetName]; if(!ws) return;
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null}); if(rows.length<2) return;
+    const head=rows[0].map(c=>String(c==null?'':c).trim().toLowerCase());
+    const find=(...n)=>{ for(const x of n){ const k=head.findIndex(h=>h===x); if(k>=0) return k; } for(const x of n){ const k=head.findIndex(h=>h.includes(x)); if(k>=0) return k; } return -1; }; // esatto prima, poi sottostringa
+    const iId=find('idcliente'), iRag=find('ragione'), iInd=find('indirizzo'), iCitta=find('citta','città'), iProv=find('provincia'), iPiva=find('partitaiva'), iCf=find('codicefisc'), iTel=find('telefono'), iCell=find('cellulare'), iMail=find('email'), iPec=find('pec'), iNote=find('note'), iModPag=find('modpagamento'), iFidoC=find('fido cliente'), iCodT=find('codicetessera'), iTarga=find('targa'), iFidoT=find('fido tessera'), iPlaf=find('plafond');
+    if(iId<0||iCodT<0) return;
+    const cat=sheetName.trim(); const tipo=SHEET_TIPO[cat.toLowerCase()]||'POST'; counts[cat]=counts[cat]||0;
+    for(let r=1;r<rows.length;r++){
+      const row=rows[r]; if(!row) continue; const id=row[iId]; if(id==null||id==='') continue; const key=String(id);
+      if(!byId[key]){ byId[key]={ id:key, categoria:cat, tipo, ragione:str(row[iRag]), indirizzo:str(row[iInd]), citta:str(row[iCitta]), prov:str(row[iProv]), piva:str(row[iPiva]), cf:str(row[iCf]), tel:str(row[iTel]), cell:str(row[iCell]), email:str(row[iMail]), pec:str(row[iPec]), note:str(row[iNote]), modPag:str(row[iModPag]), fidoCliente:csNum(row[iFidoC]), perc:0, saldo:0, saldoData:'', consumoMese:0, genAuto:false, tessere:[] }; counts[cat]++; }
+      const codT=row[iCodT]; if(codT==null||codT==='') continue; const tk=String(codT);
+      if(!byId[key].tessere.some(t=>t.id===tk)) byId[key].tessere.push({ id:tk, targa:str(row[iTarga]), descrizione:'', fidoTessera:csNum(row[iFidoT]), plafond:csNum(row[iPlaf]), prodotto:'GASOLIO', capienza:0, giorni:[1,1,1,1,1,0,0], escludiFestivi:true, sospesa:false, prezzo:0, sconto:0 });
+    }
+  });
+  const clienti=Object.values(byId);
+  return { clienti, nClienti:clienti.length, nTessere:clienti.reduce((s,c)=>s+c.tessere.length,0), counts };
+}
+function mergeClienti(parsed){ // preserva i parametri inseriti a mano (consumo, %, saldo, descrizione…)
+  const prev={}; CLIENTI.forEach(c=>prev[c.id]=c);
+  parsed.clienti.forEach(nc=>{ const oc=prev[nc.id]; if(!oc) return;
+    nc.tipo=oc.tipo; nc.perc=oc.perc; nc.saldo=oc.saldo; nc.saldoData=oc.saldoData; nc.consumoMese=oc.consumoMese; nc.genAuto=oc.genAuto;
+    const ot={}; oc.tessere.forEach(t=>ot[t.id]=t);
+    nc.tessere.forEach(nt=>{ const o=ot[nt.id]; if(!o) return; nt.descrizione=o.descrizione; nt.prodotto=o.prodotto; nt.capienza=o.capienza; nt.giorni=o.giorni; nt.escludiFestivi=o.escludiFestivi; nt.sospesa=o.sospesa; nt.prezzo=o.prezzo; nt.sconto=o.sconto; if(!nt.targa) nt.targa=o.targa; });
+  });
+  CLIENTI=parsed.clienti; CURCLI=CLIENTI.length?CLIENTI[0].id:null; saveClienti();
+}
+function handleClFile(file){
+  const res=document.getElementById('import-result-cl'); res.innerHTML='<p class="muted" style="margin-top:1rem">Lettura in corso…</p>';
+  const reader=new FileReader();
+  reader.onload=e=>{ try{ const wb=XLSX.read(e.target.result,{type:'array'}); const parsed=parseEstesoL(wb);
+    if(!parsed.nClienti) throw new Error('Nessun cliente trovato (servono colonne IdCliente e CodiceTessera).');
+    mergeClienti(parsed); renderClienti();
+    const cats=Object.entries(parsed.counts).map(([k,v])=>`${k}: ${v}`).join(' · ');
+    res.innerHTML=`<div class="ok-msg">✓ Importato: <b>${file.name}</b></div>
+      <div class="grid" style="margin-top:.9rem">
+        <div class="stat"><div class="k">Clienti</div><div class="v">${parsed.nClienti}</div></div>
+        <div class="stat"><div class="k">Tessere</div><div class="v">${parsed.nTessere}</div></div>
+      </div>
+      <p class="muted" style="margin-top:.7rem">Categorie — ${cats}. I parametri di consumo (capienza, giorni, festivi, %, saldo) restano quelli che imposti tu.</p>
+      <div style="margin-top:1rem"><button class="btn" onclick="goTab('clienti')">Vai ai Clienti →</button></div>`;
+  }catch(err){ res.innerHTML=`<div class="warn">⚠ ${err.message}</div>`; } };
+  reader.readAsArrayBuffer(file);
+}
+
+let CLQ='', CLFILT='ALL';
+// ---- RICARICHE prepagati (manuali, con ricevuta) ----
+let RICMAN={ seq:1, list:[] }; // list: [{id, clienteId, clienteNome, piva, data, importo, num}]
+let RIC_CLI='';
+function ricaricheForCliente(c){ return RICMAN.list.filter(r=>r.clienteId===c.id); }
+function saveRic(){ try{ localStorage.setItem('faboil_ricariche_man', JSON.stringify(RICMAN)); }catch(e){} }
+function loadRic(){ try{ const s=localStorage.getItem('faboil_ricariche_man'); if(s){ const o=JSON.parse(s); RICMAN={ seq:o.seq||1, list:o.list||[] }; } }catch(e){} }
+function selectRicCli(id){ RIC_CLI=id||''; const c=CLIENTI.find(x=>x.id===id); document.getElementById('ric-cliente-btn').textContent=c?`${c.ragione||c.id} · ${c.piva||''}`:'— scegli cliente —'; closeCliPicker(); }
+function addRicarica(){
+  const c=CLIENTI.find(x=>x.id===RIC_CLI); if(!c){ alert('Scegli un cliente.'); return; }
+  if(c.tipo!=='PRE'||!c.genAuto){ alert('Le ricariche sono solo per clienti prepagati con generazione automatica.'); return; }
+  const data=document.getElementById('ric-data').value; const importo=parseFloat(document.getElementById('ric-importo').value);
+  if(!data){ alert('Inserisci la data.'); return; } if(isNaN(importo)||importo<=0){ alert('Inserisci un importo > 0.'); return; }
+  const rec={ id:'r'+(RICMAN.seq), clienteId:c.id, clienteNome:c.ragione, piva:c.piva||'', data, importo:Math.round(importo*100)/100, num:RICMAN.seq };
+  RICMAN.seq++; RICMAN.list.push(rec); saveRic();
+  document.getElementById('ric-importo').value=''; document.getElementById('ric-add-result').innerHTML=`<div class="ok-msg" style="margin-top:.7rem">✓ Ricarica n. ${rec.num} registrata: ${fmtEur(rec.importo)} a ${escapeHtml(c.ragione)}. <button class="btn sm ghost" onclick="ricevutaPDF('${rec.id}')">📄 Ricevuta PDF</button></div>`;
+  renderRicariche(); refreshScheda();
+}
+function delRicarica(id){ const r=RICMAN.list.find(x=>x.id===id); if(r && !confirm(`Eliminare la ricarica n. ${r.num} (${fmtEur(r.importo)})?`)) return; RICMAN.list=RICMAN.list.filter(x=>x.id!==id); saveRic(); renderRicariche(); refreshScheda(); }
+function renderRicariche(){
+  const cont=document.getElementById('ric-storico'); const cnt=document.getElementById('ric-count'); if(!cont) return;
+  const list=[...RICMAN.list].sort((a,b)=>b.num-a.num);
+  cnt.textContent=`${list.length} ricariche · ${fmtEur(list.reduce((s,r)=>s+r.importo,0))} totali`;
+  if(!list.length){ cont.innerHTML='<p class="muted">Nessuna ricarica registrata.</p>'; return; }
+  let h='<div class="tablewrap" style="max-height:60vh"><table class="reg"><thead><tr><th>N.</th><th>Data</th><th style="text-align:left">Cliente</th><th>P.IVA</th><th>Importo</th><th></th></tr></thead><tbody>';
+  list.forEach(r=>{ h+=`<tr><td>${r.num}</td><td>${fmtDay(r.data)}</td><td style="text-align:left">${escapeHtml(r.clienteNome||'')}</td><td>${escapeHtml(r.piva||'')}</td><td>${fmtEur(r.importo)}</td><td style="white-space:nowrap"><button class="btn sm ghost" onclick="ricevutaPDF('${r.id}')" style="padding:.05rem .4rem">📄</button> <button class="btn sm danger" onclick="delRicarica('${r.id}')" style="padding:.05rem .35rem">✕</button></td></tr>`; });
+  h+='</tbody></table></div>'; cont.innerHTML=h;
+}
+function ricevutaPDF(id){
+  const r=RICMAN.list.find(x=>x.id===id); if(!r) return; const c=CLIENTI.find(x=>x.id===r.clienteId)||{};
+  const w=window.open('','_blank','width=720,height=900'); if(!w){ alert('Abilita i popup per stampare la ricevuta.'); return; }
+  const ind=[c.indirizzo,c.citta,c.prov].filter(Boolean).join(' · ');
+  w.document.write(`<!DOCTYPE html><html lang="it"><head><meta charset="UTF-8"><title>Ricevuta n. ${r.num}</title>
+  <style>body{font-family:Arial,Helvetica,sans-serif;color:#111;max-width:600px;margin:40px auto;padding:0 24px}
+  h1{color:#e07b00;font-size:22px;margin:0 0 2px}.sub{color:#666;font-size:12px;margin-bottom:24px}
+  .box{border:1.5px solid #ccc;border-radius:10px;padding:20px 22px}.row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #eee;font-size:14px}.row:last-child{border:0}
+  .lbl{color:#666}.val{font-weight:700}.imp{font-size:26px;font-weight:800;color:#15803d;text-align:right;margin-top:14px}
+  .ft{margin-top:30px;font-size:12px;color:#666}.firma{margin-top:50px;border-top:1px solid #999;width:240px;padding-top:6px;font-size:12px;color:#666}</style></head>
+  <body><h1>Faboil — Ricevuta di ricarica</h1><div class="sub">PV-2993 · EUROSPEED Lusciano</div>
+  <div class="box">
+    <div class="row"><span class="lbl">Ricevuta n.</span><span class="val">${r.num}</span></div>
+    <div class="row"><span class="lbl">Data</span><span class="val">${fmtDay(r.data)}</span></div>
+    <div class="row"><span class="lbl">Cliente</span><span class="val">${escapeHtml(r.clienteNome||'')}</span></div>
+    ${r.piva?`<div class="row"><span class="lbl">P.IVA</span><span class="val">${escapeHtml(r.piva)}</span></div>`:''}
+    ${ind?`<div class="row"><span class="lbl">Indirizzo</span><span class="val">${escapeHtml(ind)}</span></div>`:''}
+    <div class="imp">${fmtEur(r.importo)}</div>
+  </div>
+  <div class="ft">Ricarica del credito prepagato. Documento non fiscale.</div>
+  <div class="firma">Firma</div>
+  <script>window.onload=function(){window.print();}<\/script></body></html>`);
+  w.document.close();
+}
+
+// ---- credito prepagato: saldo@data + ricariche − (Card Smart + buoni) ----
+function clienteCredito(c){
+  const from=c.saldoData||'0000-00-00';
+  let ric=0; ricaricheForCliente(c).forEach(r=>{ if(r.data>=from) ric+=r.importo; });
+  let cs=0; if(CARDSMART&&CARDSMART.byTessera) c.tessere.forEach(t=>{ const m=CARDSMART.byTessera[t.id]; if(m) for(const d in m){ if(d>=from) cs+=m[d]; } });
+  let bu=0; BUONI.forEach(b=>{ if(b.clienteId===c.id && b.day>=from) bu+=(b.totale||0); });
+  const saldo=c.saldo||0;
+  return { saldo, ric, cs, bu, credito: saldo+ric-cs-bu };
+}
+function saldoSenzaData(c){ return c.tipo==='PRE' && !!(c.saldo) && !c.saldoData; } // saldo impostato ma manca la data → credito ambiguo
+function clienteAutoIncompleto(c){ // ritorna lista delle mancanze (per clienti con genAuto) oppure null
+  if(!c.genAuto) return null; const miss=[];
+  if(!(c.perc>0)) miss.push('Percentuale');
+  if(!(c.consumoMese>0)) miss.push('Litri max/mese');
+  if(saldoSenzaData(c)) miss.push('data del saldo');
+  const act=c.tessere.filter(t=>!t.sospesa);
+  if(!act.length) miss.push('nessuna tessera attiva');
+  else { const cap=act.filter(t=>(t.capienza||0)>0); if(!cap.length) miss.push('capienza tessera'); else if(!cap.some(t=>t.giorni&&t.giorni.some(x=>x))) miss.push('giorni tessera'); }
+  return miss.length?miss:null;
+}
+function fmtEur(n){ return '€ '+(Math.round(n*100)/100).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function creditoInner(c){ const k=clienteCredito(c); const nr=ricaricheForCliente(c).length;
+  return `<div><span class="f-lbl">Saldo @ data</span>${fmtEur(k.saldo)}</div>
+    <div style="color:var(--green)"><span class="f-lbl">+ Ricariche${nr?' ('+nr+')':''}</span>${fmtEur(k.ric)}</div>
+    <div style="color:var(--red)"><span class="f-lbl">− Card Smart</span>${fmtEur(k.cs)}</div>
+    <div style="color:var(--red)"><span class="f-lbl">− Buoni</span>${fmtEur(k.bu)}</div>
+    <div style="margin-left:auto;text-align:right"><span class="f-lbl">Credito attuale</span><span style="font-weight:800;font-size:1.05rem;color:${k.credito<0?'var(--red)':'var(--accent)'}">${fmtEur(k.credito)}</span></div>`;
+}
+function refreshCredito(c){ const el=document.getElementById('credito-box'); if(el) el.innerHTML=creditoInner(c); }
+
+function renderClienti(){ renderClFilters(); renderClList(); renderClDetail(); }
+function filterClienti(q,filt){
+  q=(q||'').trim().toLowerCase();
+  return CLIENTI.filter(c=>{
+    if(filt==='PRE'&&c.tipo!=='PRE') return false;
+    if(filt==='POST'&&c.tipo==='PRE') return false;
+    if(filt==='AUTO'&&!c.genAuto) return false;
+    if(!q) return true;
+    if((c.ragione||'').toLowerCase().includes(q)) return true;
+    if(String(c.id).includes(q)) return true;
+    if((c.piva||'').toLowerCase().includes(q)) return true;
+    return c.tessere.some(t=>String(t.id).includes(q)||(t.targa||'').toLowerCase().includes(q)||(t.descrizione||'').toLowerCase().includes(q));
+  });
+}
+function filteredClienti(){ return filterClienti(CLQ,CLFILT); }
+// ---- selettore cliente per i buoni (stesso stile della sezione Clienti) ----
+let CPQ='', CPFILT='ALL', BUONO_CLI='', GEN_CLI='', PICK_CB=null, PICK_FILTER=null;
+function openCliPicker(cb,filterFn){ if(!CLIENTI.length){ alert('Importa prima i Clienti (estesoL) dalla sezione Importazioni.'); return; } PICK_CB=cb||selectBuonoCli; PICK_FILTER=filterFn||null; document.getElementById('cli-picker').style.display='flex'; renderCp(); const s=document.getElementById('cp-search'); s.value=CPQ; s.focus(); }
+function closeCliPicker(){ document.getElementById('cli-picker').style.display='none'; }
+function renderCp(){ renderCpFilters(); renderCpList(); }
+function renderCpFilters(){ const el=document.getElementById('cp-filters'); const nAll=CLIENTI.length, nPre=CLIENTI.filter(c=>c.tipo==='PRE').length;
+  el.innerHTML=`<button data-f="ALL" class="${CPFILT==='ALL'?'on':''}">Tutti ${nAll}</button><button data-f="POST" class="${CPFILT==='POST'?'on':''}">Post ${nAll-nPre}</button><button data-f="PRE" class="${CPFILT==='PRE'?'on':''}">Pre ${nPre}</button>`;
+  el.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ CPFILT=b.dataset.f; renderCp(); })); }
+function renderCpList(){ const box=document.getElementById('cp-list'); let list=filterClienti(CPQ,CPFILT); if(PICK_FILTER) list=list.filter(PICK_FILTER);
+  if(!list.length){ box.innerHTML='<p class="muted" style="padding:.8rem">Nessun risultato.</p>'; return; }
+  box.innerHTML=list.map(c=>`<div class="cl-item ${c.id===BUONO_CLI?'on':''}" data-id="${escapeAttr(c.id)}"><div class="nm">${escapeHtml(c.ragione||c.id)}<div class="sub">ID ${escapeHtml(c.id)} · ${c.tessere.length} tess.${c.piva?' · '+escapeHtml(c.piva):''}</div></div><span class="badge-tipo ${c.tipo==='PRE'?'pre':'post'}">${c.tipo==='PRE'?'PRE':'POST'}</span></div>`).join('');
+}
+function selectBuonoCli(id){ BUONO_CLI=id||''; const c=CLIENTI.find(x=>x.id===id); document.getElementById('b-cliente-btn').textContent=c?`${c.ragione||c.id} · ${c.tipo==='PRE'?'PRE':'POST'}`:'— scegli cliente —'; fillBuonoTessere(); closeCliPicker(); }
+function selectGenCli(id){ GEN_CLI=id||''; const c=CLIENTI.find(x=>x.id===id); document.getElementById('g-cliente-btn').textContent=c?`${c.ragione||c.id} · ${c.tipo==='PRE'?'PRE':'POST'}`:'— scegli cliente —'; closeCliPicker(); }
+function addGenGroup(id){ if(id && !GEN_GROUP.includes(id)) GEN_GROUP.push(id); renderGenGroup(); closeCliPicker(); }
+function renderClFilters(){
+  const el=document.getElementById('cl-filters'); if(!el) return;
+  if(!CLIENTI.length){ el.innerHTML=''; return; }
+  const nAll=CLIENTI.length, nPre=CLIENTI.filter(c=>c.tipo==='PRE').length, nPost=nAll-nPre, nAuto=CLIENTI.filter(c=>c.genAuto).length;
+  el.innerHTML=`<button data-f="ALL" class="${CLFILT==='ALL'?'on':''}">Tutti ${nAll}</button><button data-f="POST" class="${CLFILT==='POST'?'on':''}">Post ${nPost}</button><button data-f="PRE" class="${CLFILT==='PRE'?'on':''}">Pre ${nPre}</button><button data-f="AUTO" class="${CLFILT==='AUTO'?'on':''}" title="generazione automatica">⚙ ${nAuto}</button>`;
+  el.querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{ CLFILT=b.dataset.f; renderClFilters(); renderClList(); }));
+}
+function renderClList(){
+  const box=document.getElementById('cl-list'); if(!box) return;
+  if(!CLIENTI.length){ box.innerHTML='<p class="muted" style="padding:.8rem">Nessun cliente. Importa il file <b>estesoL</b> dalla sezione Importazioni.</p>'; return; }
+  const list=filteredClienti();
+  if(!list.length){ box.innerHTML='<p class="muted" style="padding:.8rem">Nessun risultato.</p>'; return; }
+  box.innerHTML=list.map(c=>{ const miss=clienteAutoIncompleto(c); const ico=c.genAuto?(miss?`<span title="auto incompleto: manca ${escapeAttr(miss.join(', '))}" style="color:var(--red)">⚠</span>`:'<span title="generazione automatica">⚙</span>'):''; return `<div class="cl-item ${c.id===CURCLI?'on':''}" data-id="${escapeAttr(c.id)}"><div class="nm">${escapeHtml(c.ragione||c.id)}<div class="sub">ID ${escapeHtml(c.id)} · ${c.tessere.length} tess.</div></div>${ico}<span class="badge-tipo ${c.tipo==='PRE'?'pre':'post'}">${c.tipo==='PRE'?'PRE':'POST'}</span></div>`; }).join('');
+}
+function renderClDetail(){
+  const cont=document.getElementById('cl-detail'); const c=curCli(); if(!CLIENTI.length){ cont.innerHTML=''; return; }
+  if(!c){ cont.innerHTML='<div class="empty-state"><span class="ic">👤</span>Seleziona un cliente dalla lista.</div>'; return; }
+  let h=`<div class="cl-card">
+    <div class="cl-row" style="align-items:center">
+      <div style="flex:1"><div style="font-size:1.05rem;font-weight:800">${escapeHtml(c.ragione||'(senza nome)')}</div>
+        <div class="muted" style="font-family:var(--mono)">ID ${escapeHtml(c.id)}${c.piva?' · P.IVA '+escapeHtml(c.piva):''}${c.cf?' · CF '+escapeHtml(c.cf):''}${c.fidoCliente?' · Fido '+fmtInt(c.fidoCliente):''}</div></div>
+      <span class="badge-tipo ${c.tipo==='PRE'?'pre':'post'}">${escapeHtml(c.categoria||c.tipo)}</span>
+    </div>
+    <div class="cl-row">
+      <div><span class="f-lbl">Tipo</span><div class="toggle" id="c-tipo"><button data-v="POST" class="${c.tipo!=='PRE'?'on':''}">Postpagato</button><button data-v="PRE" class="${c.tipo==='PRE'?'on':''}">Prepagato</button></div></div>
+      <div><span class="f-lbl">Percentuale</span><input class="fld sm" id="c-perc" type="number" min="0" max="100" step="1" value="${c.perc||''}" placeholder="%"></div>
+      <div><span class="f-lbl">Gen. automatica</span><label class="chk" style="${c.genAuto?'color:var(--accent)':''}"><input type="checkbox" id="c-genauto" ${c.genAuto?'checked':''}> ⚙ attiva</label></div>`;
+  if(c.tipo==='PRE') h+=`
+      <div><span class="f-lbl">Saldo credito (€)</span><input class="fld sm" id="c-saldo" type="number" step="0.01" value="${c.saldo||''}"></div>
+      <div><span class="f-lbl">alla data</span><input class="fld" id="c-saldodata" type="date" value="${escapeAttr(c.saldoData||'')}"></div>
+      <div><span class="f-lbl">Litri max / mese</span><input class="fld sm" id="c-consumo" type="number" min="0" step="1" value="${c.consumoMese||''}" title="tetto mensile per la generazione automatica"></div>`;
+  h+=`</div>`;
+  if(c.tipo==='PRE') h+=`<div class="cl-row" id="credito-box" style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius);padding:.6rem .85rem;font-family:var(--mono);font-size:.84rem;align-items:flex-end;margin-bottom:.6rem">${creditoInner(c)}</div>`;
+  if(saldoSenzaData(c)) h+=`<div class="warn" style="margin:.2rem 0 .6rem">⚠ Saldo impostato senza <b>data</b>: il credito conta tutti i movimenti del periodo e può risultare sbagliato (movimenti già inclusi nel saldo). Imposta il campo <b>"alla data"</b>.</div>`;
+  { const miss=clienteAutoIncompleto(c); if(miss) h+=`<div class="warn" style="margin:.2rem 0 .6rem">⚠ Generazione automatica incompleta — manca: <b>${miss.map(escapeHtml).join(', ')}</b>. Finché non lo completi, questo cliente non viene generato (o solo in parte).</div>`; }
+  h+=`<div class="card-title" style="margin-top:.4rem">Tessere / veicoli (${c.tessere.length})</div>`;
+  c.tessere.forEach(t=>h+=tessHtml(t));
+  h+=`</div>`;
+  cont.innerHTML=h; bindClDetail(c);
+}
+function tessHtml(t){
+  let wd=''; for(let i=0;i<7;i++) wd+=`<button class="wd ${t.giorni[i]?'on':''} ${i>=5?'red':''}" data-wd="${i}" data-t="${escapeAttr(t.id)}" title="${WDFULL[i]}">${WD[i]}</button>`;
+  return `<div class="tess-card${t.sospesa?' susp':''}">
+    <div class="tess-head">
+      <div><span class="f-lbl">Codice tessera</span><div style="font-family:var(--mono);font-weight:700;padding:.2rem 0">${escapeHtml(t.id)}${t.plafond?'<span class="muted"> · plafond '+fmtInt(t.plafond)+'</span>':''}</div></div>
+      <div><span class="f-lbl">Stato</span><label class="chk" style="${t.sospesa?'color:var(--red)':''}"><input type="checkbox" data-tf="sospesa" data-t="${escapeAttr(t.id)}" ${t.sospesa?'checked':''}> sospesa</label></div>
+      <div><span class="f-lbl">Targa</span><input class="fld sm" data-tf="targa" data-t="${escapeAttr(t.id)}" value="${escapeAttr(t.targa)}" placeholder="targa"></div>
+      <div style="flex:1;min-width:200px"><span class="f-lbl">Descrizione</span><input class="fld" data-tf="descrizione" data-t="${escapeAttr(t.id)}" value="${escapeAttr(t.descrizione)}" placeholder="es. Trattore / generatore" style="width:100%"></div>
+    </div>
+    <div class="cl-row">
+      <div><span class="f-lbl">Prodotto</span><select class="fld" data-tf="prodotto" data-t="${escapeAttr(t.id)}"><option value="GASOLIO" ${t.prodotto==='GASOLIO'?'selected':''}>Gasolio</option><option value="VERDE" ${t.prodotto==='VERDE'?'selected':''}>Verde</option><option value="GPL" ${t.prodotto==='GPL'?'selected':''}>GPL</option></select></div>
+      <div><span class="f-lbl">Capienza serbatoio (L)</span><input class="fld sm" data-tf="capienza" data-t="${escapeAttr(t.id)}" type="number" min="0" step="1" value="${t.capienza||''}" placeholder="es. 120"></div>
+      <div><span class="f-lbl">Giorni ammessi</span><div class="wdays">${wd}</div></div>
+      <div><span class="f-lbl">Festivi</span><label class="chk"><input type="checkbox" data-tf="escludiFestivi" data-t="${escapeAttr(t.id)}" ${t.escludiFestivi?'checked':''}> escludi</label></div>
+      <div><span class="f-lbl">Prezzo €/L</span><input class="fld sm" data-tf="prezzo" data-t="${escapeAttr(t.id)}" type="number" min="0" step="0.001" value="${t.prezzo||''}"></div>
+      <div><span class="f-lbl">Sconto</span><input class="fld sm" data-tf="sconto" data-t="${escapeAttr(t.id)}" type="number" step="0.001" value="${t.sconto||''}"></div>
+    </div></div>`;
+}
+function bindClDetail(c){
+  const perc=document.getElementById('c-perc'); if(perc) perc.addEventListener('input',e=>{ c.perc=parseFloat(e.target.value)||0; saveClienti(); });
+  const ga=document.getElementById('c-genauto'); if(ga) ga.addEventListener('change',e=>{ c.genAuto=e.target.checked; saveClienti(); renderClFilters(); renderClList(); renderClDetail(); });
+  document.querySelectorAll('#c-tipo button').forEach(b=>b.addEventListener('click',()=>{ c.tipo=b.dataset.v; saveClienti(); renderClFilters(); renderClList(); renderClDetail(); }));
+  const sal=document.getElementById('c-saldo'); if(sal) sal.addEventListener('input',e=>{ c.saldo=parseFloat(e.target.value)||0; saveClienti(); refreshCredito(c); });
+  const sald=document.getElementById('c-saldodata'); if(sald) sald.addEventListener('input',e=>{ c.saldoData=e.target.value; saveClienti(); refreshCredito(c); });
+  const cons=document.getElementById('c-consumo'); if(cons) cons.addEventListener('input',e=>{ c.consumoMese=parseFloat(e.target.value)||0; saveClienti(); });
+  document.querySelectorAll('#cl-detail [data-tf]').forEach(el=>{ const ev=el.type==='checkbox'?'change':'input'; el.addEventListener(ev,()=>{ const t=c.tessere.find(x=>x.id===el.dataset.t); if(!t) return; const f=el.dataset.tf; t[f]= el.type==='checkbox'?el.checked:(el.type==='number'?(parseFloat(el.value)||0):el.value); saveClienti(); if(f==='sospesa') renderClDetail(); }); });
+  document.querySelectorAll('#cl-detail .wd').forEach(b=>b.addEventListener('click',()=>{ const t=c.tessere.find(x=>x.id===b.dataset.t); const i=parseInt(b.dataset.wd,10); t.giorni[i]=t.giorni[i]?0:1; saveClienti(); b.classList.toggle('on',!!t.giorni[i]); }));
+}
+function saveClienti(){ try{ localStorage.setItem('faboil_clienti', JSON.stringify({curcli:CURCLI,clienti:CLIENTI})); }catch(e){} }
+function loadClienti(){ try{ const s=localStorage.getItem('faboil_clienti'); if(s){ const o=JSON.parse(s); CLIENTI=o.clienti||[]; CURCLI=o.curcli!=null?o.curcli:(CLIENTI[0]&&CLIENTI[0].id); } }catch(e){} }
+
+// ---- export ----
+function exportRegistro(){
+  if(!STATE) return; const R=readingAt(REGMODE);
+  const aoa=[['DATA',...PUMPS]]; aoa.push([baselineLabel(),...PUMPS.map(()=>0)]);
+  STATE.days.forEach(day=>aoa.push([fmtDay(day),...PUMPS.map(p=>R[day][p])]));
+  const ws=XLSX.utils.aoa_to_sheet(aoa); ws['!cols']=[{wch:12},...PUMPS.map(()=>({wch:9}))]; ws['!freeze']={xSplit:1,ySplit:1};
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Registro');
+  XLSX.writeFile(wb,`Registro_dogana_${STATE.meta.period||'export'}_${REGMODE}.xlsx`);
+}
+
+function exportBackup(){
+  const data={}; for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k && k.indexOf('faboil_')===0) data[k]=localStorage.getItem(k); }
+  let stamp='backup'; try{ stamp=new Date().toISOString().slice(0,19).replace(/[:T]/g,'-'); }catch(e){}
+  const blob=new Blob([JSON.stringify({app:'faboil-registro',version:1,stamp,data})],{type:'application/json'});
+  const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`faboil_backup_${stamp}.json`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  document.getElementById('bk-result').innerHTML=`<div class="ok-msg" style="margin-top:.6rem">✓ Backup esportato (${Object.keys(data).length} chiavi).</div>`;
+}
+function importBackup(file){
+  const reader=new FileReader();
+  reader.onload=e=>{ try{ const o=JSON.parse(e.target.result); if(!o||!o.data) throw new Error('File di backup non valido.');
+    Object.keys(o.data).forEach(k=>{ if(k.indexOf('faboil_')===0) localStorage.setItem(k,o.data[k]); });
+    alert('Backup ripristinato. La pagina verrà ricaricata.'); location.reload();
+  }catch(err){ document.getElementById('bk-result').innerHTML=`<div class="warn" style="margin-top:.6rem">⚠ ${err.message}</div>`; } };
+  reader.readAsText(file);
+}
+function escapeHtml(s){ return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function escapeAttr(s){ return String(s).replace(/"/g,'&quot;'); }
+function debounce(fn,ms){ let h; return function(){ clearTimeout(h); h=setTimeout(fn,ms); }; } // ricerca fluida su telefono con tante schede
+function goTab(name){ document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===name)); document.querySelectorAll('.page').forEach(p=>p.classList.remove('on')); document.getElementById('page-'+name).classList.add('on');
+  try{ if(name==='commercialista') renderCommercialista(); else if(name==='ricariche') renderRicariche(); else if(name==='registro') renderRegistro(); else if(name==='cassa'){ renderOperatori(); } }catch(e){} }
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{ if(!t.disabled) goTab(t.dataset.tab); }));
+document.getElementById('export-btn').addEventListener('click',exportRegistro);
+document.getElementById('comm-export').addEventListener('click',exportCommercialista);
+document.getElementById('b-add').addEventListener('click',addBuono);
+document.getElementById('b-delall').addEventListener('click',delAllBuoni);
+document.getElementById('b-cliente-btn').addEventListener('click',()=>openCliPicker(selectBuonoCli));
+document.getElementById('g-cliente-btn').addEventListener('click',()=>openCliPicker(selectGenCli));
+document.getElementById('as-cliente-btn').addEventListener('click',()=>{ const ids=new Set(BUONI.map(b=>b.clienteId).filter(Boolean)); if(!ids.size){ alert('Nessun cliente ha buoni in questo mese.'); return; } openCliPicker(selectAssCli,c=>ids.has(c.id)); });
+document.getElementById('as-prod').addEventListener('change',e=>{ AS_PROD=e.target.value; renderAssegnazioni(); });
+document.getElementById('as-day').addEventListener('change',e=>{ AS_DAY=e.target.value; renderAssegnazioni(); });
+document.getElementById('g-group-add').addEventListener('click',()=>openCliPicker(addGenGroup));
+document.querySelectorAll('#g-scope button').forEach(b=>b.addEventListener('click',()=>{ GEN_SCOPE=b.dataset.s; document.querySelectorAll('#g-scope button').forEach(x=>x.classList.toggle('on',x===b)); renderGenScope(); }));
+document.getElementById('g-add').addEventListener('click',generateBuoni);
+document.getElementById('cp-close').addEventListener('click',closeCliPicker);
+document.getElementById('cp-clear').addEventListener('click',()=>{ if(PICK_CB) PICK_CB(''); });
+document.getElementById('cp-search').addEventListener('input',debounce(()=>{ CPQ=document.getElementById('cp-search').value; renderCpList(); },140));
+document.getElementById('cp-list').addEventListener('click',e=>{ const it=e.target.closest('.cl-item'); if(!it) return; if(PICK_CB) PICK_CB(it.dataset.id); }); // delegation: 1 listener
+document.getElementById('cli-picker').addEventListener('click',e=>{ if(e.target.id==='cli-picker') closeCliPicker(); });
+document.getElementById('b-tessera').addEventListener('change',onTesseraPick);
+document.getElementById('b-litri').addEventListener('input',syncFromLitri);
+document.getElementById('b-totale').addEventListener('input',syncFromTotale);
+['b-prezzo','b-sconto'].forEach(id=>document.getElementById(id).addEventListener('input',syncFromLitri));
+['b-prod','b-day'].forEach(id=>document.getElementById(id).addEventListener('change',updateBuonoPrezzo));
+document.querySelectorAll('#rett-prod-toggle button').forEach(b=>b.addEventListener('click',()=>{ TPROD=b.dataset.p; document.querySelectorAll('#rett-prod-toggle button').forEach(x=>x.classList.toggle('on',x===b)); const t=curTransfer(); const bd=document.getElementById('t-badge'); if(t&&bd) bd.textContent=`${prodName(TPROD)}: ${fmtInt(transferTotalProd(t,TPROD))} L`; renderRettGrid(); }));
+document.querySelectorAll('#reg-toggle button').forEach(b=>b.addEventListener('click',()=>{ REGMODE=b.dataset.mode; document.querySelectorAll('#reg-toggle button').forEach(x=>x.classList.toggle('on',x===b)); renderRegistro(); }));
+document.getElementById('cristal-set').addEventListener('click',()=>{ const d=document.getElementById('cristal-date').value; if(!d){ alert('Scegli la data fino a cui il registro cartaceo è scritto.'); return; } if(!confirm(`Cristallizzare il registro fino al ${fmtDay(d)}?\nDa lì a ritroso: niente travasi, niente spostamento litri; solo buoni entro il contante.`)) return; setCristal(d); });
+document.getElementById('cristal-clear').addEventListener('click',()=>{ if(!confirm('Sbloccare la cristallizzazione? I giorni torneranno modificabili.')) return; setCristal(''); });
+
+const dropAny=document.getElementById('drop-any'), fileAny=document.getElementById('file-any');
+dropAny.addEventListener('click',()=>fileAny.click());
+fileAny.addEventListener('change',e=>{ if(e.target.files[0]){ handleAnyFile(e.target.files[0]); e.target.value=''; } });
+['dragover','dragenter'].forEach(ev=>dropAny.addEventListener(ev,e=>{e.preventDefault();dropAny.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=>dropAny.addEventListener(ev,e=>{e.preventDefault();dropAny.classList.remove('drag');}));
+dropAny.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f) handleAnyFile(f); });
+document.getElementById('import-result-pos').addEventListener('click',e=>{ const c=e.target.closest('.poschip'); if(c) togglePosAcc(c.dataset.acc); }); // delegation chip Lusciano
+document.getElementById('import-list').addEventListener('click',e=>{ const b=e.target.closest('.xsrc'); if(b) removeSrc(b.dataset.k); }); // delegation rimozione
+
+// controllo casse — tutto sulla riga dell'operatore
+document.getElementById('op-new-add').addEventListener('click',addSchedaManuale);
+document.getElementById('op-list').addEventListener('input',e=>{ const i=e.target.closest('.turno-num'); if(i){ setDraft(i.dataset.s,i.dataset.f,itNum(i.value)); refreshRow(i.dataset.s); } }); // sul posto (telefono)
+document.getElementById('op-list').addEventListener('change',e=>{ const dt=e.target.closest('.turno-dt'); if(dt){ setDraft(dt.dataset.s,dt.dataset.f,dt.value); refreshRow(dt.dataset.s); return; } const a=e.target.closest('.casse-acc'); if(a){ editCasse(a.dataset.s,'account',a.value); refreshRow(a.dataset.s); } });
+document.getElementById('op-list').addEventListener('click',e=>{
+  const x=e.target.closest('.op-del-sch'); if(x){ e.preventDefault(); delSchedaManuale(x.dataset.s); return; }
+  const rn=e.target.closest('.casse-rename'); if(rn){ e.preventDefault(); renameScheda(rn.dataset.s); return; }
+  const st=e.target.closest('.casse-storico'); if(st){ e.preventDefault(); toggleStorico(st.dataset.s); return; }
+  const cv=e.target.closest('.turno-conv'); if(cv){ e.preventDefault(); convalidaTurnoRow(cv.dataset.s); return; }
+  const dl=e.target.closest('.turno-del'); if(dl){ e.preventDefault(); delTurno(dl.dataset.s,dl.dataset.id); return; }
+});
+
+document.getElementById('cl-search').addEventListener('input',debounce(()=>{ CLQ=document.getElementById('cl-search').value; renderClList(); },140));
+document.getElementById('cl-list').addEventListener('click',e=>{ const it=e.target.closest('.cl-item'); if(!it) return; CURCLI=it.dataset.id; saveClienti(); renderClList(); renderClDetail(); }); // delegation: 1 listener
+
+document.getElementById('bk-export').addEventListener('click',exportBackup);
+document.getElementById('bk-import-btn').addEventListener('click',()=>document.getElementById('bk-import').click());
+document.getElementById('bk-import').addEventListener('change',e=>{ if(e.target.files[0]) importBackup(e.target.files[0]); });
+
+// ricariche manuali
+document.getElementById('ric-cliente-btn').addEventListener('click',()=>openCliPicker(selectRicCli, c=>c.tipo==='PRE'&&c.genAuto));
+document.getElementById('ric-add').addEventListener('click',addRicarica);
+
+// anagrafica clienti: indipendente dal file importato
+loadClienti(); renderClienti();
+loadRic(); renderRicariche();
+loadCassa();
+restoreImports();
+renderOperatori();
+</script>
+</body>
+</html>
