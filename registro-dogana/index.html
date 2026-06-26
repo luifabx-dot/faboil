@@ -81,6 +81,17 @@ body{min-height:100vh;background:var(--bg);color:var(--text);font-family:var(--s
 .formline .f{display:flex;flex-direction:column;gap:.25rem}
 .formline label{font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
 .tablewrap{overflow-x:hidden;overflow-y:auto;border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);max-height:72vh}
+/* controllo casse: tabelle larghe → scorrimento orizzontale e colonne a larghezza naturale */
+.cassawrap{overflow:auto;-webkit-overflow-scrolling:touch;border:1.5px solid var(--border);border-radius:var(--radius);background:var(--surface);max-height:72vh}
+.cassawrap table.reg{table-layout:auto;width:auto;min-width:100%}
+.cassawrap table.reg th,.cassawrap table.reg td{white-space:nowrap;overflow:visible;text-overflow:clip;font-size:.74rem;padding:.42rem .55rem}
+.cassawrap table.reg .fld{font-size:.78rem;padding:.32rem .5rem;width:auto}
+.turnogrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:.5rem}
+.turnogrid .tcell{display:flex;justify-content:space-between;align-items:center;gap:.5rem;background:var(--surface2);border:1.5px solid var(--border);border-radius:9px;padding:.45rem .65rem;font-size:.84rem}
+.turnogrid .tcell label,.turnogrid .tcell span{color:var(--muted);font-weight:600}
+.turnogrid .tcell input{width:6.4rem;text-align:right}
+.turnogrid .tcell.tot{background:var(--accent-bg);border-color:var(--accent)}
+.turnogrid .tcell.tot span{color:var(--text);font-weight:700}
 table.reg{border-collapse:separate;border-spacing:0;font-family:var(--mono);width:100%;table-layout:fixed}
 table.reg th,table.reg td{padding:.28rem .15rem;text-align:right;border-bottom:1px solid var(--border);border-right:1px solid var(--border);font-size:.68rem;overflow:hidden;text-overflow:ellipsis}
 table.reg col.dc{width:74px}
@@ -1061,7 +1072,7 @@ function renderOperatori(){ const el=document.getElementById('op-list'), warn=do
   const schede=schedeGestore();
   if(!schede.length){ el.innerHTML='<p class="muted">Nessuna scheda gestore rilevata.</p>'; renderConvalida(); return; }
   const posOpts=acc=>'<option value="">—</option>'+(POS?POS.accounts.map(a=>`<option value="${escapeAttr(a.name)}"${normName(a.name)===normName(acc)?' selected':''}>${escapeHtml(a.name)}</option>`).join(''):'');
-  let h='<div class="tablewrap"><table class="reg"><thead><tr><th>N. tessera</th><th style="text-align:left">Nome</th><th style="text-align:left">Account POS</th><th title="servito di periodo, tutte le transazioni">Servito</th><th>POS</th><th title="turni convalidati">Turni</th><th>DROP</th><th>Monete</th><th>Sospese</th><th>UTA</th><th>DKV</th><th title="somma dei TOT dei turni convalidati">Σ TOT turni</th></tr></thead><tbody>';
+  let h='<div class="cassawrap"><table class="reg"><thead><tr><th>N. tessera</th><th style="text-align:left">Nome</th><th style="text-align:left">Account POS</th><th title="servito di periodo, tutte le transazioni">Servito</th><th>POS</th><th title="turni convalidati">Turni</th><th>DROP</th><th>Monete</th><th>Sospese</th><th>UTA</th><th>DKV</th><th title="somma dei TOT dei turni convalidati">Σ TOT turni</th></tr></thead><tbody>';
   const sum={serv:0,pos:0,n:0,drop:0,monete:0,sospese:0,uta:0,dkv:0,tot:0};
   schede.forEach(s=>{ const r=casseRec(s); const clan=!(r.nome||SCHEDE_NOTE[s]);
     const servPer=STATE.days.reduce((x,d)=>x+servitoDay(s,d),0), posPer=STATE.days.reduce((x,d)=>x+posAccountDay(r.account,d),0); const a=turniAgg(s);
@@ -1085,15 +1096,19 @@ function renderTurno(){ const el=document.getElementById('turno-calc'); if(!el){
   if(!STATE){ el.innerHTML='<p class="muted">Carica StoreSmart.</p>'; renderStorico(); return; }
   const s=CASSA_OP; if(!s){ el.innerHTML='<p class="muted">Scegli una scheda per impostare un turno.</p>'; renderStorico(); return; }
   const v=curTurno(); const noTx=!STATE.servitoTx;
-  const inp=f=>`<input class="fld turno-in" data-f="${f}" type="number" inputmode="decimal" step="0.01" value="${DRAFT[f]||''}" style="width:6.5rem;text-align:right">`;
-  el.innerHTML=`${noTx?'<div class="warn">⚠ Ri-importa StoreSmart e POS: senza orari il servito a finestra è 0.</div>':''}
-    <table class="reg"><tbody>
-    <tr><td style="text-align:left">Servito (finestra)</td><td style="font-weight:600;text-align:right">${fmtEur(v.serv)}</td><td style="text-align:left">POS (finestra)</td><td style="font-weight:600;text-align:right">${fmtEur(v.pos)}</td></tr>
-    <tr><td style="text-align:left">DROP</td><td style="text-align:right">${inp('drop')}</td><td style="text-align:left">Monete</td><td style="text-align:right">${inp('monete')}</td></tr>
-    <tr><td style="text-align:left">Sospese</td><td style="text-align:right">${inp('sospese')}</td><td style="text-align:left">UTA</td><td style="text-align:right">${inp('uta')}</td></tr>
-    <tr><td style="text-align:left">DKV</td><td style="text-align:right">${inp('dkv')}</td><td style="text-align:left">= TOT</td><td id="turno-tot" style="font-weight:800;text-align:right;color:${Math.abs(v.tot)>0.5?'var(--red)':'var(--text)'}">${fmtEur(v.tot)}</td></tr>
-    </tbody></table>
-    <div style="margin-top:.6rem;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap"><button class="btn" id="turno-conv"${v.hasWin?'':' disabled'}>✓ Convalida turno</button>${v.hasWin?`<span class="muted">${fmtDT(v.ini)} → ${fmtDT(v.fin)}</span>`:'<span class="muted">imposta Inizio e Fine validi</span>'}</div>`;
+  const inp=f=>`<input class="fld turno-in" data-f="${f}" type="number" inputmode="decimal" step="0.01" value="${DRAFT[f]||''}">`;
+  el.innerHTML=`${noTx?'<div class="warn" style="margin-bottom:.6rem">⚠ Ri-importa StoreSmart e POS: senza orari il servito a finestra è 0.</div>':''}
+    <div class="turnogrid">
+      <div class="tcell"><span>Servito (finestra)</span><b>${fmtEur(v.serv)}</b></div>
+      <div class="tcell"><span>POS (finestra)</span><b>${fmtEur(v.pos)}</b></div>
+      <div class="tcell"><label>DROP</label>${inp('drop')}</div>
+      <div class="tcell"><label>Monete</label>${inp('monete')}</div>
+      <div class="tcell"><label>Sospese</label>${inp('sospese')}</div>
+      <div class="tcell"><label>UTA</label>${inp('uta')}</div>
+      <div class="tcell"><label>DKV</label>${inp('dkv')}</div>
+      <div class="tcell tot"><span>= TOT</span><b id="turno-tot" style="color:${Math.abs(v.tot)>0.5?'var(--red)':'var(--text)'}">${fmtEur(v.tot)}</b></div>
+    </div>
+    <div style="margin-top:.7rem;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap"><button class="btn" id="turno-conv"${v.hasWin?'':' disabled'}>✓ Convalida turno</button>${v.hasWin?`<span class="muted">${fmtDT(v.ini)} → ${fmtDT(v.fin)}</span>`:'<span class="muted">imposta Inizio e Fine validi</span>'}</div>`;
   renderStorico(); }
 function updateTurnoTot(){ const c=document.getElementById('turno-tot'); if(!c) return; const v=curTurno(); c.textContent=fmtEur(v.tot); c.style.color=Math.abs(v.tot)>0.5?'var(--red)':'var(--text)'; }
 function convalidaTurno(){ const v=curTurno(); if(!v.s){ alert('Scegli una scheda.'); return; } if(!v.hasWin){ alert('Imposta Inizio e Fine validi (Fine dopo Inizio).'); return; }
@@ -1106,7 +1121,7 @@ function renderStorico(){ const el=document.getElementById('turno-storico'); if(
   const list=(s?turniScheda(s).map(t=>({t,s})):Object.keys(TURNI).flatMap(k=>turniScheda(k).map(t=>({t,s:k})))).sort((a,b)=>(a.t.ini<b.t.ini?1:-1));
   if(!list.length){ el.innerHTML='<p class="muted">Nessun turno convalidato'+(s?' per questa scheda':'')+'.</p>'; return; }
   const showScheda=!s;
-  let h='<div class="tablewrap" style="max-height:60vh"><table class="reg"><thead><tr>'+(showScheda?'<th>Scheda</th>':'')+'<th style="text-align:left">Inizio</th><th style="text-align:left">Fine</th><th>Servito</th><th>POS</th><th>DROP</th><th>Monete</th><th>Sospese</th><th>UTA</th><th>DKV</th><th>TOT</th><th>conv.</th><th></th></tr></thead><tbody>';
+  let h='<div class="cassawrap" style="max-height:60vh"><table class="reg"><thead><tr>'+(showScheda?'<th>Scheda</th>':'')+'<th style="text-align:left">Inizio</th><th style="text-align:left">Fine</th><th>Servito</th><th>POS</th><th>DROP</th><th>Monete</th><th>Sospese</th><th>UTA</th><th>DKV</th><th>TOT</th><th>conv.</th><th></th></tr></thead><tbody>';
   list.forEach(({t,s:sc})=>{ const r=CASSE[sc]||{};
     h+=`<tr>${showScheda?`<td>${sc}${r.nome?'<br><span class="muted" style="font-size:.7rem">'+escapeHtml(r.nome)+'</span>':''}</td>`:''}<td style="text-align:left">${fmtDT(t.ini)}</td><td style="text-align:left">${fmtDT(t.fin)}</td><td>${fmtEur(t.servito)}</td><td>${fmtEur(t.pos)}</td><td>${fmtEur(t.drop)}</td><td>${fmtEur(t.monete)}</td><td>${fmtEur(t.sospese)}</td><td>${fmtEur(t.uta)}</td><td>${fmtEur(t.dkv)}</td><td style="font-weight:700;color:${Math.abs(t.tot)>0.5?'var(--red)':'var(--text)'}">${fmtEur(t.tot)}</td><td class="muted" style="font-size:.72rem">${fmtDT((t.convAt||'').slice(0,16))}</td><td><button class="btn ghost turno-del" data-s="${sc}" data-id="${t.id}" title="elimina" style="padding:.15rem .45rem">✕</button></td></tr>`; });
   h+='</tbody></table></div>'; el.innerHTML=h; }
@@ -1506,7 +1521,7 @@ document.getElementById('import-result-pos').addEventListener('click',e=>{ const
 document.getElementById('import-list').addEventListener('click',e=>{ const b=e.target.closest('.xsrc'); if(b) removeSrc(b.dataset.k); }); // delegation rimozione
 
 // controllo casse
-document.getElementById('op-list').addEventListener('change',e=>{ const n=e.target.closest('.casse-nome'); if(n){ editCasse(n.dataset.s,'nome',n.target.value); renderOperatori(); fillCassaOp(); return; } const a=e.target.closest('.casse-acc'); if(a){ editCasse(a.dataset.s,'account',a.target.value); renderOperatori(); if(CASSA_OP===a.dataset.s) renderTurno(); } });
+document.getElementById('op-list').addEventListener('change',e=>{ const n=e.target.closest('.casse-nome'); if(n){ editCasse(n.dataset.s,'nome',n.value); renderOperatori(); fillCassaOp(); return; } const a=e.target.closest('.casse-acc'); if(a){ editCasse(a.dataset.s,'account',a.value); renderOperatori(); if(CASSA_OP===a.dataset.s) renderTurno(); } });
 document.getElementById('op-list').addEventListener('click',e=>{ const l=e.target.closest('.casse-sel'); if(l){ e.preventDefault(); CASSA_OP=l.dataset.s; const sel=document.getElementById('cassa-op'); if(sel) sel.value=l.dataset.s; DRAFT={drop:0,monete:0,sospese:0,uta:0,dkv:0}; renderTurno(); document.getElementById('turno-calc').scrollIntoView({behavior:'smooth',block:'nearest'}); } });
 document.getElementById('cassa-op').addEventListener('change',e=>{ CASSA_OP=e.target.value||null; DRAFT={drop:0,monete:0,sospese:0,uta:0,dkv:0}; renderTurno(); });
 ['turno-ini','turno-fin'].forEach(id=>document.getElementById(id).addEventListener('change',renderTurno));
