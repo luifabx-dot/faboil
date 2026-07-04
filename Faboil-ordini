@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#f8f9fb">
+<title>Faboil Ordini</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f0f3f7;--surface:#fff;--surface2:#f5f7fa;--surface3:#edf0f5;
+  --border:#e2e6ef;--border2:#c9d0de;--text:#111827;--muted:#64748b;--muted2:#94a3b8;
+  --accent:#e07b00;--accent-bg:rgba(224,123,0,.09);--blue:#2563eb;--blue-bg:rgba(37,99,235,.09);
+  --red:#dc2626;--red-bg:rgba(220,38,38,.08);--green:#15803d;--green-bg:rgba(21,128,61,.08);
+  --mono:'IBM Plex Mono',monospace;--sans:'Syne',sans-serif;--radius:10px;
+  --shadow:0 1px 4px rgba(0,0,0,.07),0 4px 16px rgba(0,0,0,.04);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{font-size:16px;-webkit-text-size-adjust:100%}
+body{height:100dvh;background:var(--bg);color:var(--text);font-family:var(--sans);overflow:hidden;-webkit-font-smoothing:antialiased}
+.app{display:flex;flex-direction:column;height:100dvh}
+.topbar{display:flex;align-items:center;padding:.75rem 1.25rem;background:var(--surface);border-bottom:1.5px solid var(--border);flex-shrink:0;gap:.75rem}
+.logo{font-size:1.1rem;font-weight:800;letter-spacing:-.02em;color:var(--accent)}
+.logo em{color:var(--muted);font-style:normal;font-weight:600;font-size:.72rem;margin-left:.35rem}
+#sync-badge{font-size:.6rem;font-family:var(--mono);padding:.1rem .45rem;border-radius:8px;background:rgba(0,0,0,.08);color:var(--muted);font-weight:500;margin-left:.3rem}
+.content{flex:1;overflow-y:auto;overflow-x:hidden}
+.page{display:none;padding:1.2rem 1rem;max-width:680px;margin:0 auto}
+.page.on{display:block;animation:fadeUp .18s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.bnav{background:var(--surface);border-top:1.5px solid var(--border);flex-shrink:0}
+.bnav-inner{display:flex}
+.bn{flex:1;background:none;border:none;font-family:var(--sans);font-size:.68rem;font-weight:700;padding:.6rem .3rem .55rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:.15rem;color:var(--muted);transition:color .12s}
+.bn .ic{font-size:1.4rem;line-height:1.1}
+.bn.on{color:var(--accent)}
+/* CARD / FORM */
+.sh{margin-bottom:1rem}
+.sh h1{font-size:1.35rem;font-weight:800;letter-spacing:-.02em}
+.sh p{font-size:.75rem;color:var(--muted);font-family:var(--mono);margin-top:.2rem}
+.card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:1rem 1.1rem;margin-bottom:.85rem;box-shadow:var(--shadow)}
+.card-title{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.8rem;display:flex;align-items:center;gap:.4rem}
+label{font-size:.7rem;font-weight:700;color:var(--muted);display:block;margin-bottom:.28rem;text-transform:uppercase;letter-spacing:.05em}
+input,select{background:var(--surface2);border:1.5px solid var(--border2);border-radius:7px;color:var(--text);font-family:var(--mono);font-size:.95rem;padding:.5rem .7rem;width:100%;outline:none;transition:border-color .12s;-webkit-appearance:none;appearance:none}
+input:focus,select:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px rgba(224,123,0,.12)}
+input[type=number]{text-align:right}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .7rem center;padding-right:1.8rem}
+.frow{display:flex;gap:.55rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:.7rem}
+.fg1{flex:1;min-width:120px}
+.fg2{flex:2;min-width:180px}
+.btn{background:var(--surface2);border:1.5px solid var(--border2);color:var(--text);font-family:var(--sans);font-size:.88rem;font-weight:700;padding:.5rem 1rem;border-radius:7px;cursor:pointer;transition:all .12s;white-space:nowrap;display:inline-flex;align-items:center;gap:.3rem}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-primary:hover{background:#c56d00;border-color:#c56d00}
+.btn-blue{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn-green{background:var(--green);border-color:var(--green);color:#fff}
+.btn-sm{font-size:.78rem;padding:.32rem .65rem}
+.btn-xs{font-size:.7rem;padding:.22rem .5rem}
+.btn-red{background:var(--red);border-color:var(--red);color:#fff}
+.sbar{font-size:.8rem;font-weight:600;padding:.5rem .85rem;border-radius:7px;margin-top:.55rem;display:flex;align-items:center;gap:.4rem}
+.sbar.ok{background:var(--green-bg);color:var(--green);border:1px solid rgba(21,128,61,.2)}
+.sbar.err{background:var(--red-bg);color:var(--red);border:1px solid rgba(220,38,38,.2)}
+.empty{text-align:center;padding:2rem 1rem;color:var(--muted2)}
+.empty-ic{font-size:2.2rem;margin-bottom:.4rem}
+.empty p{font-size:.82rem}
+/* STATS */
+.stats-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.6rem;margin-bottom:.85rem}
+.stat-box{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:.8rem .9rem;box-shadow:var(--shadow)}
+.stat-label{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:.25rem}
+.stat-val{font-size:1.3rem;font-weight:800;font-family:var(--mono);line-height:1.1}
+.stat-val.acc{color:var(--accent)}
+.stat-val.blue{color:var(--blue)}
+.stat-val.red{color:var(--red)}
+.stat-val.green{color:var(--green)}
+/* CISTERNE */
+.cist-row{padding:.7rem 0;border-bottom:1px solid var(--border)}
+.cist-row:last-child{border-bottom:none;padding-bottom:.2rem}
+.cist-head{display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem}
+.cist-nome{font-weight:800;font-size:.88rem;flex:1}
+.cist-cap{font-family:var(--mono);font-size:.72rem;color:var(--muted)}
+.cist-bar{height:14px;background:var(--surface3);border:1px solid var(--border2);border-radius:7px;overflow:hidden;margin-bottom:.45rem}
+.cist-fill{height:100%;border-radius:6px;transition:width .25s ease;min-width:2px}
+.cist-fill.benzina{background:linear-gradient(90deg,#4ade80,#15803d)}
+.cist-fill.gasolio{background:linear-gradient(90deg,#fbbf24,#e07b00)}
+.cist-fill.low{background:linear-gradient(90deg,#f87171,#dc2626)!important}
+.cist-inputs{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+.cist-inputs input{max-width:120px}
+.cist-libero{font-family:var(--mono);font-size:.78rem;font-weight:600;color:var(--blue);flex:1;text-align:right;min-width:110px}
+.sugg-box{background:var(--accent-bg);border:1.5px solid rgba(224,123,0,.3);border-radius:8px;padding:.6rem .8rem;margin-top:.7rem;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.sugg-txt{flex:1;font-size:.8rem;font-weight:700;min-width:150px}
+.sugg-txt .mono{color:var(--accent)}
+.prod-tag{border-radius:5px;padding:.15rem .45rem;font-size:.68rem;font-weight:700;display:inline-block}
+.prod-tag.Benzina{background:#dcfce7;border:1px solid #4ade80;color:#14532d}
+.prod-tag.Gasolio{background:#fef3c7;border:1px solid #fbbf24;color:#92400e}
+.staz-tag{border-radius:5px;padding:.15rem .45rem;font-size:.68rem;font-weight:700;display:inline-block;font-family:var(--mono)}
+.staz-tag.lusciano{background:var(--blue-bg);border:1px solid rgba(37,99,235,.35);color:var(--blue)}
+.staz-tag.casaluce{background:#fce7f3;border:1px solid #f472b6;color:#9d174d}
+/* ORDINI */
+.stato-pill{border-radius:5px;padding:.22rem .45rem;font-size:.72rem;font-weight:700;display:inline-block;line-height:1.3}
+.stato-pill.Attesa{background:#fef9c3;border:1px solid #fbbf24;color:#92400e}
+.stato-pill.Confermato{background:#dbeafe;border:1px solid #60a5fa;color:#1e40af}
+.stato-pill.Consegnato{background:#dcfce7;border:1px solid #4ade80;color:#14532d}
+.stato-pill.Annullato{background:#f1f5f9;border:1px solid #cbd5e1;color:#64748b;text-decoration:line-through}
+.ord-card{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:.85rem 1rem;margin-bottom:.6rem;box-shadow:var(--shadow)}
+.ord-card.late{border-color:rgba(220,38,38,.45)}
+.ord-head{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.ord-prod{font-weight:800;font-size:.95rem;flex:1}
+.ord-tot{font-family:var(--mono);font-weight:700;color:var(--accent);font-size:.95rem}
+.ord-sub{font-size:.72rem;color:var(--muted);font-family:var(--mono);margin-top:.3rem;display:flex;gap:.8rem;flex-wrap:wrap}
+.ord-note{font-size:.72rem;color:var(--muted);font-family:var(--mono);margin-top:.25rem}
+.ord-actions{display:flex;gap:.4rem;margin-top:.55rem;flex-wrap:wrap}
+.filt-row{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.8rem}
+.filt{background:var(--surface);border:1.5px solid var(--border2);border-radius:20px;font-family:var(--sans);font-size:.72rem;font-weight:700;padding:.3rem .8rem;cursor:pointer;color:var(--muted);transition:all .12s}
+.filt.on{background:var(--accent);border-color:var(--accent);color:#fff}
+/* TABLE */
+.tbl{width:100%;border-collapse:collapse;font-size:.83rem}
+.tbl th{text-align:right;padding:.5rem .55rem;background:var(--surface2);border-bottom:2px solid var(--border2);color:var(--muted);font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}
+.tbl th:first-child{text-align:left}
+.tbl td{text-align:right;padding:.55rem .55rem;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:.82rem;vertical-align:middle}
+.tbl td:first-child{text-align:left;font-family:var(--sans);font-size:.83rem}
+.tbl tfoot td{font-weight:700;border-top:2px solid var(--border2);background:var(--surface2)}
+.tbl tfoot td:first-child{font-family:var(--sans);font-weight:800}
+.mono{font-family:var(--mono)}
+.muted{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo">⛽ Faboil <em>Ordini</em>
+    <span id="sync-badge">💾 locale</span>
+  </div>
+</div>
+
+<!-- APP PAGES -->
+<div class="content" id="app-content">
+
+  <!-- CISTERNE -->
+  <div id="p-cisterne" class="page on">
+    <div class="sh"><h1>🛢 Cisterne</h1><p>Giacenze e spazio disponibile</p></div>
+    <div id="cist-container"></div>
+  </div>
+
+  <!-- NUOVO ORDINE -->
+  <div id="p-nuovo" class="page">
+    <div class="sh"><h1>📝 Nuovo ordine</h1><p>Ordine carburante</p></div>
+    <div class="card">
+      <div class="card-title">🛒 Dettagli ordine</div>
+      <div class="frow">
+        <div class="fg1"><label>Distributore</label>
+          <select id="o-staz" onchange="oSuggerisci()">
+            <option value="lusciano">Lusciano</option>
+            <option value="casaluce">Casaluce</option>
+          </select>
+        </div>
+        <div class="fg1"><label>Prodotto</label>
+          <select id="o-prod" onchange="oSuggerisci()">
+            <option value="Benzina">⛽ Benzina</option>
+            <option value="Gasolio">🛢 Gasolio</option>
+          </select>
+        </div>
+      </div>
+      <div id="o-spazio"></div>
+      <div class="frow">
+        <div class="fg1"><label>Data ordine</label><input type="date" id="o-data"></div>
+        <div class="fg2"><label>Fornitore</label><input type="text" id="o-forn" list="forn-list" placeholder="es. ENI, Q8…"><datalist id="forn-list"></datalist></div>
+      </div>
+      <div class="frow">
+        <div class="fg1"><label>Litri</label><input type="number" id="o-litri" step="1" min="0" placeholder="0" oninput="oTot()"></div>
+        <div class="fg1"><label>Prezzo €/L</label><input type="number" id="o-prezzo" step="0.001" min="0" placeholder="0.000" oninput="oTot()"></div>
+        <div class="fg1"><label>Totale €</label><input type="number" id="o-tot" step="0.01" min="0" placeholder="0.00"></div>
+      </div>
+      <div class="frow">
+        <div class="fg1"><label>Consegna prevista</label><input type="date" id="o-consegna"></div>
+        <div class="fg2"><label>Note</label><input type="text" id="o-note" placeholder="opzionale"></div>
+      </div>
+      <button class="btn btn-primary" onclick="oSalva()">➕ Salva ordine</button>
+      <div id="o-status"></div>
+    </div>
+  </div>
+
+  <!-- LISTA ORDINI -->
+  <div id="p-ordini" class="page">
+    <div class="sh"><h1>📦 Ordini</h1><p id="ord-sub"></p></div>
+    <div class="filt-row">
+      <button class="filt on" data-f="" onclick="fSet('staz','',this)">Tutti</button>
+      <button class="filt" data-f="lusciano" onclick="fSet('staz','lusciano',this)">Lusciano</button>
+      <button class="filt" data-f="casaluce" onclick="fSet('staz','casaluce',this)">Casaluce</button>
+    </div>
+    <div class="filt-row">
+      <button class="filt on" onclick="fSet('stato','',this)">Tutti gli stati</button>
+      <button class="filt" onclick="fSet('stato','Attesa',this)">⏳ In attesa</button>
+      <button class="filt" onclick="fSet('stato','Confermato',this)">📋 Confermati</button>
+      <button class="filt" onclick="fSet('stato','Consegnato',this)">✅ Consegnati</button>
+      <button class="filt" onclick="fSet('stato','Annullato',this)">🚫 Annullati</button>
+    </div>
+    <div id="ord-list"></div>
+  </div>
+
+  <!-- RIEPILOGO -->
+  <div id="p-riepilogo" class="page">
+    <div class="sh"><h1>📊 Riepilogo</h1><p>FABOIL SRL — Lusciano · Casaluce</p></div>
+    <div class="card">
+      <div class="card-title">Periodo</div>
+      <div class="frow">
+        <div class="fg1"><label>Dal</label><input type="date" id="r-da" onchange="rCalc()"></div>
+        <div class="fg1"><label>Al</label> <input type="date" id="r-a"  onchange="rCalc()"></div>
+        <div style="align-self:flex-end"><button class="btn btn-primary" onclick="rCalc()">Calcola</button></div>
+      </div>
+    </div>
+    <div id="r-empty" class="empty"><div class="empty-ic">📊</div><p>Seleziona un periodo</p></div>
+    <div id="r-stats" style="display:none">
+      <div class="stats-grid" id="r-boxes"></div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="overflow-x:auto">
+          <table class="tbl">
+            <thead><tr><th>Distributore / Prodotto</th><th>Ordini</th><th>Litri</th><th>Spesa</th></tr></thead>
+            <tbody id="r-tbody"></tbody>
+            <tfoot id="r-tfoot"></tfoot>
+          </table>
+        </div>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="overflow-x:auto">
+          <table class="tbl">
+            <thead><tr><th>Fornitore</th><th>Ordini</th><th>Litri</th><th>Spesa</th></tr></thead>
+            <tbody id="rf-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /content -->
+
+<!-- BOTTOM NAV -->
+<div class="bnav">
+  <div class="bnav-inner">
+    <button class="bn on" onclick="go('cisterne',this)"><span class="ic">🛢</span>Cisterne</button>
+    <button class="bn"    onclick="go('nuovo',this)"><span class="ic">📝</span>Nuovo</button>
+    <button class="bn"    onclick="go('ordini',this)"><span class="ic">📦</span>Ordini</button>
+    <button class="bn"    onclick="go('riepilogo',this)"><span class="ic">📊</span>Riepilogo</button>
+  </div>
+</div>
+
+</div><!-- /app -->
+
+<script>
+// ══════════════════════════════════════════════════
+//  ▼▼▼ STESSA CONFIGURAZIONE DI faboil.html ▼▼▼
+// ══════════════════════════════════════════════════
+const JB_KEY      = '$2a$10$wREVQf5to/PQ3A2ACVOpBOf.9pmfxM4DjvuSLXBi0XNKQ5LnGwSua';
+const JB_BIN_FISSO = ''; // ← stesso Bin ID di faboil.html
+// ══════════════════════════════════════════════════
+
+// ── STAZIONI E CISTERNE (capienze in litri) ────────
+const STAZIONI={
+  lusciano:{nome:'Lusciano',cisterne:[
+    {id:'L-B1',prodotto:'Benzina',cap:25000,label:'Benzina 1'},
+    {id:'L-G1',prodotto:'Gasolio',cap:50000,label:'Gasolio 1'},
+    {id:'L-G2',prodotto:'Gasolio',cap:50000,label:'Gasolio 2'}
+  ]},
+  casaluce:{nome:'Casaluce',cisterne:[
+    {id:'C-B1',prodotto:'Benzina',cap:20000,label:'Benzina 1'},
+    {id:'C-G1',prodotto:'Gasolio',cap:20000,label:'Gasolio 1'},
+    {id:'C-G2',prodotto:'Gasolio',cap:20000,label:'Gasolio 2'},
+    {id:'C-G3',prodotto:'Gasolio',cap:50000,label:'Gasolio 3'}
+  ]}
+};
+const STATO_LBL={Attesa:'⏳ In attesa',Confermato:'📋 Confermato',Consegnato:'✅ Consegnato',Annullato:'🚫 Annullato'};
+const PROD_IC={'Benzina':'⛽','Gasolio':'🛢'};
+
+let S={ordini:[],cist_liv:{}};
+let JB_BIN=JB_BIN_FISSO||localStorage.getItem('gc5_bin')||'';
+let _jbLastHash='';
+let filtStaz='',filtStato='';
+
+// ── STORAGE ────────────────────────────────────────
+// Il bin JSONBin è unico per tutte le app Faboil: S contiene TUTTO lo stato
+// condiviso (badges, erogato, drops, pos_d, turni_sched, ordini, cist_liv),
+// così salvando da qui non si perde niente delle altre app.
+function applyData(data){
+  Object.assign(S,data);
+  if(!Array.isArray(S.ordini))S.ordini=[];
+  if(!S.cist_liv||typeof S.cist_liv!=='object')S.cist_liv={};
+}
+function ld(){
+  try{const d=localStorage.getItem('gc5');if(d)Object.assign(S,JSON.parse(d))}catch(e){}
+  applyData({});
+  if(JB_BIN)jbPull();
+  setInterval(jbPoll,4000);
+}
+function sv(){
+  try{localStorage.setItem('gc5',JSON.stringify(S))}catch(e){}
+  jbSave();
+}
+
+// ── UTILS ──────────────────────────────────────────
+const fmt=v=>'€'+Number(v||0).toFixed(2);
+const fmtL=v=>Number(v||0).toLocaleString('it-IT')+' L';
+const fd=d=>{if(!d)return'—';const[y,m,dd]=String(d).split('-');return`${dd}/${m}/${y}`};
+function showSt(id,msg,type){const el=document.getElementById(id);if(el)el.innerHTML=`<div class="sbar ${type}">${msg}</div>`}
+const today=()=>new Date().toISOString().slice(0,10);
+const esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const cistById=id=>{for(const st of Object.values(STAZIONI)){const c=st.cisterne.find(c=>c.id===id);if(c)return c}return null};
+const liv=id=>Math.max(0,Number((S.cist_liv[id]||{}).litri)||0);
+
+// ── NAV ────────────────────────────────────────────
+function go(id,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  document.getElementById('p-'+id).classList.add('on');
+  document.querySelectorAll('.bn').forEach(b=>b.classList.remove('on'));
+  if(btn)btn.classList.add('on');
+  if(id==='cisterne')cistRender();
+  if(id==='nuovo'){oInit();oSuggerisci()}
+  if(id==='ordini')ordRender();
+  if(id==='riepilogo')rInit();
+}
+
+// ── CISTERNE ───────────────────────────────────────
+function spazio(sk,prod){
+  // litri ordinabili = somma (capienza - giacenza) delle cisterne di quel prodotto
+  return STAZIONI[sk].cisterne.filter(c=>c.prodotto===prod)
+    .reduce((t,c)=>t+Math.max(0,c.cap-Math.min(liv(c.id),c.cap)),0);
+}
+function cistRender(){
+  const el=document.getElementById('cist-container');
+  let html='';
+  Object.entries(STAZIONI).forEach(([sk,st])=>{
+    html+=`<div class="card"><div class="card-title"><span class="staz-tag ${sk}">📍 ${st.nome}</span></div>`;
+    st.cisterne.forEach(c=>{
+      const l=liv(c.id),pct=Math.min(100,Math.round(l/c.cap*100)),free=Math.max(0,c.cap-l);
+      const low=pct<20;
+      const dt=(S.cist_liv[c.id]||{}).data;
+      html+=`<div class="cist-row">
+        <div class="cist-head">
+          <span class="prod-tag ${c.prodotto}">${PROD_IC[c.prodotto]} ${c.prodotto}</span>
+          <span class="cist-nome">${c.label}</span>
+          <span class="cist-cap">${fmtL(c.cap)} · ${pct}%${low?' ⚠️':''}</span>
+        </div>
+        <div class="cist-bar"><div class="cist-fill ${c.prodotto.toLowerCase()}${low?' low':''}" style="width:${pct}%"></div></div>
+        <div class="cist-inputs">
+          <input type="number" step="1" min="0" max="${c.cap}" value="${l||''}" placeholder="giacenza L"
+            onchange="cistSet('${c.id}',this.value)">
+          <span class="cist-libero">libero: <strong>${fmtL(free)}</strong></span>
+        </div>
+        ${dt?`<div style="font-size:.62rem;color:var(--muted2);font-family:var(--mono);margin-top:.25rem">agg. ${fd(dt)}</div>`:''}
+      </div>`;
+    });
+    // suggerimenti ordine per prodotto
+    ['Benzina','Gasolio'].forEach(p=>{
+      if(!st.cisterne.some(c=>c.prodotto===p))return;
+      const free=spazio(sk,p);
+      if(free>0)html+=`<div class="sugg-box">
+        <div class="sugg-txt">${PROD_IC[p]} ${p}: puoi ordinare fino a <span class="mono">${fmtL(free)}</span></div>
+        <button class="btn btn-primary btn-sm" onclick="ordinaDa('${sk}','${p}',${free})">📝 Ordina</button>
+      </div>`;
+    });
+    html+='</div>';
+  });
+  el.innerHTML=html;
+}
+function cistSet(id,val){
+  const c=cistById(id);if(!c)return;
+  let l=Math.max(0,parseFloat(val)||0);
+  if(l>c.cap)l=c.cap;
+  S.cist_liv[id]={litri:l,data:today()};
+  sv();cistRender();
+}
+function ordinaDa(sk,prod,litri){
+  document.getElementById('o-staz').value=sk;
+  document.getElementById('o-prod').value=prod;
+  document.getElementById('o-litri').value=litri;
+  oTot();
+  go('nuovo',document.querySelectorAll('.bn')[1]);
+}
+
+// ── NUOVO ORDINE ───────────────────────────────────
+function oInit(){
+  if(!document.getElementById('o-data').value)document.getElementById('o-data').value=today();
+  const forn=[...new Set((S.ordini||[]).map(o=>o.fornitore).filter(Boolean))].sort();
+  document.getElementById('forn-list').innerHTML=forn.map(f=>`<option value="${esc(f)}">`).join('');
+}
+function oSuggerisci(){
+  const sk=document.getElementById('o-staz').value,prod=document.getElementById('o-prod').value;
+  const free=spazio(sk,prod);
+  document.getElementById('o-spazio').innerHTML=`<div class="sugg-box" style="margin:.1rem 0 .8rem">
+    <div class="sugg-txt">Spazio libero a ${STAZIONI[sk].nome} (${prod.toLowerCase()}): <span class="mono">${fmtL(free)}</span></div>
+    <button class="btn btn-sm" onclick="document.getElementById('o-litri').value=${free};oTot()">Usa</button>
+  </div>`;
+}
+function oTot(){
+  const l=parseFloat(document.getElementById('o-litri').value)||0;
+  const p=parseFloat(document.getElementById('o-prezzo').value)||0;
+  if(l&&p)document.getElementById('o-tot').value=(Math.round(l*p*100)/100).toFixed(2);
+}
+function oSalva(){
+  const staz=document.getElementById('o-staz').value;
+  const data=document.getElementById('o-data').value;
+  const forn=document.getElementById('o-forn').value.trim();
+  const prod=document.getElementById('o-prod').value;
+  const litri=parseFloat(document.getElementById('o-litri').value)||0;
+  const prezzo=parseFloat(document.getElementById('o-prezzo').value)||0;
+  const tot=parseFloat(document.getElementById('o-tot').value)||0;
+  const consegna=document.getElementById('o-consegna').value;
+  const note=document.getElementById('o-note').value.trim();
+  if(!data||!litri){showSt('o-status','Inserisci data e litri','err');return}
+  const free=spazio(staz,prod);
+  if(litri>free&&free>0&&!confirm(`Attenzione: a ${STAZIONI[staz].nome} c'è spazio solo per ${fmtL(free)} di ${prod.toLowerCase()}. Salvare comunque ${fmtL(litri)}?`))return;
+  S.ordini.push({
+    id:'o'+Date.now()+Math.random().toString(36).slice(2,6),
+    staz,data,fornitore:forn,prodotto:prod,litri,prezzo,totale:Math.round(tot*100)/100,
+    consegna,stato:'Attesa',note
+  });
+  sv();
+  showSt('o-status',`✅ Ordine ${PROD_IC[prod]} ${prod} ${fmtL(litri)} → ${STAZIONI[staz].nome} salvato`,'ok');
+  ['o-litri','o-prezzo','o-tot','o-note'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('o-consegna').value='';
+  oInit();oSuggerisci();
+}
+
+// ── LISTA ORDINI ───────────────────────────────────
+function fSet(tipo,val,btn){
+  if(tipo==='staz')filtStaz=val;else filtStato=val;
+  const row=btn.parentElement;
+  row.querySelectorAll('.filt').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  ordRender();
+}
+function ordById(id){return(S.ordini||[]).find(o=>o.id===id)}
+function ordStato(id,stato){
+  const o=ordById(id);if(!o)return;
+  o.stato=stato;
+  if(stato==='Consegnato'){
+    if(!o.consegnatoIl)o.consegnatoIl=today();
+    scaricaInCisterne(o);
+  }
+  sv();ordRender();
+}
+// Alla consegna, distribuisce i litri nelle cisterne del prodotto (riempie in ordine)
+function scaricaInCisterne(o){
+  if(!o.staz||!o.litri)return;
+  let resto=o.litri;
+  STAZIONI[o.staz].cisterne.filter(c=>c.prodotto===o.prodotto).forEach(c=>{
+    if(resto<=0)return;
+    const l=liv(c.id),free=Math.max(0,c.cap-l);
+    const add=Math.min(free,resto);
+    if(add>0){S.cist_liv[c.id]={litri:l+add,data:today()};resto-=add}
+  });
+}
+function ordElimina(id){
+  const o=ordById(id);if(!o)return;
+  if(!confirm(`Eliminare l'ordine ${o.prodotto} del ${fd(o.data)} (${fmtL(o.litri)})?`))return;
+  S.ordini=S.ordini.filter(x=>x.id!==id);
+  sv();ordRender();
+}
+function ordRender(){
+  const el=document.getElementById('ord-list');
+  const tod=today();
+  const aperti=(S.ordini||[]).filter(o=>o.stato==='Attesa'||o.stato==='Confermato').length;
+  document.getElementById('ord-sub').textContent=`${(S.ordini||[]).length} totali · ${aperti} aperti`;
+  let list=[...(S.ordini||[])];
+  if(filtStaz)list=list.filter(o=>o.staz===filtStaz);
+  if(filtStato)list=list.filter(o=>o.stato===filtStato);
+  list.sort((a,b)=>(b.data||'').localeCompare(a.data||'')||(b.id||'').localeCompare(a.id||''));
+  if(!list.length){el.innerHTML='<div class="empty"><div class="empty-ic">📦</div><p>Nessun ordine</p></div>';return}
+  el.innerHTML=list.map(o=>{
+    const late=(o.stato==='Attesa'||o.stato==='Confermato')&&o.consegna&&o.consegna<tod;
+    let actions='';
+    if(o.stato==='Attesa')actions+=`<button class="btn btn-blue btn-xs" onclick="ordStato('${o.id}','Confermato')">📋 Conferma</button>`;
+    if(o.stato==='Attesa'||o.stato==='Confermato')actions+=`<button class="btn btn-green btn-xs" onclick="ordStato('${o.id}','Consegnato')">✅ Consegnato</button>
+      <button class="btn btn-xs" onclick="ordStato('${o.id}','Annullato')">🚫 Annulla</button>`;
+    if(o.stato==='Annullato')actions+=`<button class="btn btn-xs" onclick="ordStato('${o.id}','Attesa')">↩️ Ripristina</button>`;
+    actions+=`<button class="btn btn-red btn-xs" onclick="ordElimina('${o.id}')">🗑</button>`;
+    return`<div class="ord-card${late?' late':''}">
+      <div class="ord-head">
+        <span class="stato-pill ${o.stato}">${STATO_LBL[o.stato]||o.stato}</span>
+        <span class="ord-prod">${PROD_IC[o.prodotto]||'📦'} ${esc(o.prodotto)}</span>
+        ${o.staz?`<span class="staz-tag ${o.staz}">${STAZIONI[o.staz]?STAZIONI[o.staz].nome:o.staz}</span>`:''}
+        <span class="ord-tot">${o.totale?fmt(o.totale):fmtL(o.litri)}</span>
+      </div>
+      <div class="ord-sub">
+        ${o.fornitore?`<span>🏭 ${esc(o.fornitore)}</span>`:''}
+        <span>📅 ${fd(o.data)}</span>
+        ${o.litri?`<span>${fmtL(o.litri)}${o.prezzo?' · '+Number(o.prezzo).toFixed(3)+' €/L':''}</span>`:''}
+        ${o.consegna?`<span style="${late?'color:var(--red);font-weight:700':''}">🚚 ${fd(o.consegna)}${late?' ⚠️ in ritardo':''}</span>`:''}
+        ${o.consegnatoIl?`<span style="color:var(--green)">✅ ${fd(o.consegnatoIl)}</span>`:''}
+      </div>
+      ${o.note?`<div class="ord-note">📝 ${esc(o.note)}</div>`:''}
+      <div class="ord-actions">${actions}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── RIEPILOGO ──────────────────────────────────────
+function rInit(){
+  const t=today();
+  if(!document.getElementById('r-da').value)document.getElementById('r-da').value=t.slice(0,8)+'01';
+  if(!document.getElementById('r-a').value)document.getElementById('r-a').value=t;
+  rCalc();
+}
+function rCalc(){
+  const da=document.getElementById('r-da').value,a=document.getElementById('r-a').value;
+  if(!da||!a)return;
+  const list=(S.ordini||[]).filter(o=>o.data>=da&&o.data<=a&&o.stato!=='Annullato');
+  if(!list.length){
+    document.getElementById('r-stats').style.display='none';
+    document.getElementById('r-empty').style.display='';
+    document.getElementById('r-empty').innerHTML='<div class="empty-ic">🔍</div><p>Nessun ordine per questo periodo</p>';
+    return;
+  }
+  document.getElementById('r-empty').style.display='none';
+  document.getElementById('r-stats').style.display='';
+  const nOrd=list.length;
+  const nCons=list.filter(o=>o.stato==='Consegnato').length;
+  const litri=list.reduce((t,o)=>t+(o.litri||0),0);
+  const spesa=Math.round(list.reduce((t,o)=>t+(o.totale||0),0)*100)/100;
+  document.getElementById('r-boxes').innerHTML=`
+    <div class="stat-box"><div class="stat-label">Ordini</div><div class="stat-val">${nOrd}</div></div>
+    <div class="stat-box"><div class="stat-label">Consegnati</div><div class="stat-val green">${nCons}/${nOrd}</div></div>
+    <div class="stat-box"><div class="stat-label">Litri</div><div class="stat-val blue">${litri.toLocaleString('it-IT')}</div></div>
+    <div class="stat-box"><div class="stat-label">Spesa</div><div class="stat-val acc">${fmt(spesa)}</div></div>`;
+  const m={};
+  list.forEach(o=>{
+    const st=STAZIONI[o.staz]?STAZIONI[o.staz].nome:'—';
+    const k=`${st} · ${PROD_IC[o.prodotto]||''} ${o.prodotto}`;
+    if(!m[k])m[k]={n:0,litri:0,spesa:0};
+    m[k].n++;m[k].litri+=(o.litri||0);m[k].spesa+=(o.totale||0);
+  });
+  document.getElementById('r-tbody').innerHTML=Object.entries(m).sort().map(([k,v])=>
+    `<tr><td><strong>${esc(k)}</strong></td><td>${v.n}</td><td>${v.litri.toLocaleString('it-IT')}</td><td>${fmt(v.spesa)}</td></tr>`).join('');
+  document.getElementById('r-tfoot').innerHTML=
+    `<tr><td>TOT.</td><td>${nOrd}</td><td>${litri.toLocaleString('it-IT')}</td><td>${fmt(spesa)}</td></tr>`;
+  const mf={};
+  list.forEach(o=>{const k=o.fornitore||'—';if(!mf[k])mf[k]={n:0,litri:0,spesa:0};mf[k].n++;mf[k].litri+=(o.litri||0);mf[k].spesa+=(o.totale||0)});
+  document.getElementById('rf-tbody').innerHTML=Object.entries(mf).sort((x,y)=>y[1].spesa-x[1].spesa).map(([k,v])=>
+    `<tr><td><strong>🏭 ${esc(k)}</strong></td><td>${v.n}</td><td>${v.litri.toLocaleString('it-IT')}</td><td>${fmt(v.spesa)}</td></tr>`).join('');
+}
+
+// ── JSONBIN SYNC ───────────────────────────────────
+function jbEnabled(){return JB_KEY&&JB_KEY.length>10}
+async function jbPull(){
+  if(!jbEnabled()||!JB_BIN)return;
+  try{
+    const r=await fetch(`https://api.jsonbin.io/v3/b/${JB_BIN}/latest`,{headers:{'X-Master-Key':JB_KEY}});
+    const d=await r.json();if(!d.record)return;
+    applyData(d.record);
+    try{localStorage.setItem('gc5',JSON.stringify(S))}catch(e){}
+    _jbLastHash=JSON.stringify(d.record).slice(0,200);
+    jbStatusUpdate('ok');
+    refreshActive();
+  }catch(e){console.warn('jbPull:',e)}
+}
+async function jbSave(){
+  if(!jbEnabled()||!JB_BIN)return;
+  try{
+    await fetch(`https://api.jsonbin.io/v3/b/${JB_BIN}`,{method:'PUT',headers:{'Content-Type':'application/json','X-Master-Key':JB_KEY},body:JSON.stringify(S)});
+    jbStatusUpdate('ok');
+  }catch(e){jbStatusUpdate('err');console.warn('jbSave:',e)}
+}
+async function jbPoll(){
+  if(!jbEnabled()||!JB_BIN)return;
+  try{
+    const r=await fetch(`https://api.jsonbin.io/v3/b/${JB_BIN}/latest`,{headers:{'X-Master-Key':JB_KEY}});
+    const d=await r.json();if(!d.record)return;
+    const hash=JSON.stringify(d.record).slice(0,200);
+    if(hash===_jbLastHash)return;
+    _jbLastHash=hash;
+    applyData(d.record);
+    try{localStorage.setItem('gc5',JSON.stringify(S))}catch(e){}
+    refreshActive();
+  }catch(e){}
+}
+function refreshActive(){
+  const act=document.querySelector('.page.on');if(!act)return;
+  if(act.id==='p-cisterne')cistRender();
+  if(act.id==='p-ordini')ordRender();
+  if(act.id==='p-riepilogo')rCalc();
+  if(act.id==='p-nuovo'){oInit();oSuggerisci()}
+}
+function jbStatusUpdate(state){
+  const el=document.getElementById('sync-badge');if(!el)return;
+  if(!jbEnabled()||!JB_BIN){el.textContent='💾 locale';return}
+  if(state==='ok'){el.textContent='☁️ sync';el.style.color='#16a34a';el.style.background='rgba(34,197,94,.15)'}
+  else if(state==='err'){el.textContent='⚠️ errore';el.style.color='#dc2626';el.style.background='rgba(239,68,68,.1)'}
+}
+
+// ── BOOT ───────────────────────────────────────────
+ld();
+cistRender();
+setTimeout(()=>jbStatusUpdate(),500);
+</script>
+</body>
+</html>
